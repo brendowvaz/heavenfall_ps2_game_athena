@@ -1,0 +1,8 @@
+# Athena Visual Editor primitive material
+newmtl ice_editor
+Ka 0.16 0.28 0.35
+Kd 0.35 0.74 0.90
+Ks 0.18 0.28 0.34
+Ns 18.0
+d 1.0
+illum 2

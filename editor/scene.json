@@ -1,0 +1,239 @@
+{
+  "version": 1,
+  "name": "Ruínas do Véu Azul",
+  "settings": {
+    "background": "#07101d",
+    "gridSize": 120,
+    "snap": 0.25,
+    "camera": {
+      "position": {
+        "x": 24.5779,
+        "y": 27.5747,
+        "z": 29.1491
+      },
+      "target": {
+        "x": 0,
+        "y": 1,
+        "z": 0
+      }
+    }
+  },
+  "objects": [
+    {
+      "id": "legacy-scene-0",
+      "name": "Cenário — bloco 1",
+      "source": {
+        "kind": "model",
+        "asset": "scene_0.obj"
+      },
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true
+    },
+    {
+      "id": "legacy-scene-1",
+      "name": "Cenário — bloco 2",
+      "source": {
+        "kind": "model",
+        "asset": "scene_1.obj"
+      },
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true
+    },
+    {
+      "id": "legacy-scene-2",
+      "name": "Cenário — bloco 3",
+      "source": {
+        "kind": "model",
+        "asset": "scene_2.obj"
+      },
+      "position": {
+        "x": 0,
+        "y": 1.494,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true
+    },
+    {
+      "id": "legacy-scene-3",
+      "name": "Cenário — bloco 4",
+      "source": {
+        "kind": "model",
+        "asset": "scene_3.obj"
+      },
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true
+    },
+    {
+      "id": "legacy-scene-4",
+      "name": "Cenário — bloco 5",
+      "source": {
+        "kind": "model",
+        "asset": "scene_4.obj"
+      },
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true
+    },
+    {
+      "id": "legacy-scene-5",
+      "name": "Cenário — bloco 6",
+      "source": {
+        "kind": "model",
+        "asset": "scene_5.obj"
+      },
+      "position": {
+        "x": -4.602,
+        "y": -2.7304,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true
+    },
+    {
+      "id": "legacy-scene-6",
+      "name": "Cenário — bloco 7",
+      "source": {
+        "kind": "model",
+        "asset": "scene_6.obj"
+      },
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true
+    },
+    {
+      "id": "player-reference",
+      "name": "Jogador (referência)",
+      "source": {
+        "kind": "model",
+        "asset": "player.obj"
+      },
+      "position": {
+        "x": 0,
+        "y": 0.08,
+        "z": 18
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#d7f3ff",
+      "visible": true,
+      "locked": true,
+      "runtime": false
+    }
+  ]
+}

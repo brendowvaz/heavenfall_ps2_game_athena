@@ -1,0 +1,13 @@
+{
+  "name": "athena-visual-editor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "editor": "node editor/server.mjs",
+    "editor:check": "node --check editor/server.mjs && node --check editor/app.js"
+  },
+  "dependencies": {
+    "three": "^0.177.0"
+  }
+}

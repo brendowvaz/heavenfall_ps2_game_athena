@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Athena Visual Editor</title>
+  <link rel="stylesheet" href="/editor/styles.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "/vendor/three/build/three.module.js",
+        "three/addons/": "/vendor/three/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand" aria-label="Athena Visual Editor">
+      <div class="brand-mark">A</div>
+      <div>
+        <strong>ATHENA</strong>
+        <span>VISUAL EDITOR</span>
+      </div>
+    </div>
+
+    <div class="scene-title-wrap">
+      <span class="save-dot" id="save-dot" title="Estado do arquivo"></span>
+      <input id="scene-name" class="scene-title" value="Cena Athena" aria-label="Nome da cena">
+    </div>
+
+    <div class="toolbar toolbar-history" aria-label="Histórico">
+      <button id="undo-button" class="icon-button" title="Desfazer (Ctrl+Z)" disabled>↶</button>
+      <button id="redo-button" class="icon-button" title="Refazer (Ctrl+Y)" disabled>↷</button>
+    </div>
+
+    <div class="toolbar mode-switch" aria-label="Ferramentas de transformação">
+      <button data-mode="translate" class="mode-button active" title="Mover (W)"><span>↔</span> Mover</button>
+      <button data-mode="rotate" class="mode-button" title="Rotacionar (E)"><span>⟳</span> Rotacionar</button>
+      <button data-mode="scale" class="mode-button" title="Redimensionar (R)"><span>⤢</span> Escala</button>
+    </div>
+
+    <div class="toolbar toolbar-options">
+      <button id="space-button" class="compact-button" title="Alternar espaço local/global">Global</button>
+      <label class="toggle-chip" title="Encaixar transformações">
+        <input id="snap-toggle" type="checkbox">
+        <span>Snap</span>
+      </label>
+    </div>
+
+    <div class="top-actions">
+      <button id="export-button" class="secondary-button" title="Baixar uma cópia JSON">Exportar</button>
+      <button id="save-button" class="primary-button"><span>◆</span> Salvar cena</button>
+      <button id="run-button" class="run-button"><span>▶</span> Testar no PS2</button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <aside class="left-panel panel">
+      <section class="panel-section hierarchy-section">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">CENA</span>
+            <h2>Hierarquia</h2>
+          </div>
+          <div class="heading-actions">
+            <button id="new-scene-button" class="mini-button" title="Nova cena">＋</button>
+            <button id="open-scene-button" class="mini-button" title="Abrir cena JSON">⌁</button>
+          </div>
+        </div>
+        <label class="search-box">
+          <span>⌕</span>
+          <input id="hierarchy-search" type="search" placeholder="Filtrar objetos">
+        </label>
+        <div id="object-list" class="object-list" role="tree"></div>
+      </section>
+
+      <section class="panel-section add-section">
+        <div class="section-heading compact">
+          <div>
+            <span class="eyebrow">CRIAR</span>
+            <h2>Primitivas</h2>
+          </div>
+        </div>
+        <div class="primitive-grid">
+          <button data-primitive="cube"><span class="shape cube-shape"></span>Cubo</button>
+          <button data-primitive="sphere"><span class="shape sphere-shape"></span>Esfera</button>
+          <button data-primitive="cylinder"><span class="shape cylinder-shape"></span>Cilindro</button>
+          <button data-primitive="cone"><span class="shape cone-shape"></span>Cone</button>
+          <button data-primitive="plane"><span class="shape plane-shape"></span>Plano</button>
+        </div>
+      </section>
+
+      <section class="panel-section asset-section">
+        <div class="section-heading compact">
+          <div>
+            <span class="eyebrow">PROJETO</span>
+            <h2>Modelos</h2>
+          </div>
+          <button id="import-button" class="import-button">Importar</button>
+        </div>
+        <label class="search-box small">
+          <span>⌕</span>
+          <input id="asset-search" type="search" placeholder="Buscar assets">
+        </label>
+        <div id="asset-list" class="asset-list"></div>
+      </section>
+    </aside>
+
+    <main id="viewport" class="viewport" tabindex="0">
+      <div class="viewport-top-left overlay-card">
+        <span class="viewport-label">PERSPECTIVA</span>
+        <span id="viewport-stats">0 objetos · 0 triângulos</span>
+      </div>
+
+      <div class="viewport-top-right overlay-card view-buttons" aria-label="Controles da câmera">
+        <button data-view="perspective" class="active" title="Perspectiva">3D</button>
+        <button data-view="top" title="Vista superior">TOP</button>
+        <button data-view="front" title="Vista frontal">FRT</button>
+        <button data-view="side" title="Vista lateral">LAT</button>
+        <i></i>
+        <button id="focus-button" title="Focar seleção (F)">◎</button>
+        <button id="grid-button" class="active" title="Mostrar grade">#</button>
+      </div>
+
+      <div id="empty-hint" class="empty-hint" hidden>
+        <div class="empty-symbol">◇</div>
+        <h2>Sua cena está vazia</h2>
+        <p>Adicione uma primitiva ou importe modelos OBJ, GLTF e GLB.</p>
+        <button id="empty-import-button" class="primary-button">Importar primeiro modelo</button>
+      </div>
+
+      <div id="drop-zone" class="drop-zone" hidden>
+        <div>＋</div>
+        <strong>Solte os arquivos para importar</strong>
+        <span>OBJ, MTL, GLTF, GLB, BIN e texturas</span>
+      </div>
+
+      <div id="loading-indicator" class="loading-indicator" hidden>
+        <span class="spinner"></span>
+        <span id="loading-label">Carregando modelos…</span>
+      </div>
+
+      <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
+    </main>
+
+    <aside class="right-panel panel">
+      <div id="inspector-empty" class="inspector-empty">
+        <div class="empty-symbol small">◇</div>
+        <h2>Nenhum objeto selecionado</h2>
+        <p>Clique em um objeto na cena ou na hierarquia para editar suas propriedades.</p>
+      </div>
+
+      <div id="inspector" hidden>
+        <section class="inspector-header">
+          <span class="eyebrow">INSPECTOR</span>
+          <div class="object-title-row">
+            <span id="object-type-icon" class="object-type-icon">◇</span>
+            <input id="object-name" aria-label="Nome do objeto">
+          </div>
+          <div class="object-actions">
+            <button id="duplicate-button" title="Duplicar (Ctrl+D)">Duplicar</button>
+            <button id="delete-button" class="danger-text" title="Excluir (Delete)">Excluir</button>
+          </div>
+        </section>
+
+        <section class="inspector-section">
+          <div class="inspector-section-title">
+            <h3>Transformação</h3>
+            <button id="reset-transform-button">Redefinir</button>
+          </div>
+
+          <div class="vector-row">
+            <label>Posição</label>
+            <div class="vector-inputs">
+              <label><span class="axis x">X</span><input id="position-x" type="number" step="0.1"></label>
+              <label><span class="axis y">Y</span><input id="position-y" type="number" step="0.1"></label>
+              <label><span class="axis z">Z</span><input id="position-z" type="number" step="0.1"></label>
+            </div>
+          </div>
+
+          <div class="vector-row">
+            <label>Rotação</label>
+            <div class="vector-inputs">
+              <label><span class="axis x">X</span><input id="rotation-x" type="number" step="1"></label>
+              <label><span class="axis y">Y</span><input id="rotation-y" type="number" step="1"></label>
+              <label><span class="axis z">Z</span><input id="rotation-z" type="number" step="1"></label>
+            </div>
+          </div>
+
+          <div class="vector-row">
+            <label>Escala</label>
+            <div class="vector-inputs">
+              <label><span class="axis x">X</span><input id="scale-x" type="number" step="0.1"></label>
+              <label><span class="axis y">Y</span><input id="scale-y" type="number" step="0.1"></label>
+              <label><span class="axis z">Z</span><input id="scale-z" type="number" step="0.1"></label>
+            </div>
+          </div>
+        </section>
+
+        <section class="inspector-section appearance-section">
+          <h3>Aparência e saída</h3>
+          <label class="property-row color-property">
+            <span>Cor no editor</span>
+            <input id="object-color" type="color" value="#8bd5f7">
+          </label>
+          <label class="property-row switch-property">
+            <span><strong>Visível</strong><small>Mostrar no editor</small></span>
+            <input id="object-visible" type="checkbox">
+          </label>
+          <label class="property-row switch-property">
+            <span><strong>Bloqueado</strong><small>Impedir transformação acidental</small></span>
+            <input id="object-locked" type="checkbox">
+          </label>
+          <label class="property-row switch-property">
+            <span><strong>Exportar para Athena</strong><small>Incluir no runtime do PS2</small></span>
+            <input id="object-runtime" type="checkbox">
+          </label>
+        </section>
+
+        <section class="inspector-section source-section">
+          <h3>Origem</h3>
+          <dl>
+            <div><dt>Tipo</dt><dd id="source-kind">—</dd></div>
+            <div><dt>Arquivo</dt><dd id="source-asset">—</dd></div>
+            <div><dt>Geometria</dt><dd id="source-stats">—</dd></div>
+            <div><dt>ID</dt><dd id="source-id">—</dd></div>
+          </dl>
+        </section>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="statusbar">
+    <div><span class="status-light"></span><span id="status-message">Editor pronto</span></div>
+    <div class="shortcut-hints">
+      <span><kbd>W</kbd> mover</span>
+      <span><kbd>E</kbd> rotacionar</span>
+      <span><kbd>R</kbd> escala</span>
+      <span><kbd>F</kbd> focar</span>
+      <span><kbd>Del</kbd> excluir</span>
+    </div>
+    <div id="cursor-position">X 0.00 · Y 0.00 · Z 0.00</div>
+  </footer>
+
+  <input id="import-input" type="file" multiple accept=".obj,.mtl,.gltf,.glb,.bin,.png,.jpg,.jpeg,.webp,.bmp,.tga" hidden>
+  <input id="open-scene-input" type="file" accept=".json,application/json" hidden>
+
+  <script type="module" src="/editor/app.js"></script>
+</body>
+</html>
