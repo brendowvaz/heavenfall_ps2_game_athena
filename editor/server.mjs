@@ -7,16 +7,19 @@ import {
   readdir,
   rename,
   stat,
+  unlink,
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import * as THREE from "three";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..");
 const assetsRoot = path.join(projectRoot, "assets");
 const threeRoot = path.join(projectRoot, "node_modules", "three");
 const sceneFile = path.join(__dirname, "scene.json");
+const prefabsRoot = path.join(__dirname, "prefabs");
 const generatedSceneFile = path.join(assetsRoot, "scene.generated.js");
 const host = "127.0.0.1";
 const port = Number(process.env.ATHENA_EDITOR_PORT || 4173);
@@ -144,7 +147,7 @@ function safeAssetPath(value) {
 
 function normalizeScene(input) {
   const objects = Array.isArray(input?.objects) ? input.objects : [];
-  return {
+  const scene = {
     version: 1,
     name: String(input?.name || "Cena Athena").slice(0, 120),
     settings: {
@@ -157,7 +160,8 @@ function normalizeScene(input) {
       },
     },
     objects: objects.slice(0, 2000).map((item, index) => {
-      const kind = item?.source?.kind === "primitive" ? "primitive" : "model";
+      const allowedKinds = new Set(["model", "primitive", "group", "collider"]);
+      const kind = allowedKinds.has(item?.source?.kind) ? item.source.kind : "model";
       const asset = safeAssetPath(item?.source?.asset || item?.asset);
       const primitive = ["cube", "sphere", "cylinder", "cone", "plane"].includes(item?.source?.primitive)
         ? item.source.primitive
@@ -169,7 +173,11 @@ function normalizeScene(input) {
           kind,
           asset,
           ...(kind === "primitive" ? { primitive } : {}),
+          ...(kind === "collider" ? {
+            collider: ["box", "sphere", "capsule"].includes(item?.source?.collider) ? item.source.collider : "box",
+          } : {}),
         },
+        parentId: typeof item?.parentId === "string" && item.parentId ? item.parentId : null,
         position: vector(item?.position, { x: 0, y: 0, z: 0 }),
         rotation: vector(item?.rotation, { x: 0, y: 0, z: 0 }),
         scale: vector(item?.scale, { x: 1, y: 1, z: 1 }),
@@ -177,37 +185,155 @@ function normalizeScene(input) {
         visible: item?.visible !== false,
         locked: item?.locked === true,
         runtime: item?.runtime !== false,
+        collider: kind === "collider" ? {
+          trigger: item?.collider?.trigger === true,
+          cameraBlocker: item?.collider?.cameraBlocker !== false,
+        } : undefined,
+        prefabId: typeof item?.prefabId === "string" ? item.prefabId.slice(0, 96) : undefined,
       };
     }),
   };
+
+  const byId = new Map(scene.objects.map((item) => [item.id, item]));
+  for (const item of scene.objects) {
+    if (!item.parentId || !byId.has(item.parentId) || item.parentId === item.id) {
+      item.parentId = null;
+      continue;
+    }
+    const visited = new Set([item.id]);
+    let parentId = item.parentId;
+    let cyclic = false;
+    while (parentId) {
+      if (visited.has(parentId)) {
+        cyclic = true;
+        break;
+      }
+      visited.add(parentId);
+      parentId = byId.get(parentId)?.parentId || null;
+    }
+    if (cyclic) item.parentId = null;
+  }
+  return scene;
 }
 
 function degreesToRadians(degrees) {
   return degrees * Math.PI / 180;
 }
 
+function worldTransforms(scene) {
+  const nodes = new Map();
+  for (const item of scene.objects) {
+    const node = new THREE.Object3D();
+    node.position.set(item.position.x, item.position.y, item.position.z);
+    node.rotation.set(
+      degreesToRadians(item.rotation.x),
+      degreesToRadians(item.rotation.y),
+      degreesToRadians(item.rotation.z),
+    );
+    node.scale.set(item.scale.x, item.scale.y, item.scale.z);
+    nodes.set(item.id, node);
+  }
+  for (const item of scene.objects) {
+    const node = nodes.get(item.id);
+    const parent = item.parentId ? nodes.get(item.parentId) : null;
+    if (parent) parent.add(node);
+  }
+  for (const item of scene.objects) {
+    if (!item.parentId) nodes.get(item.id).updateMatrixWorld(true);
+  }
+  const output = new Map();
+  for (const item of scene.objects) {
+    const node = nodes.get(item.id);
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    node.matrixWorld.decompose(position, quaternion, scale);
+    const rotation = new THREE.Euler().setFromQuaternion(quaternion, "XYZ");
+    output.set(item.id, {
+      position: { x: position.x, y: position.y, z: position.z },
+      rotation: { x: rotation.x, y: rotation.y, z: rotation.z },
+      scale: { x: scale.x, y: scale.y, z: scale.z },
+    });
+  }
+  return output;
+}
+
 function generateAthenaScene(scene) {
+  const transforms = worldTransforms(scene);
   const objects = scene.objects
-    .filter((item) => item.runtime && item.visible && item.source.asset)
-    .map((item) => ({
+    .filter((item) => item.runtime && item.visible && item.source.asset && ["model", "primitive"].includes(item.source.kind))
+    .map((item) => {
+      const transform = transforms.get(item.id);
+      return {
       id: item.id,
       name: item.name,
       asset: item.source.asset,
-      position: item.position,
-      rotation: {
-        x: degreesToRadians(item.rotation.x),
-        y: degreesToRadians(item.rotation.y),
-        z: degreesToRadians(item.rotation.z),
-      },
-      scale: item.scale,
-    }));
+      position: transform.position,
+      rotation: transform.rotation,
+      scale: transform.scale,
+      };
+    });
+
+  const colliders = scene.objects
+    .filter((item) => item.runtime && item.visible && item.source.kind === "collider")
+    .map((item) => {
+      const transform = transforms.get(item.id);
+      return {
+        id: item.id,
+        name: item.name,
+        shape: item.source.collider,
+        position: transform.position,
+        rotation: transform.rotation,
+        scale: {
+          x: Math.abs(transform.scale.x),
+          y: Math.abs(transform.scale.y),
+          z: Math.abs(transform.scale.z),
+        },
+        trigger: item.collider?.trigger === true,
+        cameraBlocker: item.collider?.cameraBlocker !== false,
+      };
+    });
 
   return [
     "// Generated by Athena Visual Editor. Do not edit by hand.",
     `// Scene: ${scene.name}`,
     `globalThis.EDITOR_SCENE = ${JSON.stringify(objects, null, 2)};`,
+    `globalThis.EDITOR_COLLIDERS = ${JSON.stringify(colliders, null, 2)};`,
     "",
   ].join("\n");
+}
+
+async function listPrefabs() {
+  await mkdir(prefabsRoot, { recursive: true });
+  const files = (await readdir(prefabsRoot, { withFileTypes: true }))
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".json"));
+  const prefabs = [];
+  for (const file of files) {
+    try {
+      const prefab = JSON.parse(await readFile(path.join(prefabsRoot, file.name), "utf8"));
+      prefabs.push(prefab);
+    } catch {
+      // Ignore malformed prefab files so one bad file cannot hide the library.
+    }
+  }
+  return prefabs.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+}
+
+async function savePrefab(payload) {
+  const name = String(payload?.name || "Prefab").trim().slice(0, 120) || "Prefab";
+  const id = sanitizeSegment(payload?.id || `${name}-${Date.now().toString(36)}`).replace(/\.[^.]+$/, "");
+  const normalized = normalizeScene({ name, objects: payload?.objects || [] });
+  const prefab = {
+    version: 1,
+    id,
+    name,
+    createdAt: new Date().toISOString(),
+    objects: normalized.objects,
+  };
+  await mkdir(prefabsRoot, { recursive: true });
+  const destination = path.join(prefabsRoot, `${id}.json`);
+  await writeFile(destination, `${JSON.stringify(prefab, null, 2)}\n`, "utf8");
+  return prefab;
 }
 
 async function writeScene(scene) {
@@ -364,6 +490,38 @@ async function handleApi(request, response, url) {
     return true;
   }
 
+  if (url.pathname === "/api/prefabs" && request.method === "GET") {
+    try {
+      sendJson(response, 200, { prefabs: await listPrefabs() });
+    } catch (error) {
+      sendJson(response, 500, { error: error.message });
+    }
+    return true;
+  }
+
+  if (url.pathname === "/api/prefabs" && request.method === "POST") {
+    try {
+      const prefab = await savePrefab(await readJsonBody(request, 16 * 1024 * 1024));
+      sendJson(response, 201, { ok: true, prefab });
+    } catch (error) {
+      sendJson(response, 400, { error: error.message });
+    }
+    return true;
+  }
+
+  if (url.pathname.startsWith("/api/prefabs/") && request.method === "DELETE") {
+    try {
+      const id = sanitizeSegment(decodeURIComponent(url.pathname.slice("/api/prefabs/".length))).replace(/\.[^.]+$/, "");
+      const destination = path.join(prefabsRoot, `${id}.json`);
+      if (!isInside(prefabsRoot, destination)) throw new Error("Invalid prefab id");
+      await unlink(destination);
+      sendJson(response, 200, { ok: true });
+    } catch (error) {
+      sendJson(response, 400, { error: error.message });
+    }
+    return true;
+  }
+
   if (url.pathname === "/api/import" && request.method === "POST") {
     try {
       const result = await importFiles(await readJsonBody(request));
@@ -429,4 +587,3 @@ server.listen(port, host, () => {
   console.log(`Athena Visual Editor: http://${host}:${port}/editor/`);
   console.log("Pressione Ctrl+C para encerrar.");
 });
-

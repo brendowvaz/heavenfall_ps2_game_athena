@@ -37,9 +37,13 @@ Abra `http://127.0.0.1:4173/editor/` no navegador. O editor oferece:
 
 - viewport 3D com câmera orbital e vistas superior, frontal e lateral;
 - seleção pela viewport ou hierarquia;
+- seleção múltipla com `Ctrl+clique` e transformação por pivô comum;
+- grupos, relações pai/filho, arrastar na hierarquia e preservação da transformação mundial;
 - gizmos de posição, rotação e escala;
 - inspector numérico, visibilidade, bloqueio e inclusão no runtime;
 - primitivas de cubo, esfera, cilindro, cone e plano;
+- colisores visuais de caixa, esfera e cápsula, com trigger e bloqueio de câmera;
+- prefabs criados a partir de qualquer seleção, incluindo grupos e colisores;
 - importação múltipla de OBJ/MTL, GLTF/GLB, BIN e texturas;
 - biblioteca dos modelos disponíveis no projeto;
 - duplicação, exclusão, desfazer/refazer e transformação com snap;
@@ -47,10 +51,12 @@ Abra `http://127.0.0.1:4173/editor/` no navegador. O editor oferece:
 
 Ao importar OBJ ou GLTF com arquivos externos, selecione também o MTL, BIN e as texturas relacionados. Eles serão copiados juntos para `assets/imported`.
 
-O botão **Salvar cena** mantém o documento editável em `editor/scene.json` e gera `assets/scene.generated.js`. O `main.js` lê esse arquivo no AthenaEnv e aplica posição, rotação e escala a cada `RenderObject`.
+O botão **Salvar cena** mantém o documento editável em `editor/scene.json` e gera `assets/scene.generated.js`. O `main.js` lê esse arquivo no AthenaEnv, aplica a transformação mundial a cada `RenderObject` e usa os colisores exportados no movimento do jogador e da câmera.
 
-Atalhos principais: `W` mover, `E` rotacionar, `R` redimensionar, `F` focar, `Delete` excluir, `Ctrl+D` duplicar, `Ctrl+Z` desfazer e `Ctrl+S` salvar.
+Prefabs são armazenados em `editor/prefabs`. Ao instanciar um prefab, novos IDs são gerados e a hierarquia interna é preservada; as instâncias já colocadas continuam independentes do arquivo original.
 
-O cenário procedural original já estava consolidado em sete blocos OBJ; eles aparecem como sete objetos editáveis. Todo modelo ou primitiva adicionado pelo editor permanece como um objeto independente. As colisões do jogador continuam definidas separadamente no código do jogo.
+Atalhos principais: `W` mover, `E` rotacionar, `R` redimensionar, `F` focar, `Delete` excluir, `Ctrl+D` duplicar, `Ctrl+Z` desfazer e `Ctrl+S` salvar. Use `Ctrl+clique` para adicionar ou remover objetos da seleção.
+
+O cenário procedural original já estava consolidado em sete blocos OBJ; eles aparecem como filhos do grupo **Cenário congelado**. Todo modelo, primitiva, grupo ou colisor adicionado pelo editor permanece independente. Os sete obstáculos originais foram migrados para o grupo **Colisões** e agora são editados visualmente.
 
 Para validar o runtime no computador, execute `node tests/smoke.cjs`.

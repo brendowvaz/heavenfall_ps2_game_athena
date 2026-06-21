@@ -7,18 +7,46 @@
     "snap": 0.25,
     "camera": {
       "position": {
-        "x": 24.5779,
-        "y": 27.5747,
-        "z": 29.1491
+        "x": 11.3176,
+        "y": 2.1438,
+        "z": -26.3181
       },
       "target": {
-        "x": 0,
-        "y": 1,
-        "z": 0
+        "x": 3.6108,
+        "y": 1.5271,
+        "z": -26.4939
       }
     }
   },
   "objects": [
+    {
+      "id": "environment-root",
+      "name": "Cenário congelado",
+      "source": {
+        "kind": "group",
+        "asset": ""
+      },
+      "parentId": null,
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true
+    },
     {
       "id": "legacy-scene-0",
       "name": "Cenário — bloco 1",
@@ -26,6 +54,7 @@
         "kind": "model",
         "asset": "scene_0.obj"
       },
+      "parentId": "environment-root",
       "position": {
         "x": 0,
         "y": 0,
@@ -53,6 +82,7 @@
         "kind": "model",
         "asset": "scene_1.obj"
       },
+      "parentId": "environment-root",
       "position": {
         "x": 0,
         "y": 0,
@@ -80,6 +110,7 @@
         "kind": "model",
         "asset": "scene_2.obj"
       },
+      "parentId": "environment-root",
       "position": {
         "x": 0,
         "y": 1.494,
@@ -107,6 +138,7 @@
         "kind": "model",
         "asset": "scene_3.obj"
       },
+      "parentId": "environment-root",
       "position": {
         "x": 0,
         "y": 0,
@@ -134,6 +166,7 @@
         "kind": "model",
         "asset": "scene_4.obj"
       },
+      "parentId": "environment-root",
       "position": {
         "x": 0,
         "y": 0,
@@ -161,6 +194,7 @@
         "kind": "model",
         "asset": "scene_5.obj"
       },
+      "parentId": "environment-root",
       "position": {
         "x": -4.602,
         "y": -2.7304,
@@ -188,6 +222,7 @@
         "kind": "model",
         "asset": "scene_6.obj"
       },
+      "parentId": "environment-root",
       "position": {
         "x": 0,
         "y": 0,
@@ -215,6 +250,7 @@
         "kind": "model",
         "asset": "player.obj"
       },
+      "parentId": null,
       "position": {
         "x": 0,
         "y": 0.08,
@@ -234,6 +270,166 @@
       "visible": true,
       "locked": true,
       "runtime": false
+    },
+    {
+      "id": "collision-root",
+      "name": "Colisões",
+      "source": {
+        "kind": "group",
+        "asset": ""
+      },
+      "parentId": null,
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#68e0b2",
+      "visible": true,
+      "locked": false,
+      "runtime": true
+    },
+    {
+      "id": "collider-brazier-a",
+      "name": "Colisão — braseiro A",
+      "source": {
+        "kind": "collider",
+        "asset": "",
+        "collider": "sphere"
+      },
+      "parentId": "collision-root",
+      "position": {
+        "x": -4.55,
+        "y": 1,
+        "z": 17.4
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1.1,
+        "y": 1.1,
+        "z": 1.1
+      },
+      "color": "#68e0b2",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "collider": {
+        "trigger": false,
+        "cameraBlocker": true
+      }
+    },
+    {
+      "id": "collider-brazier-b",
+      "name": "Colisão — braseiro B",
+      "source": {
+        "kind": "collider",
+        "asset": "",
+        "collider": "sphere"
+      },
+      "parentId": "collision-root",
+      "position": {
+        "x": 4.55,
+        "y": 1,
+        "z": 15
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1.1,
+        "y": 1.1,
+        "z": 1.1
+      },
+      "color": "#68e0b2",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "collider": {
+        "trigger": false,
+        "cameraBlocker": true
+      }
+    },
+    {
+      "id": "collider-mqn4vahj-jrwccf",
+      "name": "Colisor caixa",
+      "source": {
+        "kind": "collider",
+        "asset": "",
+        "collider": "box"
+      },
+      "parentId": null,
+      "position": {
+        "x": -7.2814,
+        "y": 1.3319,
+        "z": -1.8342
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 0.3563,
+        "y": 0.5904,
+        "z": 1
+      },
+      "color": "#68e0b2",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "collider": {
+        "trigger": false,
+        "cameraBlocker": true
+      }
+    },
+    {
+      "id": "collider-mqn4zjkj-b94qcs",
+      "name": "Colisor esfera",
+      "source": {
+        "kind": "collider",
+        "asset": "",
+        "collider": "sphere"
+      },
+      "parentId": null,
+      "position": {
+        "x": 3.6108,
+        "y": 3.3554,
+        "z": -27.0851
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#68e0b2",
+      "visible": false,
+      "locked": false,
+      "runtime": true,
+      "collider": {
+        "trigger": false,
+        "cameraBlocker": true
+      }
     }
   ]
 }

@@ -46,8 +46,29 @@ function configureData(data) {
 // transform data in a tiny generated script avoids JSON parsing and path
 // differences between PCSX2 HostFS and real hardware.
 globalThis.EDITOR_SCENE = [];
+globalThis.EDITOR_COLLIDERS = [];
 if (std.exists("scene.generated.js")) {
     std.loadScript("scene.generated.js");
+}
+
+if (EDITOR_COLLIDERS.length === 0) {
+    const legacyColliders = [
+        [-2.8, -1.5, 1.52], [3.5, -5.0, 1.32], [1.0, 5.0, 1.0],
+        [-8.2, 5.2, 0.92], [8.0, -0.3, 0.86],
+        [-4.55, 17.4, 1.1], [4.55, 15.0, 1.1]
+    ];
+    for (let i = 0; i < legacyColliders.length; i++) {
+        const legacy = legacyColliders[i];
+        EDITOR_COLLIDERS.push({
+            name: "Legacy collider " + i,
+            shape: "sphere",
+            position: { x: legacy[0], y: 1.0, z: legacy[1] },
+            rotation: { x: 0.0, y: 0.0, z: 0.0 },
+            scale: { x: legacy[2], y: legacy[2], z: legacy[2] },
+            trigger: false,
+            cameraBlocker: true
+        });
+    }
 }
 
 // Backward-compatible fallback for builds made before the editor existed.
@@ -98,21 +119,27 @@ function baseWalkable(x, z) {
     return arena || northHall || southHall;
 }
 
-const collisionCircles = [
-    { x: -2.8, z: -1.5, radius: 1.52 },
-    { x: 3.5, z: -5.0, radius: 1.32 },
-    { x: 1.0, z: 5.0, radius: 1.0 },
-    { x: -8.2, z: 5.2, radius: 0.92 },
-    { x: 8.0, z: -0.3, radius: 0.86 },
-    { x: -4.55, z: 17.4, radius: 1.1 },
-    { x: 4.55, z: 15.0, radius: 1.1 }
+const collisionShapes = EDITOR_COLLIDERS;
+const cameraBlockers = [];
+for (let i = 0; i < collisionShapes.length; i++) {
+    if (collisionShapes[i].cameraBlocker) cameraBlockers.push(collisionShapes[i]);
+}
+const legacyCameraBlockers = [
+    [-12.5, -10.0, 1.5], [12.2, -9.0, 1.5],
+    [-13.8, 2.5, 1.4], [13.7, 3.6, 1.5],
+    [-9.0, 11.2, 1.4], [9.5, 10.0, 1.4]
 ];
-
-const cameraBlockers = collisionCircles.concat([
-    { x: -12.5, z: -10.0, radius: 1.5 }, { x: 12.2, z: -9.0, radius: 1.5 },
-    { x: -13.8, z: 2.5, radius: 1.4 }, { x: 13.7, z: 3.6, radius: 1.5 },
-    { x: -9.0, z: 11.2, radius: 1.4 }, { x: 9.5, z: 10.0, radius: 1.4 }
-]);
+for (let i = 0; i < legacyCameraBlockers.length; i++) {
+    const blocker = legacyCameraBlockers[i];
+    cameraBlockers.push({
+        shape: "sphere",
+        position: { x: blocker[0], y: 1.0, z: blocker[1] },
+        rotation: { x: 0.0, y: 0.0, z: 0.0 },
+        scale: { x: blocker[2], y: blocker[2], z: blocker[2] },
+        trigger: false,
+        cameraBlocker: true
+    });
+}
 
 const PLAYER_RADIUS = 0.68;
 const SPAWN = { x: 0.0, z: 18.0 };
@@ -126,14 +153,42 @@ let showHud = true;
 let titleTimer = 330;
 let collisionFlash = 0;
 
+function colliderHits(x, z, radius, collider) {
+    if (collider.trigger) return false;
+    const dx = x - collider.position.x;
+    const dz = z - collider.position.z;
+    const scaleX = Math.abs(collider.scale.x);
+    const scaleZ = Math.abs(collider.scale.z);
+
+    if (collider.shape === "box") {
+        const angle = -(collider.rotation.y || 0.0);
+        const cosine = Math.cos(angle);
+        const sine = Math.sin(angle);
+        const localX = dx * cosine - dz * sine;
+        const localZ = dx * sine + dz * cosine;
+        return Math.abs(localX) < scaleX + radius && Math.abs(localZ) < scaleZ + radius;
+    }
+
+    if (collider.shape === "capsule") {
+        const angle = -(collider.rotation.y || 0.0);
+        const cosine = Math.cos(angle);
+        const sine = Math.sin(angle);
+        const localX = dx * cosine - dz * sine;
+        const localZ = dx * sine + dz * cosine;
+        const segmentZ = clamp(localZ, -scaleZ, scaleZ);
+        const offsetZ = localZ - segmentZ;
+        const limit = scaleX + radius;
+        return localX * localX + offsetZ * offsetZ < limit * limit;
+    }
+
+    const limit = Math.max(scaleX, scaleZ) + radius;
+    return dx * dx + dz * dz < limit * limit;
+}
+
 function isPlayerValid(x, z) {
     if (!baseWalkable(x, z)) return false;
-    for (let i = 0; i < collisionCircles.length; i++) {
-        const obstacle = collisionCircles[i];
-        const dx = x - obstacle.x;
-        const dz = z - obstacle.z;
-        const minimum = PLAYER_RADIUS + obstacle.radius;
-        if (dx * dx + dz * dz < minimum * minimum) return false;
+    for (let i = 0; i < collisionShapes.length; i++) {
+        if (colliderHits(x, z, PLAYER_RADIUS, collisionShapes[i])) return false;
     }
     return true;
 }
@@ -147,12 +202,8 @@ function walkableHalfWidth(z) {
 }
 
 function clearOfObstacles(x, z) {
-    for (let i = 0; i < collisionCircles.length; i++) {
-        const obstacle = collisionCircles[i];
-        const ox = x - obstacle.x;
-        const oz = z - obstacle.z;
-        const minimum = PLAYER_RADIUS + obstacle.radius;
-        if (ox * ox + oz * oz < minimum * minimum) return false;
+    for (let i = 0; i < collisionShapes.length; i++) {
+        if (colliderHits(x, z, PLAYER_RADIUS, collisionShapes[i])) return false;
     }
     return true;
 }
@@ -164,10 +215,14 @@ function applyMovement(dx, dz) {
     const halfWidth = walkableHalfWidth(nextZ);
     const nextX = clamp(playerX + dx, -halfWidth, halfWidth);
 
-    // Apply both axes directly. Static obstacle collision is intentionally kept
-    // out of this pass so only the actual platform boundary can stop movement.
-    playerX = nextX;
-    playerZ = nextZ;
+    if (isPlayerValid(nextX, nextZ)) {
+        playerX = nextX;
+        playerZ = nextZ;
+    } else if (isPlayerValid(nextX, playerZ)) {
+        playerX = nextX;
+    } else if (isPlayerValid(playerX, nextZ)) {
+        playerZ = nextZ;
+    }
 
     const moved = Math.abs(playerX - oldX) + Math.abs(playerZ - oldZ) > 0.0001;
     collisionFlash = moved ? 0 : 5;
@@ -176,11 +231,7 @@ function applyMovement(dx, dz) {
 
 function cameraBlocked(x, z) {
     for (let i = 0; i < cameraBlockers.length; i++) {
-        const blocker = cameraBlockers[i];
-        const dx = x - blocker.x;
-        const dz = z - blocker.z;
-        const limit = blocker.radius + 0.35;
-        if (dx * dx + dz * dz < limit * limit) return true;
+        if (colliderHits(x, z, 0.35, cameraBlockers[i])) return true;
     }
     return false;
 }

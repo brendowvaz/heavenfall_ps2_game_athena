@@ -142,3 +142,71 @@ globalThis.EDITOR_SCENE = [
     }
   }
 ];
+globalThis.EDITOR_COLLIDERS = [
+  {
+    "id": "collider-brazier-a",
+    "name": "Colisão — braseiro A",
+    "shape": "sphere",
+    "position": {
+      "x": -4.55,
+      "y": 1,
+      "z": 17.4
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": {
+      "x": 1.1,
+      "y": 1.1,
+      "z": 1.1
+    },
+    "trigger": false,
+    "cameraBlocker": true
+  },
+  {
+    "id": "collider-brazier-b",
+    "name": "Colisão — braseiro B",
+    "shape": "sphere",
+    "position": {
+      "x": 4.55,
+      "y": 1,
+      "z": 15
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": {
+      "x": 1.1,
+      "y": 1.1,
+      "z": 1.1
+    },
+    "trigger": false,
+    "cameraBlocker": true
+  },
+  {
+    "id": "collider-mqn4vahj-jrwccf",
+    "name": "Colisor caixa",
+    "shape": "box",
+    "position": {
+      "x": -7.2814,
+      "y": 1.3319,
+      "z": -1.8342
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": {
+      "x": 0.3563,
+      "y": 0.5904,
+      "z": 1
+    },
+    "trigger": false,
+    "cameraBlocker": true
+  }
+];

@@ -72,6 +72,9 @@
           <span>⌕</span>
           <input id="hierarchy-search" type="search" placeholder="Filtrar objetos">
         </label>
+        <div id="scene-root-row" class="scene-root-row" title="Arraste objetos aqui para removê-los de um grupo">
+          <span>⌂</span><strong>Raiz da cena</strong><small>solte aqui</small>
+        </div>
         <div id="object-list" class="object-list" role="tree"></div>
       </section>
 
@@ -83,12 +86,38 @@
           </div>
         </div>
         <div class="primitive-grid">
+          <button id="add-group-button"><span class="shape group-shape">◇</span>Grupo</button>
           <button data-primitive="cube"><span class="shape cube-shape"></span>Cubo</button>
           <button data-primitive="sphere"><span class="shape sphere-shape"></span>Esfera</button>
           <button data-primitive="cylinder"><span class="shape cylinder-shape"></span>Cilindro</button>
           <button data-primitive="cone"><span class="shape cone-shape"></span>Cone</button>
           <button data-primitive="plane"><span class="shape plane-shape"></span>Plano</button>
         </div>
+      </section>
+
+      <section class="panel-section physics-section">
+        <div class="section-heading compact">
+          <div>
+            <span class="eyebrow">FÍSICA</span>
+            <h2>Colisores</h2>
+          </div>
+        </div>
+        <div class="collider-grid">
+          <button data-collider="box"><span>▣</span>Caixa</button>
+          <button data-collider="sphere"><span>●</span>Esfera</button>
+          <button data-collider="capsule"><span>⬭</span>Cápsula</button>
+        </div>
+      </section>
+
+      <section class="panel-section prefab-section">
+        <div class="section-heading compact">
+          <div>
+            <span class="eyebrow">REUTILIZAR</span>
+            <h2>Prefabs</h2>
+          </div>
+          <button id="create-prefab-button" class="import-button" disabled>Da seleção</button>
+        </div>
+        <div id="prefab-list" class="prefab-list"></div>
       </section>
 
       <section class="panel-section asset-section">
@@ -120,6 +149,7 @@
         <button data-view="side" title="Vista lateral">LAT</button>
         <i></i>
         <button id="focus-button" title="Focar seleção (F)">◎</button>
+        <button id="collider-visibility-button" class="active" title="Mostrar colisores">COL</button>
         <button id="grid-button" class="active" title="Mostrar grade">#</button>
       </div>
 
@@ -151,6 +181,27 @@
         <p>Clique em um objeto na cena ou na hierarquia para editar suas propriedades.</p>
       </div>
 
+      <div id="inspector-multi" class="inspector-multi" hidden>
+        <section class="inspector-header">
+          <span class="eyebrow">MULTISSELEÇÃO</span>
+          <div class="multi-title"><span>◆</span><strong id="multi-selection-count">2 objetos selecionados</strong></div>
+          <p>Use o gizmo para transformar todos em torno do pivô comum.</p>
+          <div class="object-actions multi-actions">
+            <button id="multi-duplicate-button">Duplicar todos</button>
+            <button id="multi-prefab-button">Criar prefab</button>
+            <button id="multi-delete-button" class="danger-text">Excluir</button>
+          </div>
+        </section>
+        <section class="inspector-section">
+          <h3>Transformação conjunta</h3>
+          <dl class="selection-summary">
+            <div><dt>Pivô</dt><dd id="multi-pivot">—</dd></div>
+            <div><dt>Triângulos</dt><dd id="multi-triangles">—</dd></div>
+            <div><dt>Dica</dt><dd>Ctrl+clique adiciona ou remove objetos.</dd></div>
+          </dl>
+        </section>
+      </div>
+
       <div id="inspector" hidden>
         <section class="inspector-header">
           <span class="eyebrow">INSPECTOR</span>
@@ -160,6 +211,7 @@
           </div>
           <div class="object-actions">
             <button id="duplicate-button" title="Duplicar (Ctrl+D)">Duplicar</button>
+            <button id="prefab-button">Criar prefab</button>
             <button id="delete-button" class="danger-text" title="Excluir (Delete)">Excluir</button>
           </div>
         </section>
@@ -169,6 +221,11 @@
             <h3>Transformação</h3>
             <button id="reset-transform-button">Redefinir</button>
           </div>
+
+          <label class="parent-property">
+            <span>Objeto pai</span>
+            <select id="object-parent"><option value="">Raiz da cena</option></select>
+          </label>
 
           <div class="vector-row">
             <label>Posição</label>
@@ -196,6 +253,26 @@
               <label><span class="axis z">Z</span><input id="scale-z" type="number" step="0.1"></label>
             </div>
           </div>
+        </section>
+
+        <section id="collider-section" class="inspector-section collider-inspector" hidden>
+          <h3>Colisor</h3>
+          <label class="property-row select-property">
+            <span><strong>Formato</strong><small>A escala controla suas dimensões</small></span>
+            <select id="collider-shape">
+              <option value="box">Caixa</option>
+              <option value="sphere">Esfera</option>
+              <option value="capsule">Cápsula</option>
+            </select>
+          </label>
+          <label class="property-row switch-property">
+            <span><strong>Trigger</strong><small>Detecta entrada sem bloquear</small></span>
+            <input id="collider-trigger" type="checkbox">
+          </label>
+          <label class="property-row switch-property">
+            <span><strong>Bloquear câmera</strong><small>Impede a câmera de atravessar</small></span>
+            <input id="collider-camera" type="checkbox">
+          </label>
         </section>
 
         <section class="inspector-section appearance-section">
@@ -245,6 +322,19 @@
 
   <input id="import-input" type="file" multiple accept=".obj,.mtl,.gltf,.glb,.bin,.png,.jpg,.jpeg,.webp,.bmp,.tga" hidden>
   <input id="open-scene-input" type="file" accept=".json,application/json" hidden>
+
+  <dialog id="prefab-dialog" class="editor-dialog">
+    <form method="dialog">
+      <span class="eyebrow">NOVO PREFAB</span>
+      <h2>Salvar seleção como prefab</h2>
+      <p>O grupo, seus filhos e colisores serão preservados.</p>
+      <label>Nome<input id="prefab-name-input" autocomplete="off" maxlength="120"></label>
+      <div class="dialog-actions">
+        <button value="cancel" class="secondary-button">Cancelar</button>
+        <button id="confirm-prefab-button" value="default" class="primary-button">Criar prefab</button>
+      </div>
+    </form>
+  </dialog>
 
   <script type="module" src="/editor/app.js"></script>
 </body>

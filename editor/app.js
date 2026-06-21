@@ -19,7 +19,9 @@ const state = {
   document: null,
   objects: new Map(),
   assets: [],
-  selectedId: null,
+  prefabs: [],
+  selectedIds: new Set(),
+  primaryId: null,
   dirty: false,
   loading: 0,
   loadGeneration: 0,
@@ -28,8 +30,10 @@ const state = {
   transformMode: "translate",
   transformSpace: "world",
   dragSnapshot: null,
+  multiTransformStart: null,
   fieldSnapshot: null,
   runPoll: null,
+  collidersVisible: true,
 };
 
 const scene = new THREE.Scene();
@@ -97,13 +101,18 @@ const warmLight = new THREE.DirectionalLight(0xffae78, 0.72);
 warmLight.position.set(18, 9, -20);
 scene.add(warmLight);
 
-const selectionBox = new THREE.BoxHelper(undefined, 0x6de0ff);
+const selectionBounds = new THREE.Box3();
+const selectionBox = new THREE.Box3Helper(selectionBounds, 0x6de0ff);
 selectionBox.material.depthTest = false;
 selectionBox.material.transparent = true;
 selectionBox.material.opacity = 0.9;
 selectionBox.renderOrder = 999;
 selectionBox.visible = false;
 scene.add(selectionBox);
+
+const selectionPivot = new THREE.Object3D();
+selectionPivot.name = "MultiSelectionPivot";
+scene.add(selectionPivot);
 
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
@@ -133,7 +142,9 @@ function fileName(asset) {
 }
 
 function normalizeRecord(record = {}) {
-  const kind = record.source?.kind === "primitive" ? "primitive" : "model";
+  const kind = ["model", "primitive", "group", "collider"].includes(record.source?.kind)
+    ? record.source.kind
+    : "model";
   return {
     id: record.id || uid(kind),
     name: record.name || (kind === "primitive" ? "Primitiva" : fileName(record.source?.asset)),
@@ -141,7 +152,9 @@ function normalizeRecord(record = {}) {
       kind,
       asset: record.source?.asset || "",
       ...(kind === "primitive" ? { primitive: record.source?.primitive || "cube" } : {}),
+      ...(kind === "collider" ? { collider: ["box", "sphere", "capsule"].includes(record.source?.collider) ? record.source.collider : "box" } : {}),
     },
+    parentId: record.parentId || null,
     position: {
       x: clampNumber(record.position?.x), y: clampNumber(record.position?.y), z: clampNumber(record.position?.z),
     },
@@ -155,6 +168,13 @@ function normalizeRecord(record = {}) {
     visible: record.visible !== false,
     locked: record.locked === true,
     runtime: record.runtime !== false,
+    ...(kind === "collider" ? {
+      collider: {
+        trigger: record.collider?.trigger === true,
+        cameraBlocker: record.collider?.cameraBlocker !== false,
+      },
+    } : {}),
+    ...(record.prefabId ? { prefabId: record.prefabId } : {}),
   };
 }
 
@@ -298,6 +318,44 @@ function createPrimitive(record) {
   return mesh;
 }
 
+function createCollider(record) {
+  const root = new THREE.Group();
+  const color = record.collider?.trigger ? 0xffaa63 : 0x68e0b2;
+  const material = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.16,
+    wireframe: false,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const wireMaterial = new THREE.MeshBasicMaterial({ color, wireframe: true, transparent: true, opacity: 0.9 });
+  const shape = record.source.collider;
+  if (shape === "sphere") {
+    root.add(new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10), material));
+    root.add(new THREE.Mesh(new THREE.SphereGeometry(1.005, 16, 10), wireMaterial));
+  } else if (shape === "capsule") {
+    const cylinder = new THREE.CylinderGeometry(1, 1, 2, 14, 1, true);
+    cylinder.rotateX(Math.PI / 2);
+    root.add(new THREE.Mesh(cylinder, material), new THREE.Mesh(cylinder.clone(), wireMaterial));
+    for (const z of [-1, 1]) {
+      const cap = new THREE.SphereGeometry(1, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+      if (z < 0) cap.rotateX(Math.PI);
+      cap.translate(0, 0, z);
+      root.add(new THREE.Mesh(cap, material), new THREE.Mesh(cap.clone(), wireMaterial));
+    }
+  } else {
+    root.add(new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), material));
+    root.add(new THREE.Mesh(new THREE.BoxGeometry(2.01, 2.01, 2.01), wireMaterial));
+  }
+  root.userData.colliderVisual = true;
+  root.traverse((child) => {
+    child.renderOrder = 800;
+    child.userData.colliderVisual = true;
+  });
+  return root;
+}
+
 async function loadObj(asset) {
   const url = `/assets/${asset.split("/").map(encodeURIComponent).join("/")}`;
   const response = await fetch(url);
@@ -380,16 +438,25 @@ async function createEditorObject(record, generation = state.loadGeneration) {
   editorRoot.add(group);
   state.objects.set(record.id, group);
 
-  setLoading(1, `Carregando ${record.name}…`);
+  if (record.source.kind === "group") {
+    group.userData.stats = { vertices: 0, triangles: 0 };
+    return group;
+  }
+
+  setLoading(1, record.source.kind === "collider" ? `Criando ${record.name}…` : `Carregando ${record.name}…`);
   try {
-    const content = record.source.kind === "primitive" ? createPrimitive(record) : await loadModel(record.source.asset);
+    const content = record.source.kind === "primitive"
+      ? createPrimitive(record)
+      : record.source.kind === "collider"
+        ? createCollider(record)
+        : await loadModel(record.source.asset);
     if (generation !== state.loadGeneration || !state.objects.has(record.id)) {
       disposeObject(content);
       return group;
     }
     content.userData.editorContent = true;
     group.add(content);
-    group.userData.stats = prepareModel(content);
+    group.userData.stats = record.source.kind === "collider" ? { vertices: 0, triangles: 0 } : prepareModel(content);
   } catch (error) {
     console.error(error);
     group.add(createErrorPlaceholder(record));
@@ -400,71 +467,159 @@ async function createEditorObject(record, generation = state.loadGeneration) {
   }
 
   updateViewportStats();
-  if (state.selectedId === record.id) refreshSelectionVisuals();
+  if (state.selectedIds.has(record.id)) refreshSelectionVisuals();
   return group;
 }
 
 function currentRecord() {
-  return state.document?.objects.find((item) => item.id === state.selectedId) || null;
+  return state.document?.objects.find((item) => item.id === state.primaryId) || null;
 }
 
 function currentObject() {
-  return state.objects.get(state.selectedId) || null;
+  return state.objects.get(state.primaryId) || null;
 }
 
-function setSelection(id) {
-  state.selectedId = id && state.objects.has(id) ? id : null;
+function recordById(id) {
+  return state.document?.objects.find((item) => item.id === id) || null;
+}
+
+function selectedRecords() {
+  return [...state.selectedIds].map(recordById).filter(Boolean);
+}
+
+function selectedObjects() {
+  return [...state.selectedIds].map((id) => state.objects.get(id)).filter(Boolean);
+}
+
+function isDescendant(id, ancestorId) {
+  let current = recordById(id);
+  const visited = new Set();
+  while (current?.parentId && !visited.has(current.parentId)) {
+    if (current.parentId === ancestorId) return true;
+    visited.add(current.parentId);
+    current = recordById(current.parentId);
+  }
+  return false;
+}
+
+function transformSelectionIds() {
+  return [...state.selectedIds].filter((id) => {
+    const record = recordById(id);
+    const object = state.objects.get(id);
+    if (!record || !object || record.locked || !record.visible || !object.visible) return false;
+    return ![...state.selectedIds].some((otherId) => otherId !== id && isDescendant(id, otherId));
+  });
+}
+
+function setSelection(id, { additive = false, toggle = false } = {}) {
+  if (!additive) state.selectedIds.clear();
+  if (id && state.objects.has(id)) {
+    if (toggle && state.selectedIds.has(id)) state.selectedIds.delete(id);
+    else state.selectedIds.add(id);
+  }
+  state.primaryId = id && state.selectedIds.has(id) ? id : [...state.selectedIds].at(-1) || null;
   transform.detach();
   selectionBox.visible = false;
-  const record = currentRecord();
-  const object = currentObject();
-  if (record && object) {
-    if (!record.locked && record.visible) transform.attach(object);
-    if (record.visible) {
-      selectionBox.setFromObject(object);
-      selectionBox.visible = true;
-    }
+  const targets = transformSelectionIds();
+  if (targets.length === 1 && state.selectedIds.size === 1) {
+    transform.attach(state.objects.get(targets[0]));
+  } else if (targets.length > 0) {
+    updateSelectionBounds();
+    const center = selectionBounds.getCenter(new THREE.Vector3());
+    selectionPivot.position.copy(center);
+    selectionPivot.rotation.set(0, 0, 0);
+    selectionPivot.scale.set(1, 1, 1);
+    selectionPivot.updateMatrixWorld(true);
+    transform.attach(selectionPivot);
   }
+  refreshSelectionVisuals();
   renderHierarchy();
   renderInspector();
+  $("create-prefab-button").disabled = state.selectedIds.size === 0;
+}
+
+function updateSelectionBounds() {
+  selectionBounds.makeEmpty();
+  for (const id of state.selectedIds) {
+    const record = recordById(id);
+    const object = state.objects.get(id);
+    if (record?.visible && object?.visible) selectionBounds.expandByObject(object, true);
+  }
+  return !selectionBounds.isEmpty();
 }
 
 function refreshSelectionVisuals() {
-  const record = currentRecord();
-  const object = currentObject();
-  if (!record || !object) return;
-  if (record.visible) {
-    selectionBox.setFromObject(object);
-    selectionBox.visible = true;
-  } else {
-    selectionBox.visible = false;
-  }
+  selectionBox.visible = state.selectedIds.size > 0 && updateSelectionBounds();
 }
 
 function renderHierarchy() {
   const query = $("hierarchy-search").value.trim().toLocaleLowerCase("pt-BR");
   objectList.replaceChildren();
   const records = state.document?.objects || [];
+  const children = new Map();
   for (const record of records) {
+    const parentId = record.parentId && records.some((item) => item.id === record.parentId) ? record.parentId : null;
+    if (!children.has(parentId)) children.set(parentId, []);
+    children.get(parentId).push(record);
+  }
+  const ordered = [];
+  const visit = (parentId, depth) => {
+    for (const record of children.get(parentId) || []) {
+      ordered.push({ record, depth });
+      visit(record.id, depth + 1);
+    }
+  };
+  if (query) {
+    for (const record of records) {
+      if (record.name.toLocaleLowerCase("pt-BR").includes(query)) ordered.push({ record, depth: 0 });
+    }
+  } else {
+    visit(null, 0);
+  }
+
+  const icons = { group: "▱", collider: "▣", primitive: "◆", model: "◇" };
+  for (const { record, depth } of ordered) {
     if (query && !record.name.toLocaleLowerCase("pt-BR").includes(query)) continue;
     const row = document.createElement("div");
-    row.className = `object-row${record.id === state.selectedId ? " selected" : ""}${record.visible ? "" : " hidden-object"}`;
+    row.className = `object-row${state.selectedIds.has(record.id) ? " selected" : ""}${record.visible ? "" : " hidden-object"}`;
     row.dataset.id = record.id;
+    row.draggable = true;
+    row.style.setProperty("--depth", depth);
     row.setAttribute("role", "treeitem");
     row.innerHTML = `
-      <span class="object-icon">${record.source.kind === "primitive" ? "◆" : "◇"}</span>
+      <span class="object-icon">${icons[record.source.kind] || "◇"}</span>
       <span class="object-name"></span>
       <button class="visibility-button" title="${record.visible ? "Ocultar" : "Mostrar"}">${record.visible ? "◉" : "○"}</button>
       <button class="lock-button" title="${record.locked ? "Desbloquear" : "Bloquear"}">${record.locked ? "▣" : "□"}</button>
     `;
     row.querySelector(".object-name").textContent = record.name;
-    row.addEventListener("click", () => setSelection(record.id));
+    row.addEventListener("click", (event) => setSelection(record.id, {
+      additive: event.ctrlKey || event.metaKey || event.shiftKey,
+      toggle: event.ctrlKey || event.metaKey,
+    }));
+    row.addEventListener("dragstart", (event) => {
+      event.dataTransfer.setData("text/athena-object", record.id);
+      event.dataTransfer.effectAllowed = "move";
+    });
+    row.addEventListener("dragover", (event) => {
+      if (!event.dataTransfer.types.includes("text/athena-object")) return;
+      event.preventDefault();
+      row.classList.add("drag-over");
+    });
+    row.addEventListener("dragleave", () => row.classList.remove("drag-over"));
+    row.addEventListener("drop", (event) => {
+      row.classList.remove("drag-over");
+      const childId = event.dataTransfer.getData("text/athena-object");
+      if (!childId) return;
+      event.preventDefault();
+      setParent(childId, record.id);
+    });
     row.querySelector(".visibility-button").addEventListener("click", (event) => {
       event.stopPropagation();
       const before = serializeScene();
       record.visible = !record.visible;
       const object = state.objects.get(record.id);
-      if (object) object.visible = record.visible;
+      if (object) object.visible = record.visible && (record.source.kind !== "collider" || state.collidersVisible);
       pushHistorySnapshot(before);
       setSelection(record.id);
     });
@@ -506,6 +661,34 @@ function renderAssets() {
   }
 }
 
+function renderPrefabs() {
+  const list = $("prefab-list");
+  list.replaceChildren();
+  if (!state.prefabs.length) {
+    const empty = document.createElement("div");
+    empty.className = "prefab-empty";
+    empty.textContent = "Selecione objetos e use “Da seleção” para criar um prefab.";
+    list.append(empty);
+    return;
+  }
+  for (const prefab of state.prefabs) {
+    const row = document.createElement("div");
+    row.className = "prefab-row";
+    row.innerHTML = `
+      <span class="asset-badge">PF</span>
+      <span class="asset-info"><strong></strong><small></small></span>
+      <button class="prefab-add" title="Instanciar prefab">＋</button>
+      <button class="prefab-delete" title="Excluir prefab">×</button>
+    `;
+    row.querySelector("strong").textContent = prefab.name;
+    row.querySelector("small").textContent = `${prefab.objects?.length || 0} objeto(s)`;
+    row.querySelector(".prefab-add").addEventListener("click", () => instantiatePrefab(prefab));
+    row.querySelector(".prefab-delete").addEventListener("click", () => deletePrefab(prefab));
+    row.addEventListener("dblclick", () => instantiatePrefab(prefab));
+    list.append(row);
+  }
+}
+
 function setVectorInputs(prefix, vector) {
   $(`${prefix}-x`).value = cleanNumber(vector.x);
   $(`${prefix}-y`).value = cleanNumber(vector.y);
@@ -515,12 +698,27 @@ function setVectorInputs(prefix, vector) {
 function renderInspector() {
   const record = currentRecord();
   const object = currentObject();
-  inspector.hidden = !record;
+  const multi = state.selectedIds.size > 1;
+  $("create-prefab-button").disabled = state.selectedIds.size === 0;
+  $("inspector-multi").hidden = !multi;
+  inspector.hidden = !record || multi;
   inspectorEmpty.hidden = Boolean(record);
+  if (multi) {
+    inspectorEmpty.hidden = true;
+    const count = state.selectedIds.size;
+    $("multi-selection-count").textContent = `${count} objetos selecionados`;
+    updateSelectionBounds();
+    const pivot = selectionBounds.getCenter(new THREE.Vector3());
+    $("multi-pivot").textContent = `${pivot.x.toFixed(2)}, ${pivot.y.toFixed(2)}, ${pivot.z.toFixed(2)}`;
+    let triangles = 0;
+    for (const selected of selectedObjects()) triangles += selected.userData.stats?.triangles || 0;
+    $("multi-triangles").textContent = Math.round(triangles).toLocaleString("pt-BR");
+    return;
+  }
   if (!record) return;
 
   $("object-name").value = record.name;
-  $("object-type-icon").textContent = record.source.kind === "primitive" ? "◆" : "◇";
+  $("object-type-icon").textContent = ({ group: "▱", collider: "▣", primitive: "◆", model: "◇" })[record.source.kind] || "◇";
   setVectorInputs("position", record.position);
   setVectorInputs("rotation", record.rotation);
   setVectorInputs("scale", record.scale);
@@ -528,11 +726,31 @@ function renderInspector() {
   $("object-visible").checked = record.visible;
   $("object-locked").checked = record.locked;
   $("object-runtime").checked = record.runtime;
-  $("source-kind").textContent = record.source.kind === "primitive" ? `Primitiva · ${record.source.primitive}` : "Modelo 3D";
+  $("source-kind").textContent = record.source.kind === "primitive"
+    ? `Primitiva · ${record.source.primitive}`
+    : record.source.kind === "collider"
+      ? `Colisor · ${record.source.collider}`
+      : record.source.kind === "group" ? "Grupo" : "Modelo 3D";
   $("source-asset").textContent = record.source.asset || "—";
   $("source-id").textContent = record.id;
   const stats = object?.userData.stats;
   $("source-stats").textContent = stats ? `${stats.vertices.toLocaleString("pt-BR")} vértices · ${stats.triangles.toLocaleString("pt-BR")} tris` : "Carregando…";
+
+  const parentSelect = $("object-parent");
+  parentSelect.replaceChildren(new Option("Raiz da cena", ""));
+  for (const candidate of state.document.objects) {
+    if (candidate.id === record.id || isDescendant(candidate.id, record.id)) continue;
+    parentSelect.append(new Option(candidate.name, candidate.id));
+  }
+  parentSelect.value = record.parentId || "";
+
+  const colliderMode = record.source.kind === "collider";
+  $("collider-section").hidden = !colliderMode;
+  if (colliderMode) {
+    $("collider-shape").value = record.source.collider;
+    $("collider-trigger").checked = record.collider?.trigger === true;
+    $("collider-camera").checked = record.collider?.cameraBlocker !== false;
+  }
 
   const transformInputs = inspector.querySelectorAll('.vector-inputs input, #reset-transform-button');
   for (const input of transformInputs) input.disabled = record.locked;
@@ -557,12 +775,177 @@ async function refreshAssetCatalog() {
   }
 }
 
+async function refreshPrefabs() {
+  try {
+    const response = await fetch("/api/prefabs", { cache: "no-store" });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Falha ao listar prefabs");
+    state.prefabs = data.prefabs || [];
+    renderPrefabs();
+  } catch (error) {
+    toast(error.message, "error");
+  }
+}
+
+function recordWorldTransform(record) {
+  const object = state.objects.get(record.id);
+  object.updateMatrixWorld(true);
+  const position = new THREE.Vector3();
+  const quaternion = new THREE.Quaternion();
+  const scale = new THREE.Vector3();
+  object.matrixWorld.decompose(position, quaternion, scale);
+  const rotation = new THREE.Euler().setFromQuaternion(quaternion, "XYZ");
+  return {
+    position: { x: cleanNumber(position.x), y: cleanNumber(position.y), z: cleanNumber(position.z) },
+    rotation: {
+      x: cleanNumber(THREE.MathUtils.radToDeg(rotation.x)),
+      y: cleanNumber(THREE.MathUtils.radToDeg(rotation.y)),
+      z: cleanNumber(THREE.MathUtils.radToDeg(rotation.z)),
+    },
+    scale: { x: cleanNumber(scale.x), y: cleanNumber(scale.y), z: cleanNumber(scale.z) },
+  };
+}
+
+async function saveSelectionAsPrefab(nameOverride) {
+  if (!state.selectedIds.size) return;
+  const defaultName = state.selectedIds.size === 1 ? currentRecord()?.name : `Conjunto de ${state.selectedIds.size} objetos`;
+  if (typeof nameOverride !== "string") {
+    $("prefab-name-input").value = defaultName || "Novo prefab";
+    $("prefab-dialog").showModal();
+    $("prefab-name-input").focus();
+    $("prefab-name-input").select();
+    return;
+  }
+  const name = nameOverride;
+  if (!name?.trim()) return;
+  const closure = selectionClosure();
+  updateSelectionBounds();
+  const origin = selectionBounds.getCenter(new THREE.Vector3());
+  const objects = state.document.objects.filter((record) => closure.has(record.id)).map((record) => {
+    const copy = deepClone(record);
+    if (!record.parentId || !closure.has(record.parentId)) {
+      const world = recordWorldTransform(record);
+      copy.parentId = null;
+      copy.position = {
+        x: cleanNumber(world.position.x - origin.x),
+        y: cleanNumber(world.position.y - origin.y),
+        z: cleanNumber(world.position.z - origin.z),
+      };
+      copy.rotation = world.rotation;
+      copy.scale = world.scale;
+    }
+    return copy;
+  });
+  try {
+    const response = await fetch("/api/prefabs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim(), objects }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Falha ao criar prefab");
+    await refreshPrefabs();
+    toast(`Prefab “${result.prefab.name}” criado.`, "success");
+  } catch (error) {
+    toast(error.message, "error");
+  }
+}
+
+async function instantiatePrefab(prefab) {
+  if (!prefab?.objects?.length) return;
+  const before = serializeScene();
+  const idMap = new Map(prefab.objects.map((record) => [record.id, uid(record.source?.kind || "prefab")]));
+  const rootIds = [];
+  for (const source of prefab.objects) {
+    const record = deepClone(source);
+    record.id = idMap.get(source.id);
+    record.parentId = source.parentId && idMap.has(source.parentId) ? idMap.get(source.parentId) : null;
+    record.prefabId = prefab.id;
+    if (!record.parentId) {
+      record.position.x += orbit.target.x;
+      record.position.y += orbit.target.y;
+      record.position.z += orbit.target.z;
+      rootIds.push(record.id);
+    }
+    await addRecord(record, { select: false, checkpoint: false });
+  }
+  rebuildHierarchy();
+  pushHistorySnapshot(before);
+  state.selectedIds = new Set(rootIds);
+  state.primaryId = rootIds.at(-1) || null;
+  setSelection(state.primaryId, { additive: true });
+  focusSelection();
+  toast(`Prefab “${prefab.name}” instanciado.`, "success");
+}
+
+async function deletePrefab(prefab) {
+  if (!window.confirm(`Excluir o prefab “${prefab.name}”? As instâncias existentes continuarão na cena.`)) return;
+  try {
+    const response = await fetch(`/api/prefabs/${encodeURIComponent(prefab.id)}`, { method: "DELETE" });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Falha ao excluir prefab");
+    await refreshPrefabs();
+    toast("Prefab excluído.");
+  } catch (error) {
+    toast(error.message, "error");
+  }
+}
+
+function rebuildHierarchy() {
+  for (const record of state.document?.objects || []) {
+    const object = state.objects.get(record.id);
+    if (!object) continue;
+    editorRoot.add(object);
+    applyRecordTransform(record, object);
+  }
+  for (const record of state.document?.objects || []) {
+    if (!record.parentId) continue;
+    const object = state.objects.get(record.id);
+    const parent = state.objects.get(record.parentId);
+    if (!object || !parent || isDescendant(record.parentId, record.id)) {
+      record.parentId = null;
+      continue;
+    }
+    parent.add(object);
+    applyRecordTransform(record, object);
+  }
+  for (const record of state.document?.objects || []) {
+    const object = state.objects.get(record.id);
+    if (object) object.visible = record.visible && (record.source.kind !== "collider" || state.collidersVisible);
+  }
+  editorRoot.updateMatrixWorld(true);
+}
+
+function setParent(id, parentId) {
+  const record = recordById(id);
+  const object = state.objects.get(id);
+  const parent = parentId ? state.objects.get(parentId) : editorRoot;
+  if (!record || !object || !parent || id === parentId || (parentId && isDescendant(parentId, id))) {
+    toast("Essa relação criaria um ciclo na hierarquia.", "error");
+    return;
+  }
+  const before = serializeScene();
+  object.updateMatrixWorld(true);
+  const world = object.matrixWorld.clone();
+  parent.updateMatrixWorld(true);
+  parent.add(object);
+  const local = parent.matrixWorld.clone().invert().multiply(world);
+  local.decompose(object.position, object.quaternion, object.scale);
+  object.rotation.setFromQuaternion(object.quaternion, "XYZ");
+  record.parentId = parentId || null;
+  syncRecordFromObject(record, object);
+  pushHistorySnapshot(before);
+  setSelection(id);
+  setStatus(parentId ? `${record.name} adicionado a ${recordById(parentId)?.name}` : `${record.name} movido para a raiz`);
+}
+
 async function loadDocument(documentData, { preserveHistory = false, dirty = false } = {}) {
   state.loadGeneration += 1;
   const generation = state.loadGeneration;
   transform.detach();
   selectionBox.visible = false;
-  state.selectedId = null;
+  state.selectedIds.clear();
+  state.primaryId = null;
   for (const object of [...editorRoot.children]) {
     editorRoot.remove(object);
     disposeObject(object);
@@ -602,6 +985,7 @@ async function loadDocument(documentData, { preserveHistory = false, dirty = fal
   renderHierarchy();
   await Promise.all(normalizedObjects.map((record) => createEditorObject(record, generation)));
   if (generation !== state.loadGeneration) return;
+  rebuildHierarchy();
   renderHierarchy();
   renderInspector();
   updateViewportStats();
@@ -616,6 +1000,10 @@ async function addRecord(record, { select = true, checkpoint = true } = {}) {
   state.document.objects.push(normalized);
   renderHierarchy();
   await createEditorObject(normalized);
+  if (normalized.parentId && state.objects.has(normalized.parentId)) {
+    state.objects.get(normalized.parentId).add(state.objects.get(normalized.id));
+    applyRecordTransform(normalized, state.objects.get(normalized.id));
+  }
   if (checkpoint) pushHistorySnapshot(before);
   if (select) {
     setSelection(normalized.id);
@@ -623,6 +1011,34 @@ async function addRecord(record, { select = true, checkpoint = true } = {}) {
   }
   updateViewportStats();
   return normalized;
+}
+
+async function addGroup() {
+  await addRecord({
+    id: uid("group"),
+    name: "Novo grupo",
+    source: { kind: "group", asset: "" },
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 1, y: 1, z: 1 },
+    color: "#8bd5f7",
+  });
+  setStatus("Grupo adicionado");
+}
+
+async function addCollider(shape) {
+  const labels = { box: "Colisor caixa", sphere: "Colisor esfera", capsule: "Colisor cápsula" };
+  await addRecord({
+    id: uid("collider"),
+    name: labels[shape] || "Colisor",
+    source: { kind: "collider", collider: shape, asset: "" },
+    position: { x: orbit.target.x, y: 1, z: orbit.target.z },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 1, y: 1, z: 1 },
+    color: "#68e0b2",
+    collider: { trigger: false, cameraBlocker: true },
+  });
+  setStatus(`${labels[shape]} adicionado`);
 }
 
 function primitiveLabel(kind) {
@@ -655,34 +1071,75 @@ async function addAssetToScene(asset) {
   setStatus(`${fileName(asset)} adicionado`);
 }
 
+function selectionClosure() {
+  const ids = new Set(state.selectedIds);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const record of state.document.objects) {
+      if (record.parentId && ids.has(record.parentId) && !ids.has(record.id)) {
+        ids.add(record.id);
+        changed = true;
+      }
+    }
+  }
+  return ids;
+}
+
 async function duplicateSelection() {
-  const record = currentRecord();
-  if (!record) return;
-  const duplicate = deepClone(record);
-  duplicate.id = uid(record.source.kind);
-  duplicate.name = `${record.name} cópia`;
-  duplicate.position.x += 1;
-  duplicate.position.z += 1;
-  await addRecord(duplicate);
+  if (!state.selectedIds.size) return;
+  const before = serializeScene();
+  const closure = selectionClosure();
+  const originals = state.document.objects.filter((record) => closure.has(record.id));
+  const idMap = new Map(originals.map((record) => [record.id, uid(record.source.kind)]));
+  const newIds = [];
+  for (const original of originals) {
+    const duplicate = deepClone(original);
+    duplicate.id = idMap.get(original.id);
+    duplicate.name = state.selectedIds.has(original.id) ? `${original.name} cópia` : original.name;
+    duplicate.parentId = original.parentId && idMap.has(original.parentId) ? idMap.get(original.parentId) : original.parentId;
+    duplicate.prefabId = original.prefabId;
+    if (!duplicate.parentId || !idMap.has(original.parentId)) {
+      duplicate.position.x += 1;
+      duplicate.position.z += 1;
+    }
+    await addRecord(duplicate, { select: false, checkpoint: false });
+    if (state.selectedIds.has(original.id)) newIds.push(duplicate.id);
+  }
+  pushHistorySnapshot(before);
+  state.selectedIds = new Set(newIds);
+  state.primaryId = newIds.at(-1) || null;
+  setSelection(state.primaryId, { additive: true });
+  focusSelection();
 }
 
 function deleteSelection() {
-  const record = currentRecord();
-  const object = currentObject();
-  if (!record || !object) return;
+  if (!state.selectedIds.size) return;
   const before = serializeScene();
+  const closure = selectionClosure();
+  const names = selectedRecords().map((item) => item.name);
   transform.detach();
-  editorRoot.remove(object);
-  disposeObject(object);
-  state.objects.delete(record.id);
-  state.document.objects = state.document.objects.filter((item) => item.id !== record.id);
-  state.selectedId = null;
+  const topLevel = [...closure].filter((id) => {
+    const parentId = recordById(id)?.parentId;
+    return !parentId || !closure.has(parentId);
+  });
+  for (const id of topLevel) {
+    const object = state.objects.get(id);
+    if (object) {
+      object.parent?.remove(object);
+      disposeObject(object);
+    }
+  }
+  for (const id of closure) state.objects.delete(id);
+  state.document.objects = state.document.objects.filter((item) => !closure.has(item.id));
+  state.selectedIds.clear();
+  state.primaryId = null;
   selectionBox.visible = false;
   pushHistorySnapshot(before);
   renderHierarchy();
   renderInspector();
   updateViewportStats();
-  setStatus(`${record.name} excluído`);
+  setStatus(`${names.length > 1 ? `${names.length} objetos excluídos` : `${names[0]} excluído`}`);
 }
 
 async function undo() {
@@ -706,10 +1163,24 @@ async function redo() {
 }
 
 function updatePrimitiveColor(record, object) {
-  if (record.source.kind !== "primitive" || !object) return;
+  if (!["primitive", "collider"].includes(record.source.kind) || !object) return;
   object.traverse((child) => {
     if (child.isMesh && child.material?.color) child.material.color.set(record.color);
   });
+}
+
+function rebuildColliderVisual(record) {
+  const object = state.objects.get(record.id);
+  if (!object || record.source.kind !== "collider") return;
+  for (const child of [...object.children]) {
+    if (!child.userData.editorContent) continue;
+    object.remove(child);
+    disposeObject(child);
+  }
+  const content = createCollider(record);
+  content.userData.editorContent = true;
+  object.add(content);
+  refreshSelectionVisuals();
 }
 
 function updateTransformFromInspector() {
@@ -767,11 +1238,8 @@ function updateSnap() {
 }
 
 function focusSelection() {
-  const object = currentObject();
-  if (!object) return;
-  const box = new THREE.Box3().setFromObject(object);
-  if (box.isEmpty()) return;
-  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  if (!updateSelectionBounds()) return;
+  const sphere = selectionBounds.getBoundingSphere(new THREE.Sphere());
   const direction = camera.position.clone().sub(orbit.target).normalize();
   const distance = Math.max(sphere.radius * 2.8, 3);
   orbit.target.copy(sphere.center);
@@ -783,8 +1251,8 @@ function focusSelection() {
 }
 
 function setView(view) {
-  const target = currentObject()
-    ? new THREE.Box3().setFromObject(currentObject()).getCenter(new THREE.Vector3())
+  const target = state.selectedIds.size && updateSelectionBounds()
+    ? selectionBounds.getCenter(new THREE.Vector3())
     : orbit.target.clone();
   const distance = Math.max(camera.position.distanceTo(orbit.target), 25);
   camera.up.set(0, 1, 0);
@@ -959,7 +1427,10 @@ renderer.domElement.addEventListener("pointerup", (event) => {
     }
     if (selected) break;
   }
-  setSelection(selected);
+  setSelection(selected, {
+    additive: event.ctrlKey || event.metaKey || event.shiftKey,
+    toggle: event.ctrlKey || event.metaKey,
+  });
 });
 
 renderer.domElement.addEventListener("pointermove", (event) => {
@@ -977,9 +1448,40 @@ transform.addEventListener("dragging-changed", (event) => {
 
 transform.addEventListener("mouseDown", () => {
   state.dragSnapshot = serializeScene();
+  if (transform.object === selectionPivot && state.selectedIds.size > 1) {
+    selectionPivot.updateMatrixWorld(true);
+    const matrices = new Map();
+    for (const id of transformSelectionIds()) {
+      const object = state.objects.get(id);
+      object.updateMatrixWorld(true);
+      matrices.set(id, object.matrixWorld.clone());
+    }
+    state.multiTransformStart = {
+      pivot: selectionPivot.matrixWorld.clone(),
+      matrices,
+    };
+  }
 });
 
 transform.addEventListener("objectChange", () => {
+  if (transform.object === selectionPivot && state.multiTransformStart) {
+    selectionPivot.updateMatrixWorld(true);
+    const delta = selectionPivot.matrixWorld.clone().multiply(state.multiTransformStart.pivot.clone().invert());
+    for (const [id, startWorld] of state.multiTransformStart.matrices) {
+      const object = state.objects.get(id);
+      const record = recordById(id);
+      if (!object || !record) continue;
+      object.parent.updateMatrixWorld(true);
+      const local = object.parent.matrixWorld.clone().invert().multiply(delta).multiply(startWorld);
+      local.decompose(object.position, object.quaternion, object.scale);
+      object.rotation.setFromQuaternion(object.quaternion, "XYZ");
+      syncRecordFromObject(record, object);
+    }
+    renderInspector();
+    refreshSelectionVisuals();
+    markDirty();
+    return;
+  }
   const record = currentRecord();
   const object = currentObject();
   if (!record || !object) return;
@@ -992,6 +1494,8 @@ transform.addEventListener("objectChange", () => {
 transform.addEventListener("mouseUp", () => {
   pushHistorySnapshot(state.dragSnapshot);
   state.dragSnapshot = null;
+  state.multiTransformStart = null;
+  if (state.selectedIds.size > 1) setSelection(state.primaryId, { additive: true });
 });
 
 function bindInspector() {
@@ -1041,16 +1545,54 @@ function bindInspector() {
       if (!record) return;
       stageFieldHistory();
       record[property] = event.target.checked;
-      if (property === "visible" && currentObject()) currentObject().visible = record.visible;
+      if (property === "visible" && currentObject()) {
+        currentObject().visible = record.visible && (record.source.kind !== "collider" || state.collidersVisible);
+      }
       finishFieldHistory();
       setSelection(record.id);
     });
   }
+
+  $("object-parent").addEventListener("change", (event) => {
+    const record = currentRecord();
+    if (record) setParent(record.id, event.target.value || null);
+  });
+
+  $("collider-shape").addEventListener("change", (event) => {
+    const record = currentRecord();
+    if (!record || record.source.kind !== "collider") return;
+    stageFieldHistory();
+    record.source.collider = event.target.value;
+    rebuildColliderVisual(record);
+    finishFieldHistory();
+    markDirty();
+    renderInspector();
+  });
+  $("collider-trigger").addEventListener("change", (event) => {
+    const record = currentRecord();
+    if (!record || record.source.kind !== "collider") return;
+    stageFieldHistory();
+    record.collider.trigger = event.target.checked;
+    record.color = record.collider.trigger ? "#ffad66" : "#68e0b2";
+    rebuildColliderVisual(record);
+    finishFieldHistory();
+    markDirty();
+    renderInspector();
+  });
+  $("collider-camera").addEventListener("change", (event) => {
+    const record = currentRecord();
+    if (!record || record.source.kind !== "collider") return;
+    stageFieldHistory();
+    record.collider.cameraBlocker = event.target.checked;
+    finishFieldHistory();
+    markDirty();
+  });
 }
 
 function bindUi() {
   document.querySelectorAll("[data-mode]").forEach((button) => button.addEventListener("click", () => setTransformMode(button.dataset.mode)));
   document.querySelectorAll("[data-primitive]").forEach((button) => button.addEventListener("click", () => addPrimitive(button.dataset.primitive)));
+  document.querySelectorAll("[data-collider]").forEach((button) => button.addEventListener("click", () => addCollider(button.dataset.collider)));
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
 
   $("space-button").addEventListener("click", toggleTransformSpace);
@@ -1060,6 +1602,16 @@ function bindUi() {
     axes.visible = grid.visible;
     $("grid-button").classList.toggle("active", grid.visible);
   });
+  $("collider-visibility-button").addEventListener("click", () => {
+    state.collidersVisible = !state.collidersVisible;
+    for (const record of state.document.objects) {
+      if (record.source.kind !== "collider") continue;
+      const object = state.objects.get(record.id);
+      if (object) object.visible = record.visible && state.collidersVisible;
+    }
+    $("collider-visibility-button").classList.toggle("active", state.collidersVisible);
+    refreshSelectionVisuals();
+  });
   $("focus-button").addEventListener("click", focusSelection);
   $("save-button").addEventListener("click", () => saveScene());
   $("export-button").addEventListener("click", exportSceneFile);
@@ -1067,7 +1619,20 @@ function bindUi() {
   $("undo-button").addEventListener("click", undo);
   $("redo-button").addEventListener("click", redo);
   $("duplicate-button").addEventListener("click", duplicateSelection);
+  $("multi-duplicate-button").addEventListener("click", duplicateSelection);
   $("delete-button").addEventListener("click", deleteSelection);
+  $("multi-delete-button").addEventListener("click", deleteSelection);
+  $("prefab-button").addEventListener("click", saveSelectionAsPrefab);
+  $("multi-prefab-button").addEventListener("click", saveSelectionAsPrefab);
+  $("create-prefab-button").addEventListener("click", saveSelectionAsPrefab);
+  $("add-group-button").addEventListener("click", addGroup);
+  $("confirm-prefab-button").addEventListener("click", (event) => {
+    event.preventDefault();
+    const name = $("prefab-name-input").value.trim();
+    if (!name) return;
+    $("prefab-dialog").close();
+    saveSelectionAsPrefab(name);
+  });
   $("reset-transform-button").addEventListener("click", resetTransform);
   $("hierarchy-search").addEventListener("input", renderHierarchy);
   $("asset-search").addEventListener("input", renderAssets);
@@ -1075,6 +1640,20 @@ function bindUi() {
   $("empty-import-button").addEventListener("click", () => $("import-input").click());
   $("import-input").addEventListener("change", (event) => importFiles(event.target.files));
   $("open-scene-button").addEventListener("click", () => $("open-scene-input").click());
+  $("scene-root-row").addEventListener("dragover", (event) => {
+    if (!event.dataTransfer.types.includes("text/athena-object")) return;
+    event.preventDefault();
+    $("scene-root-row").classList.add("drag-over");
+  });
+  $("scene-root-row").addEventListener("dragleave", () => $("scene-root-row").classList.remove("drag-over"));
+  $("scene-root-row").addEventListener("drop", (event) => {
+    $("scene-root-row").classList.remove("drag-over");
+    const id = event.dataTransfer.getData("text/athena-object");
+    if (id) {
+      event.preventDefault();
+      setParent(id, null);
+    }
+  });
   $("open-scene-input").addEventListener("change", async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -1179,7 +1758,7 @@ function animate() {
   requestAnimationFrame(animate);
   const delta = clock.getDelta();
   orbit.update(delta);
-  if (selectionBox.visible && currentObject()) selectionBox.update();
+  if (selectionBox.visible) updateSelectionBounds();
   renderer.render(scene, camera);
 }
 
@@ -1193,6 +1772,7 @@ async function boot() {
     const [sceneResponse] = await Promise.all([
       fetch("/api/scene", { cache: "no-store" }),
       refreshAssetCatalog(),
+      refreshPrefabs(),
     ]);
     const data = await sceneResponse.json();
     if (!sceneResponse.ok) throw new Error(data.error || "Falha ao abrir a cena");

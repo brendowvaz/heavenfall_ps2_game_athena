@@ -7,7 +7,7 @@ const sourcePath = path.join(__dirname, "..", "main.js");
 let source = fs.readFileSync(sourcePath, "utf8");
 source = source.replace(
     "while (true) {",
-    "globalThis.__levelTest = { baseWalkable, isPlayerValid, applyMovement, getPlayer: () => ({ x: playerX, z: playerZ }) }; for (let __smokeFrame = 0; __smokeFrame < 2; __smokeFrame++) {"
+    "globalThis.__levelTest = { baseWalkable, isPlayerValid, applyMovement, colliderHits, getPlayer: () => ({ x: playerX, z: playerZ }) }; for (let __smokeFrame = 0; __smokeFrame < 2; __smokeFrame++) {"
 );
 
 let vertexCount = 0;
@@ -73,9 +73,10 @@ const context = {
         },
         loadScript(filename) {
             const generated = fs.readFileSync(path.join(__dirname, "..", "assets", filename), "utf8");
-            const firstBracket = generated.indexOf("[");
-            const lastBracket = generated.lastIndexOf("]");
-            context.EDITOR_SCENE = JSON.parse(generated.slice(firstBracket, lastBracket + 1));
+            const sceneMatch = generated.match(/globalThis\.EDITOR_SCENE\s*=\s*([\s\S]*?);\s*globalThis\.EDITOR_COLLIDERS/);
+            const colliderMatch = generated.match(/globalThis\.EDITOR_COLLIDERS\s*=\s*([\s\S]*?);\s*$/);
+            context.EDITOR_SCENE = JSON.parse(sceneMatch[1]);
+            context.EDITOR_COLLIDERS = JSON.parse(colliderMatch[1]);
         }
     },
     Lights: {
@@ -114,6 +115,23 @@ if (context.__levelTest.isPlayerValid(20, 0)) {
 }
 if (context.__levelTest.isPlayerValid(-2.8, -1.5)) {
     throw new Error("The main ice spire must block the player");
+}
+const testBox = {
+    shape: "box",
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: Math.PI / 4, z: 0 },
+    scale: { x: 1, y: 1, z: 2 },
+    trigger: false
+};
+if (!context.__levelTest.colliderHits(0.5, 0.0, 0.2, testBox)) {
+    throw new Error("Rotated box collider must detect an interior point");
+}
+if (context.__levelTest.colliderHits(8.0, 8.0, 0.2, testBox)) {
+    throw new Error("Box collider must reject a distant point");
+}
+testBox.trigger = true;
+if (context.__levelTest.colliderHits(0.0, 0.0, 0.2, testBox)) {
+    throw new Error("Trigger colliders must not block movement");
 }
 if (context.__levelTest.getPlayer().z >= 17.9) {
     throw new Error("Forward input must decrease Z inside the entrance corridor");
