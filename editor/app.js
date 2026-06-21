@@ -1395,6 +1395,67 @@ function setView(view) {
   $("viewport").querySelector(".viewport-label").textContent = ({ top: "SUPERIOR", front: "FRONTAL", side: "LATERAL" }[view] || "PERSPECTIVA");
 }
 
+const axisDirections = {
+  x: new THREE.Vector3(1, 0, 0),
+  y: new THREE.Vector3(0, 1, 0),
+  z: new THREE.Vector3(0, 0, 1),
+};
+const axisCameraQuaternion = new THREE.Quaternion();
+const axisScreenDirection = new THREE.Vector3();
+
+function placeAxisNode(axis, direction) {
+  const radius = 38;
+  const x = 64 + direction.x * radius;
+  const y = 64 - direction.y * radius;
+  const positive = document.querySelector(`[data-axis-view="${axis}"]`);
+  const negative = document.querySelector(`[data-axis-view="-${axis}"]`);
+  positive.style.left = `${x}px`;
+  positive.style.top = `${y}px`;
+  positive.style.zIndex = direction.z >= 0 ? 4 : 2;
+  positive.style.opacity = direction.z >= 0 ? "1" : "0.58";
+  negative.style.left = `${128 - x}px`;
+  negative.style.top = `${128 - y}px`;
+  negative.style.zIndex = direction.z < 0 ? 4 : 2;
+  negative.style.opacity = direction.z < 0 ? "0.88" : "0.38";
+
+  const line = $(`axis-line-${axis}`);
+  line.setAttribute("x1", 128 - x);
+  line.setAttribute("y1", 128 - y);
+  line.setAttribute("x2", x);
+  line.setAttribute("y2", y);
+}
+
+function updateAxisGizmo() {
+  axisCameraQuaternion.copy(camera.quaternion).invert();
+  for (const [axis, direction] of Object.entries(axisDirections)) {
+    axisScreenDirection.copy(direction).applyQuaternion(axisCameraQuaternion);
+    placeAxisNode(axis, axisScreenDirection);
+  }
+}
+
+function setAxisView(axisName) {
+  const negative = axisName.startsWith("-");
+  const axis = negative ? axisName.slice(1) : axisName;
+  const direction = axisDirections[axis].clone().multiplyScalar(negative ? -1 : 1);
+  const distance = Math.max(camera.position.distanceTo(orbit.target), 0.5);
+  const labels = {
+    x: "LATERAL +X", "-x": "LATERAL -X",
+    y: "SUPERIOR +Y", "-y": "INFERIOR -Y",
+    z: "FRONTAL +Z", "-z": "TRASEIRA -Z",
+  };
+
+  camera.up.set(0, 1, 0);
+  if (axis === "y") camera.up.set(0, 0, negative ? 1 : -1);
+  camera.position.copy(orbit.target).add(direction.multiplyScalar(distance));
+  orbit.update();
+  document.querySelectorAll("[data-view]").forEach((button) => {
+    const activeView = !negative && ({ x: "side", y: "top", z: "front" }[axis]);
+    button.classList.toggle("active", button.dataset.view === activeView);
+  });
+  viewport.querySelector(".viewport-label").textContent = labels[axisName];
+  setStatus(`${labels[axisName]} — clique em outro eixo para trocar a visão`);
+}
+
 async function saveScene({ quiet = false } = {}) {
   try {
     syncAllRecords();
@@ -1539,7 +1600,12 @@ renderer.domElement.addEventListener("pointerup", (event) => {
     return;
   }
   if (!pointerStart || transform.dragging) return;
-  if (Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) > 4) return;
+  const movement = Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y);
+  if (movement > 4) {
+    document.querySelectorAll("[data-view]").forEach((button) => button.classList.toggle("active", button.dataset.view === "perspective"));
+    viewport.querySelector(".viewport-label").textContent = "PERSPECTIVA";
+    return;
+  }
   pointerCoordinates(event);
   raycaster.setFromCamera(pointer, camera);
   const hits = raycaster.intersectObjects(editorRoot.children, true);
@@ -1724,6 +1790,7 @@ function bindUi() {
   document.querySelectorAll("[data-primitive]").forEach((button) => button.addEventListener("click", () => addPrimitive(button.dataset.primitive)));
   document.querySelectorAll("[data-collider]").forEach((button) => button.addEventListener("click", () => addCollider(button.dataset.collider)));
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
+  document.querySelectorAll("[data-axis-view]").forEach((button) => button.addEventListener("click", () => setAxisView(button.dataset.axisView)));
 
   $("space-button").addEventListener("click", toggleTransformSpace);
   $("snap-toggle").addEventListener("change", updateSnap);
@@ -1902,6 +1969,7 @@ function animate() {
   const delta = clock.getDelta();
   orbit.update(delta);
   if (selectionBox.visible) updateSelectionBounds();
+  updateAxisGizmo();
   renderer.render(scene, camera);
 }
 

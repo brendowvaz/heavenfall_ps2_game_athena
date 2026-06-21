@@ -158,6 +158,21 @@
         <button id="grid-button" class="active" title="Mostrar grade">#</button>
       </div>
 
+      <div id="axis-gizmo" class="axis-gizmo" aria-label="Orientação da câmera">
+        <svg viewBox="0 0 128 128" aria-hidden="true">
+          <line id="axis-line-x" class="axis-line axis-x"></line>
+          <line id="axis-line-y" class="axis-line axis-y"></line>
+          <line id="axis-line-z" class="axis-line axis-z"></line>
+        </svg>
+        <span class="axis-center" aria-hidden="true"></span>
+        <button data-axis-view="-x" class="axis-node axis-x negative" title="Vista pelo eixo -X" aria-label="Vista pelo eixo menos X"></button>
+        <button data-axis-view="-y" class="axis-node axis-y negative" title="Vista pelo eixo -Y" aria-label="Vista pelo eixo menos Y"></button>
+        <button data-axis-view="-z" class="axis-node axis-z negative" title="Vista pelo eixo -Z" aria-label="Vista pelo eixo menos Z"></button>
+        <button data-axis-view="x" class="axis-node axis-x positive" title="Vista pelo eixo +X">X</button>
+        <button data-axis-view="y" class="axis-node axis-y positive" title="Vista pelo eixo +Y">Y</button>
+        <button data-axis-view="z" class="axis-node axis-z positive" title="Vista pelo eixo +Z">Z</button>
+      </div>
+
       <div id="empty-hint" class="empty-hint" hidden>
         <div class="empty-symbol">◇</div>
         <h2>Sua cena está vazia</h2>
@@ -263,7 +278,7 @@
         <section id="collider-section" class="inspector-section collider-inspector" hidden>
           <h3>Colisor</h3>
           <label class="property-row select-property">
-            <span><strong>Formato</strong><small>A escala controla suas dimensões</small></span>
+            <span><strong>Formato</strong><small>Caixa: escala = meia-extensão. Esfera/cápsula: escala = raios locais.</small></span>
             <select id="collider-shape">
               <option value="box">Caixa</option>
               <option value="sphere">Esfera</option>

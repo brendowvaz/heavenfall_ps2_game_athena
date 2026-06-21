@@ -36,7 +36,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\editor.ps1
 
 Abra `http://127.0.0.1:4173/editor/` no navegador. O editor oferece:
 
-- viewport 3D com câmera orbital e vistas superior, frontal e lateral;
+- viewport 3D com câmera orbital, vistas superior, frontal e lateral e gizmo de eixos X/Y/Z clicável;
 - Mão temporária em qualquer ferramenta ao segurar o botão direito;
 - seleção pela viewport ou hierarquia;
 - seleção múltipla com `Ctrl+clique` e transformação por pivô comum;
@@ -56,6 +56,8 @@ Ao importar OBJ ou GLTF com arquivos externos, selecione também o MTL, BIN e as
 
 O botão **Salvar cena** mantém o documento editável em `editor/scene.json` e gera `assets/scene.generated.js`. O `main.js` lê esse arquivo no AthenaEnv, aplica a transformação mundial a cada `RenderObject` e usa os colisores exportados no movimento do jogador e da câmera.
 
+As dimensões dos colisores seguem a visualização do editor: na caixa, `scale` representa as meias-extensões; na esfera e na cápsula, representa os raios locais. Posição, rotação XYZ, escala hierárquica e altura são exportadas em coordenadas mundiais. Triggers são detectados sem bloquear, e **Bloquear câmera** afeta somente a câmera.
+
 Prefabs são armazenados em `editor/prefabs`. Ao instanciar um prefab, novos IDs são gerados e a hierarquia interna é preservada; as instâncias já colocadas continuam independentes do arquivo original.
 
 Atalhos principais: `W` move, `E` rotaciona, `R` redimensiona, `F` foca e `Delete` exclui. Use `Ctrl+C`, `Ctrl+V` e `Ctrl+D` para copiar, colar e duplicar; `Ctrl+Z` desfaz e `Ctrl+S` salva. `Ctrl+clique` adiciona ou remove objetos da seleção.
@@ -64,4 +66,9 @@ Em qualquer ferramenta, mantenha o botão direito pressionado para ativar tempor
 
 O cenário procedural original já estava consolidado em sete blocos OBJ; eles aparecem como filhos do grupo **Cenário congelado**. Todo modelo, primitiva, grupo ou colisor adicionado pelo editor permanece independente. Os sete obstáculos originais foram migrados para o grupo **Colisões** e agora são editados visualmente.
 
-Para validar o runtime no computador, execute `node tests/smoke.cjs`.
+Para validar runtime, colisões 3D e exportação hierárquica do editor, execute:
+
+```powershell
+node tests/smoke.cjs
+node tests/editor-collision.mjs
+```

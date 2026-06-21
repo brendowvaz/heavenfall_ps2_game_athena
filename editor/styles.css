@@ -367,6 +367,19 @@ h2, h3, p { margin: 0; }
 .view-buttons button:hover, .view-buttons button.active { background: rgba(87,206,245,.11); color: var(--cyan-bright); }
 .view-buttons i { height: 16px; width: 1px; background: var(--border); margin: 0 3px; }
 
+.axis-gizmo { position: absolute; z-index: 3; right: 12px; bottom: 12px; width: 128px; height: 128px; border-radius: 50%; background: radial-gradient(circle, rgba(8,18,28,.62) 0, rgba(8,18,28,.18) 52%, transparent 70%); }
+.axis-gizmo svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.axis-line { stroke-width: 2; stroke-linecap: round; opacity: .75; }
+.axis-x { --axis-color: #ff526f; }
+.axis-y { --axis-color: #66d975; }
+.axis-z { --axis-color: #4d8fff; }
+.axis-line.axis-x, .axis-line.axis-y, .axis-line.axis-z { stroke: var(--axis-color); }
+.axis-center { position: absolute; left: 60px; top: 60px; width: 8px; height: 8px; border-radius: 50%; background: #9cb0bc; box-shadow: 0 0 0 2px rgba(5,12,19,.75); pointer-events: none; }
+.axis-node { position: absolute; transform: translate(-50%,-50%); display: grid; place-items: center; padding: 0; border-radius: 50%; border: 0; color: #07101d; background: var(--axis-color); font: 800 10px/1 sans-serif; cursor: pointer; box-shadow: 0 0 0 2px rgba(5,12,19,.8), 0 2px 8px rgba(0,0,0,.32); transition: filter .12s, transform .12s, opacity .12s; }
+.axis-node.positive { width: 24px; height: 24px; }
+.axis-node.negative { width: 12px; height: 12px; }
+.axis-node:hover { filter: brightness(1.28); transform: translate(-50%,-50%) scale(1.16); }
+
 .empty-hint {
   position: absolute; z-index: 2; left: 50%; top: 50%; transform: translate(-50%,-50%);
   width: 320px; text-align: center; pointer-events: auto;

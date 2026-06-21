@@ -7,13 +7,14 @@ const sourcePath = path.join(__dirname, "..", "main.js");
 let source = fs.readFileSync(sourcePath, "utf8");
 source = source.replace(
     "while (true) {",
-    "globalThis.__levelTest = { baseWalkable, isPlayerValid, applyMovement, colliderHits, getPlayer: () => ({ x: playerX, y: playerY, z: playerZ }) }; for (let __smokeFrame = 0; __smokeFrame < 2; __smokeFrame++) {"
+    "globalThis.__levelTest = { baseWalkable, isPlayerValid, applyMovement, colliderHits, updateVerticalMovement, getColliders: () => collisionShapes, setPlayer: (state) => { playerX = state.x; playerY = state.y; playerZ = state.z; playerVelocityY = state.velocityY; playerGrounded = state.grounded; }, getPlayer: () => ({ x: playerX, y: playerY, z: playerZ, velocityY: playerVelocityY, grounded: playerGrounded }) }; for (let __smokeFrame = 0; __smokeFrame < 2; __smokeFrame++) {"
 );
 
 let vertexCount = 0;
 let drawCalls = 0;
 const assetLoads = [];
 const manifest = require(path.join(__dirname, "..", "assets", "manifest.json"));
+let sandbox;
 
 class MockFont {
     print() {}
@@ -72,11 +73,8 @@ const context = {
             return fs.existsSync(path.join(__dirname, "..", "assets", filename));
         },
         loadScript(filename) {
-            const generated = fs.readFileSync(path.join(__dirname, "..", "assets", filename), "utf8");
-            const sceneMatch = generated.match(/globalThis\.EDITOR_SCENE\s*=\s*([\s\S]*?);\s*globalThis\.EDITOR_COLLIDERS/);
-            const colliderMatch = generated.match(/globalThis\.EDITOR_COLLIDERS\s*=\s*([\s\S]*?);\s*$/);
-            context.EDITOR_SCENE = JSON.parse(sceneMatch[1]);
-            context.EDITOR_COLLIDERS = JSON.parse(colliderMatch[1]);
+            const script = fs.readFileSync(path.join(__dirname, "..", "assets", filename), "utf8");
+            vm.runInContext(script, sandbox, { filename });
         }
     },
     Lights: {
@@ -91,15 +89,17 @@ const context = {
     Draw: { point() {}, rect() {} }
 };
 
-vm.runInNewContext(source, context, { filename: sourcePath, timeout: 5000 });
+sandbox = vm.createContext(context);
+vm.runInContext(source, sandbox, { filename: sourcePath, timeout: 5000 });
 
 if (manifest.sceneVertices < 1000 || manifest.sceneVertices > 30000) {
     throw new Error(`Unexpected geometry budget: ${manifest.sceneVertices} vertices`);
 }
-if (assetLoads.length !== manifest.sceneChunks + 1) {
-    throw new Error(`Expected ${manifest.sceneChunks + 1} OBJ loads, received ${assetLoads.length}`);
+const expectedRuntimeObjects = context.EDITOR_SCENE.length + 1;
+if (assetLoads.length !== expectedRuntimeObjects) {
+    throw new Error(`Expected ${expectedRuntimeObjects} OBJ loads, received ${assetLoads.length}`);
 }
-if (drawCalls !== (manifest.sceneChunks + 1) * 2) {
+if (drawCalls !== expectedRuntimeObjects * 2) {
     throw new Error(`Unexpected draw-call count over two frames: ${drawCalls}`);
 }
 if (!context.__levelTest.isPlayerValid(0, 18)) {
@@ -130,6 +130,70 @@ testBox.trigger = true;
 if (context.__levelTest.colliderHits(0.0, 0.0, 0.2, testBox)) {
     throw new Error("Trigger colliders must not block movement");
 }
+
+const Collision3D = context.Collision3D;
+const pitchedBox = Collision3D.normalize({
+    id: "pitched-box",
+    shape: "box",
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: Math.PI / 2, y: 0, z: 0 },
+    scale: { x: 0.5, y: 2.0, z: 0.5 }
+}, 0);
+if (!Collision3D.sphereHits(pitchedBox, 0, 0, 1.5, 0.1)) {
+    throw new Error("Box pitch/roll exported by the editor must affect collision");
+}
+if (Collision3D.sphereHits(pitchedBox, 0, 1.5, 0, 0.1)) {
+    throw new Error("Rotated box must not retain its unrotated vertical extent");
+}
+
+const highBox = Collision3D.normalize({
+    id: "high-box",
+    shape: "box",
+    position: { x: 0, y: 6, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 2, y: 1, z: 2 }
+}, 0);
+if (Collision3D.playerContacts([highBox], 0, 0.08, 0, 0.68, 2.25, false).length !== 0) {
+    throw new Error("A collider above the player must not block ground movement");
+}
+
+const capsule = Collision3D.normalize({
+    id: "capsule",
+    shape: "capsule",
+    position: { x: 0, y: 1, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 0.5, y: 0.75, z: 2.0 }
+}, 0);
+if (!Collision3D.sphereHits(capsule, 0, 1, 3.5, 0.1)) {
+    throw new Error("Capsule collision must match the editor's scaled end caps");
+}
+if (Collision3D.sphereHits(capsule, 1.0, 1, 0, 0.1)) {
+    throw new Error("Capsule radial scale must be respected");
+}
+
+const trigger = Collision3D.normalize({
+    id: "trigger",
+    shape: "sphere",
+    position: { x: 0, y: 1, z: 0 },
+    scale: { x: 2, y: 2, z: 2 },
+    trigger: true,
+    cameraBlocker: true
+}, 0);
+if (Collision3D.playerContacts([trigger], 0, 0.08, 0, 0.68, 2.25, false).length !== 0 ||
+    Collision3D.playerContacts([trigger], 0, 0.08, 0, 0.68, 2.25, true).length !== 1) {
+    throw new Error("Triggers must be detectable without blocking the player");
+}
+if (Collision3D.cameraBlocked([trigger], 0, 1, 0, 0.35)) {
+    throw new Error("Trigger colliders must not block the camera");
+}
+
+const overlapA = [{ id: "a" }];
+if (!Collision3D.transitionAllowed(overlapA, overlapA)) {
+    throw new Error("A player spawned inside a collider must be allowed to escape");
+}
+if (Collision3D.transitionAllowed(overlapA, [{ id: "a" }, { id: "b" }])) {
+    throw new Error("Escaping overlap must not permit entering another collider");
+}
 if (context.__levelTest.getPlayer().z >= 17.9) {
     throw new Error("Forward input must decrease Z inside the entrance corridor");
 }
@@ -141,5 +205,35 @@ if (context.__levelTest.getPlayer().x <= beforeHorizontal) {
 if (context.__levelTest.getPlayer().y <= 0.08) {
     throw new Error("Square input must raise the player above the ground");
 }
+
+const runtimeColliders = context.__levelTest.getColliders();
+runtimeColliders.push(Collision3D.normalize({
+    id: "walk-off-platform",
+    shape: "box",
+    position: { x: 0, y: 1, z: 18 },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 1, y: 1, z: 1 },
+    trigger: false,
+    cameraBlocker: false
+}, runtimeColliders.length));
+
+context.__levelTest.setPlayer({ x: 0, y: 2.01, z: 18, velocityY: 0, grounded: true });
+context.__levelTest.updateVerticalMovement();
+if (!context.__levelTest.getPlayer().grounded) {
+    throw new Error("Player standing on a collider must remain grounded");
+}
+
+context.__levelTest.applyMovement(2.0, 0.0);
+context.__levelTest.updateVerticalMovement();
+if (context.__levelTest.getPlayer().grounded) {
+    throw new Error("Walking beyond a collider edge must clear grounded state");
+}
+const edgeHeight = context.__levelTest.getPlayer().y;
+context.__levelTest.updateVerticalMovement();
+context.__levelTest.updateVerticalMovement();
+if (context.__levelTest.getPlayer().y >= edgeHeight) {
+    throw new Error("Player must fall after walking off a collider");
+}
+runtimeColliders.pop();
 
 console.log(`Smoke test passed: ${manifest.sceneVertices + manifest.playerVertices} OBJ vertices, ${drawCalls / 2} draw calls/frame.`);

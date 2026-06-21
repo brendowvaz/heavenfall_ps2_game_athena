@@ -13,6 +13,21 @@ if (!(Test-Path -LiteralPath $AthenaElf)) {
     throw "Runtime AthenaEnv nao encontrado: $AthenaElf"
 }
 
+$NodeCommand = Get-Command node.exe -ErrorAction SilentlyContinue
+if ($NodeCommand) {
+    $NodeExe = $NodeCommand.Source
+} else {
+    $NodeExe = Join-Path $env:USERPROFILE ".cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe"
+}
+if (!(Test-Path -LiteralPath $NodeExe)) {
+    throw "Node.js nao encontrado; necessario para exportar os colisores do editor."
+}
+
+& $NodeExe (Join-Path $ProjectRoot "scripts\export-editor-scene.mjs")
+if ($LASTEXITCODE -ne 0) {
+    throw "Falha ao exportar editor\scene.json para o runtime."
+}
+
 New-Item -ItemType Directory -Force -Path $Dist | Out-Null
 if (Test-Path -LiteralPath $DistAssets) {
     Remove-Item -LiteralPath $DistAssets -Recurse -Force

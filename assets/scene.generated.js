@@ -140,6 +140,26 @@ globalThis.EDITOR_SCENE = [
       "y": 1,
       "z": 1
     }
+  },
+  {
+    "id": "cube-mqnvjvo7-zwe93m",
+    "name": "Cubo",
+    "asset": "editor_primitives/cube.obj",
+    "position": {
+      "x": 8.2656,
+      "y": 1,
+      "z": 2.2385
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": {
+      "x": 1,
+      "y": 1,
+      "z": 1
+    }
   }
 ];
 globalThis.EDITOR_COLLIDERS = [
@@ -249,6 +269,28 @@ globalThis.EDITOR_COLLIDERS = [
       "x": 0.6118,
       "y": 1,
       "z": 0.5466
+    },
+    "trigger": false,
+    "cameraBlocker": true
+  },
+  {
+    "id": "collider-mqnvkvze-oxwuul",
+    "name": "Colisor caixa",
+    "shape": "box",
+    "position": {
+      "x": 8.2655,
+      "y": 1,
+      "z": 2.2385
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": {
+      "x": 1,
+      "y": 1,
+      "z": 1
     },
     "trigger": false,
     "cameraBlocker": true

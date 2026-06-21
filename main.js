@@ -33,6 +33,7 @@ console.log("[VeuAzul] Render inicializado em modo OBJ");
 
 // AthenaEnv resolves OBJ materials and their textures from the current folder.
 os.chdir("assets");
+std.loadScript("collision.js");
 
 function configureData(data) {
     data.pipeline = Render.PL_DEFAULT;
@@ -50,6 +51,8 @@ globalThis.EDITOR_COLLIDERS = [];
 if (std.exists("scene.generated.js")) {
     std.loadScript("scene.generated.js");
 }
+
+const usingEditorColliders = EDITOR_COLLIDERS.length > 0;
 
 if (EDITOR_COLLIDERS.length === 0) {
     const legacyColliders = [
@@ -119,32 +122,39 @@ function baseWalkable(x, z) {
     return arena || northHall || southHall;
 }
 
-const collisionShapes = EDITOR_COLLIDERS;
+const collisionShapes = Collision3D.normalizeAll(EDITOR_COLLIDERS);
 const cameraBlockers = [];
 for (let i = 0; i < collisionShapes.length; i++) {
     if (collisionShapes[i].cameraBlocker) cameraBlockers.push(collisionShapes[i]);
 }
-const legacyCameraBlockers = [
-    [-12.5, -10.0, 1.5], [12.2, -9.0, 1.5],
-    [-13.8, 2.5, 1.4], [13.7, 3.6, 1.5],
-    [-9.0, 11.2, 1.4], [9.5, 10.0, 1.4]
-];
-for (let i = 0; i < legacyCameraBlockers.length; i++) {
-    const blocker = legacyCameraBlockers[i];
-    cameraBlockers.push({
-        shape: "sphere",
-        position: { x: blocker[0], y: 1.0, z: blocker[1] },
-        rotation: { x: 0.0, y: 0.0, z: 0.0 },
-        scale: { x: blocker[2], y: blocker[2], z: blocker[2] },
-        trigger: false,
-        cameraBlocker: true
-    });
+if (!usingEditorColliders) {
+    const legacyCameraBlockers = [
+        [-12.5, -10.0, 1.5], [12.2, -9.0, 1.5],
+        [-13.8, 2.5, 1.4], [13.7, 3.6, 1.5],
+        [-9.0, 11.2, 1.4], [9.5, 10.0, 1.4]
+    ];
+    for (let i = 0; i < legacyCameraBlockers.length; i++) {
+        const blocker = legacyCameraBlockers[i];
+        cameraBlockers.push(Collision3D.normalize({
+            id: "legacy-camera-" + i,
+            shape: "sphere",
+            position: { x: blocker[0], y: 1.0, z: blocker[1] },
+            rotation: { x: 0.0, y: 0.0, z: 0.0 },
+            scale: { x: blocker[2], y: blocker[2], z: blocker[2] },
+            trigger: false,
+            cameraBlocker: true
+        }, i));
+    }
 }
+console.log("[VeuAzul] Colisao 3D: " + collisionShapes.length + " colisores, " + cameraBlockers.length + " bloqueadores de camera");
 
 const PLAYER_RADIUS = 0.68;
+const PLAYER_HEIGHT = 2.25;
 const PLAYER_GROUND_Y = 0.08;
 const JUMP_SPEED = 0.30;
 const GRAVITY = 0.014;
+const SUPPORT_PROBE = 0.08;
+const LANDING_SEARCH_STEPS = 7;
 const SPAWN = { x: 0.0, z: 18.0 };
 let playerX = SPAWN.x;
 let playerZ = SPAWN.z;
@@ -158,45 +168,29 @@ let shoulderSide = 1.0;
 let showHud = true;
 let titleTimer = 330;
 let collisionFlash = 0;
+let activeTriggerIds = [];
 
 function colliderHits(x, z, radius, collider) {
-    if (collider.trigger) return false;
-    const dx = x - collider.position.x;
-    const dz = z - collider.position.z;
-    const scaleX = Math.abs(collider.scale.x);
-    const scaleZ = Math.abs(collider.scale.z);
+    const normalized = collider.qw === undefined ? Collision3D.normalize(collider, 0) : collider;
+    if (normalized.trigger) return false;
+    return Collision3D.sphereHits(normalized, x, normalized.position.y, z, radius);
+}
 
-    if (collider.shape === "box") {
-        const angle = -(collider.rotation.y || 0.0);
-        const cosine = Math.cos(angle);
-        const sine = Math.sin(angle);
-        const localX = dx * cosine - dz * sine;
-        const localZ = dx * sine + dz * cosine;
-        return Math.abs(localX) < scaleX + radius && Math.abs(localZ) < scaleZ + radius;
-    }
+function playerContactsAt(x, y, z) {
+    return Collision3D.playerContacts(collisionShapes, x, y, z, PLAYER_RADIUS, PLAYER_HEIGHT, false);
+}
 
-    if (collider.shape === "capsule") {
-        const angle = -(collider.rotation.y || 0.0);
-        const cosine = Math.cos(angle);
-        const sine = Math.sin(angle);
-        const localX = dx * cosine - dz * sine;
-        const localZ = dx * sine + dz * cosine;
-        const segmentZ = clamp(localZ, -scaleZ, scaleZ);
-        const offsetZ = localZ - segmentZ;
-        const limit = scaleX + radius;
-        return localX * localX + offsetZ * offsetZ < limit * limit;
-    }
-
-    const limit = Math.max(scaleX, scaleZ) + radius;
-    return dx * dx + dz * dz < limit * limit;
+function updateActiveTriggers() {
+    const triggers = Collision3D.playerContacts(
+        collisionShapes, playerX, playerY, playerZ, PLAYER_RADIUS, PLAYER_HEIGHT, true
+    );
+    activeTriggerIds = [];
+    for (let i = 0; i < triggers.length; i++) activeTriggerIds.push(triggers[i].id);
 }
 
 function isPlayerValid(x, z) {
     if (!baseWalkable(x, z)) return false;
-    for (let i = 0; i < collisionShapes.length; i++) {
-        if (colliderHits(x, z, PLAYER_RADIUS, collisionShapes[i])) return false;
-    }
-    return true;
+    return playerContactsAt(x, playerY, z).length === 0;
 }
 
 function walkableHalfWidth(z) {
@@ -207,11 +201,10 @@ function walkableHalfWidth(z) {
     return Math.max(5.0, ellipse - PLAYER_RADIUS);
 }
 
-function clearOfObstacles(x, z) {
-    for (let i = 0; i < collisionShapes.length; i++) {
-        if (colliderHits(x, z, PLAYER_RADIUS, collisionShapes[i])) return false;
-    }
-    return true;
+function movementAllowed(currentContacts, x, z) {
+    if (!baseWalkable(x, z)) return false;
+    const nextContacts = playerContactsAt(x, playerY, z);
+    return Collision3D.transitionAllowed(currentContacts, nextContacts);
 }
 
 function applyMovement(dx, dz) {
@@ -220,14 +213,17 @@ function applyMovement(dx, dz) {
     const nextZ = clamp(playerZ + dz, -27.4, 24.4);
     const halfWidth = walkableHalfWidth(nextZ);
     const nextX = clamp(playerX + dx, -halfWidth, halfWidth);
+    let currentContacts = playerContactsAt(playerX, playerY, playerZ);
 
-    if (isPlayerValid(nextX, nextZ)) {
+    if (movementAllowed(currentContacts, nextX, nextZ)) {
         playerX = nextX;
         playerZ = nextZ;
-    } else if (isPlayerValid(nextX, playerZ)) {
-        playerX = nextX;
-    } else if (isPlayerValid(playerX, nextZ)) {
-        playerZ = nextZ;
+    } else {
+        if (movementAllowed(currentContacts, nextX, playerZ)) {
+            playerX = nextX;
+            currentContacts = playerContactsAt(playerX, playerY, playerZ);
+        }
+        if (movementAllowed(currentContacts, playerX, nextZ)) playerZ = nextZ;
     }
 
     const moved = Math.abs(playerX - oldX) + Math.abs(playerZ - oldZ) > 0.0001;
@@ -235,11 +231,48 @@ function applyMovement(dx, dz) {
     return moved;
 }
 
-function cameraBlocked(x, z) {
-    for (let i = 0; i < cameraBlockers.length; i++) {
-        if (colliderHits(x, z, 0.35, cameraBlockers[i])) return true;
+function updateVerticalMovement() {
+    if (playerGrounded) {
+        if (playerY <= PLAYER_GROUND_Y + 0.001) return;
+        const supportContacts = playerContactsAt(playerX, playerY - SUPPORT_PROBE, playerZ);
+        if (supportContacts.length > 0) return;
+        playerGrounded = false;
+        playerVelocityY = Math.min(0.0, playerVelocityY);
     }
-    return false;
+
+    const nextY = playerY + playerVelocityY;
+    const currentContacts = playerContactsAt(playerX, playerY, playerZ);
+    const nextContacts = playerContactsAt(playerX, nextY, playerZ);
+
+    if (Collision3D.transitionAllowed(currentContacts, nextContacts)) {
+        playerY = nextY;
+    } else {
+        if (playerVelocityY < 0.0) {
+            // Refine the landing height between the last safe and first blocked
+            // positions so the support probe remains stable on the next frame.
+            let blockedY = nextY;
+            let safeY = playerY;
+            for (let step = 0; step < LANDING_SEARCH_STEPS; step++) {
+                const middleY = (blockedY + safeY) * 0.5;
+                if (playerContactsAt(playerX, middleY, playerZ).length > 0) blockedY = middleY;
+                else safeY = middleY;
+            }
+            playerY = safeY;
+            playerGrounded = true;
+        }
+        playerVelocityY = 0.0;
+    }
+
+    if (!playerGrounded) playerVelocityY -= GRAVITY;
+    if (playerY <= PLAYER_GROUND_Y) {
+        playerY = PLAYER_GROUND_Y;
+        playerVelocityY = 0.0;
+        playerGrounded = true;
+    }
+}
+
+function cameraBlocked(x, y, z) {
+    return Collision3D.cameraBlocked(cameraBlockers, x, y, z, 0.35);
 }
 
 const pad = Pads.get(0);
@@ -316,15 +349,8 @@ function updatePlayerAndCamera() {
         if (applyMovement(dx, dz)) playerYaw = Math.atan2(dx, -dz);
     }
 
-    if (!playerGrounded) {
-        playerY += playerVelocityY;
-        playerVelocityY -= GRAVITY;
-        if (playerY <= PLAYER_GROUND_Y) {
-            playerY = PLAYER_GROUND_Y;
-            playerVelocityY = 0.0;
-            playerGrounded = true;
-        }
-    }
+    updateVerticalMovement();
+    updateActiveTriggers();
 
     playerObject.position = { x: playerX, y: playerY, z: playerZ };
     playerObject.rotation = { x: 0.0, y: playerYaw, z: 0.0 };
@@ -342,8 +368,9 @@ function updatePlayerAndCamera() {
     for (let step = 2; step <= 10; step++) {
         const factor = step / 10.0;
         const sampleX = targetX + (desiredX - targetX) * factor;
+        const sampleY = targetY + (desiredY - targetY) * factor;
         const sampleZ = targetZ + (desiredZ - targetZ) * factor;
-        if (cameraBlocked(sampleX, sampleZ)) {
+        if (cameraBlocked(sampleX, sampleY, sampleZ)) {
             cameraFactor = Math.max(0.2, factor - 0.12);
             break;
         }
@@ -402,8 +429,8 @@ function drawHud() {
     if (showHud) {
         font.scale = 0.40;
         font.color = HUD_WHITE;
-        font.print(14, canvas.height - 67, "BUILD 12 - PULO COM QUADRADO");
-        font.print(14, canvas.height - 51, "POS: " + playerX.toFixed(2) + " / " + playerY.toFixed(2) + " / " + playerZ.toFixed(2));
+        font.print(14, canvas.height - 67, "BUILD 14 - SUPORTE E QUEDA");
+        font.print(14, canvas.height - 51, "POS: " + playerX.toFixed(2) + " / " + playerY.toFixed(2) + " / " + playerZ.toFixed(2) + "  TRG: " + activeTriggerIds.length);
         font.print(14, canvas.height - 35, "MOVER: D-PAD/ANALOGICO  |  QUADRADO: PULAR  |  X: CORRER");
         font.color = HUD_BLUE;
         font.print(14, canvas.height - 19, "L1: TROCAR OMBRO  |  R3: CENTRALIZAR  |  SELECT: REINICIAR");

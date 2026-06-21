@@ -7,14 +7,14 @@
     "snap": 0.25,
     "camera": {
       "position": {
-        "x": -7.866,
-        "y": 2.7099,
-        "z": -24.905
+        "x": -5.1974,
+        "y": 6.1038,
+        "z": 6.7748
       },
       "target": {
-        "x": 7.3855,
-        "y": -1.1126,
-        "z": -33.0675
+        "x": 3.2145,
+        "y": -0.0916,
+        "z": 5.1486
       }
     }
   },
@@ -454,6 +454,68 @@
         "x": 0.6118,
         "y": 1,
         "z": 0.5466
+      },
+      "color": "#68e0b2",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "collider": {
+        "trigger": false,
+        "cameraBlocker": true
+      }
+    },
+    {
+      "id": "cube-mqnvjvo7-zwe93m",
+      "name": "Cubo",
+      "source": {
+        "kind": "primitive",
+        "asset": "editor_primitives/cube.obj",
+        "primitive": "cube"
+      },
+      "parentId": null,
+      "position": {
+        "x": 8.2656,
+        "y": 1,
+        "z": 2.2385
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true
+    },
+    {
+      "id": "collider-mqnvkvze-oxwuul",
+      "name": "Colisor caixa",
+      "source": {
+        "kind": "collider",
+        "asset": "",
+        "collider": "box"
+      },
+      "parentId": null,
+      "position": {
+        "x": 8.2655,
+        "y": 1,
+        "z": 2.2385
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
       },
       "color": "#68e0b2",
       "visible": true,
