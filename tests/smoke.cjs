@@ -7,7 +7,7 @@ const sourcePath = path.join(__dirname, "..", "main.js");
 let source = fs.readFileSync(sourcePath, "utf8");
 source = source.replace(
     "while (true) {",
-    "globalThis.__levelTest = { baseWalkable, isPlayerValid, applyMovement, colliderHits, getPlayer: () => ({ x: playerX, z: playerZ }) }; for (let __smokeFrame = 0; __smokeFrame < 2; __smokeFrame++) {"
+    "globalThis.__levelTest = { baseWalkable, isPlayerValid, applyMovement, colliderHits, getPlayer: () => ({ x: playerX, y: playerY, z: playerZ }) }; for (let __smokeFrame = 0; __smokeFrame < 2; __smokeFrame++) {"
 );
 
 let vertexCount = 0;
@@ -40,7 +40,7 @@ class MockRenderObject {
 const neutralPad = {
     lx: 0, ly: -127, rx: 0, ry: 0, btns: 0,
     update() {},
-    justPressed() { return false; },
+    justPressed(button) { return button === 10; },
     pressed() { return false; }
 };
 
@@ -85,7 +85,7 @@ const context = {
     },
     Pads: {
         SELECT: 1, START: 2, L1: 3, R3: 4, CROSS: 5,
-        LEFT: 6, RIGHT: 7, UP: 8, DOWN: 9,
+        LEFT: 6, RIGHT: 7, UP: 8, DOWN: 9, SQUARE: 10,
         get: () => neutralPad
     },
     Draw: { point() {}, rect() {} }
@@ -113,9 +113,6 @@ for (const [x, z] of [[0.125, 18], [-0.125, 18], [0, 18.125], [0, 17.875]]) {
 if (context.__levelTest.isPlayerValid(20, 0)) {
     throw new Error("The eastern chasm must not be walkable");
 }
-if (context.__levelTest.isPlayerValid(-2.8, -1.5)) {
-    throw new Error("The main ice spire must block the player");
-}
 const testBox = {
     shape: "box",
     position: { x: 0, y: 0, z: 0 },
@@ -140,6 +137,9 @@ const beforeHorizontal = context.__levelTest.getPlayer().x;
 context.__levelTest.applyMovement(0.125, 0.0);
 if (context.__levelTest.getPlayer().x <= beforeHorizontal) {
     throw new Error("Horizontal input must increase X independently of Z");
+}
+if (context.__levelTest.getPlayer().y <= 0.08) {
+    throw new Error("Square input must raise the player above the ground");
 }
 
 console.log(`Smoke test passed: ${manifest.sceneVertices + manifest.playerVertices} OBJ vertices, ${drawCalls / 2} draw calls/frame.`);

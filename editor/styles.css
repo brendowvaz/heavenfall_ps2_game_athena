@@ -138,6 +138,8 @@ input:focus-visible {
 .toolbar button:disabled { opacity: .3; cursor: default; }
 
 .icon-button { width: 32px; font-size: 18px; color: #9fb3c0; }
+.toolbar-clipboard .compact-button { display: flex; align-items: center; gap: 5px; }
+.toolbar-clipboard .compact-button span { color: var(--cyan); font-size: 13px; }
 .mode-switch { flex: 0 0 auto; }
 .mode-button { padding: 0 10px; color: #91a7b5; font-size: 11px; }
 .mode-button span { font-size: 15px; margin-right: 4px; }
@@ -345,6 +347,8 @@ h2, h3, p { margin: 0; }
   outline: none;
 }
 .viewport canvas { display: block; width: 100%; height: 100%; }
+.viewport.pan-mode canvas { cursor: grab; }
+.viewport.pan-mode.panning canvas { cursor: grabbing; }
 .overlay-card {
   position: absolute;
   z-index: 2;
@@ -499,13 +503,15 @@ h2, h3, p { margin: 0; }
 .statusbar > div:first-child { display: flex; align-items: center; gap: 6px; }
 .statusbar > div:last-child { text-align: right; font-variant-numeric: tabular-nums; }
 .status-light { width: 6px; height: 6px; background: var(--green); border-radius: 50%; box-shadow: 0 0 6px rgba(116,217,171,.45); }
-.shortcut-hints { display: flex; gap: 13px; }
+.shortcut-hints { display: flex; gap: 9px; }
 kbd { min-width: 17px; height: 16px; display: inline-grid; place-items: center; border: 1px solid #294252; border-bottom-color: #35566a; border-radius: 3px; color: #7894a4; font: 8px inherit; margin-right: 3px; background: #0d1c27; }
 
 @media (max-width: 1150px) {
   :root { --left: 225px; --right: 280px; }
   .mode-button { font-size: 0; width: 36px; padding: 0; }
   .mode-button span { font-size: 16px; margin: 0; }
+  .toolbar-clipboard .compact-button { width: 32px; padding: 0; font-size: 0; justify-content: center; }
+  .toolbar-clipboard .compact-button span { font-size: 14px; }
   .secondary-button { display: none; }
 }
 

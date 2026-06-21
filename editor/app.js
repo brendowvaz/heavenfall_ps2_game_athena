@@ -34,6 +34,9 @@ const state = {
   fieldSnapshot: null,
   runPoll: null,
   collidersVisible: true,
+  clipboard: null,
+  pasteCount: 0,
+  rightHandActive: false,
 };
 
 const scene = new THREE.Scene();
@@ -59,6 +62,10 @@ orbit.target.set(0, 2, 0);
 orbit.screenSpacePanning = true;
 orbit.maxDistance = 500;
 orbit.minDistance = 0.1;
+orbit.zoomSpeed = 2;
+orbit.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
+orbit.mouseButtons.MIDDLE = THREE.MOUSE.DOLLY;
+orbit.mouseButtons.RIGHT = THREE.MOUSE.PAN;
 
 const transform = new TransformControls(camera, renderer.domElement);
 transform.setMode("translate");
@@ -253,6 +260,23 @@ function serializeScene() {
 function updateHistoryButtons() {
   $("undo-button").disabled = state.undo.length === 0;
   $("redo-button").disabled = state.redo.length === 0;
+}
+
+function updateClipboardButtons() {
+  $("copy-button").disabled = state.selectedIds.size === 0;
+  $("paste-button").disabled = !state.clipboard?.objects?.length;
+}
+
+function restoreClipboard() {
+  try {
+    const stored = JSON.parse(localStorage.getItem("athena-visual-editor-clipboard") || "null");
+    if (stored?.version === 1 && Array.isArray(stored.objects) && stored.objects.length) {
+      state.clipboard = stored;
+    }
+  } catch {
+    state.clipboard = null;
+  }
+  updateClipboardButtons();
 }
 
 function pushHistorySnapshot(snapshot) {
@@ -521,21 +545,24 @@ function setSelection(id, { additive = false, toggle = false } = {}) {
   transform.detach();
   selectionBox.visible = false;
   const targets = transformSelectionIds();
-  if (targets.length === 1 && state.selectedIds.size === 1) {
-    transform.attach(state.objects.get(targets[0]));
-  } else if (targets.length > 0) {
-    updateSelectionBounds();
-    const center = selectionBounds.getCenter(new THREE.Vector3());
-    selectionPivot.position.copy(center);
-    selectionPivot.rotation.set(0, 0, 0);
-    selectionPivot.scale.set(1, 1, 1);
-    selectionPivot.updateMatrixWorld(true);
-    transform.attach(selectionPivot);
+  if (!state.rightHandActive) {
+    if (targets.length === 1 && state.selectedIds.size === 1) {
+      transform.attach(state.objects.get(targets[0]));
+    } else if (targets.length > 0) {
+      updateSelectionBounds();
+      const center = selectionBounds.getCenter(new THREE.Vector3());
+      selectionPivot.position.copy(center);
+      selectionPivot.rotation.set(0, 0, 0);
+      selectionPivot.scale.set(1, 1, 1);
+      selectionPivot.updateMatrixWorld(true);
+      transform.attach(selectionPivot);
+    }
   }
   refreshSelectionVisuals();
   renderHierarchy();
   renderInspector();
   $("create-prefab-button").disabled = state.selectedIds.size === 0;
+  updateClipboardButtons();
 }
 
 function updateSelectionBounds() {
@@ -988,6 +1015,7 @@ async function loadDocument(documentData, { preserveHistory = false, dirty = fal
   rebuildHierarchy();
   renderHierarchy();
   renderInspector();
+  updateClipboardButtons();
   updateViewportStats();
   markDirty(dirty);
   setStatus(`${state.document.name} carregada`);
@@ -1086,6 +1114,81 @@ function selectionClosure() {
   return ids;
 }
 
+function copySelection() {
+  if (!state.selectedIds.size) return;
+  syncAllRecords();
+  const closure = selectionClosure();
+  const objects = state.document.objects.filter((record) => closure.has(record.id)).map((record) => {
+    const copy = deepClone(record);
+    if (!record.parentId || !closure.has(record.parentId)) {
+      const world = recordWorldTransform(record);
+      copy.parentId = null;
+      copy.position = world.position;
+      copy.rotation = world.rotation;
+      copy.scale = world.scale;
+    }
+    return copy;
+  });
+  state.clipboard = {
+    version: 1,
+    copiedAt: new Date().toISOString(),
+    objects,
+    selectedIds: [...state.selectedIds].filter((id) => closure.has(id)),
+  };
+  state.pasteCount = 0;
+  try {
+    localStorage.setItem("athena-visual-editor-clipboard", JSON.stringify(state.clipboard));
+  } catch {
+    // The in-memory clipboard remains available if local storage is disabled.
+  }
+  updateClipboardButtons();
+  const count = state.selectedIds.size;
+  setStatus(`${count} objeto${count === 1 ? " copiado" : "s copiados"}`);
+  toast(`${count} objeto${count === 1 ? " copiado" : "s copiados"}. Use Ctrl+V para colar.`);
+}
+
+async function pasteClipboard() {
+  if (!state.clipboard?.objects?.length) restoreClipboard();
+  const clipboard = state.clipboard;
+  if (!clipboard?.objects?.length) {
+    toast("A área de transferência está vazia.", "error");
+    return;
+  }
+
+  const before = serializeScene();
+  state.pasteCount += 1;
+  const offset = state.pasteCount;
+  const idMap = new Map(clipboard.objects.map((record) => [record.id, uid(record.source?.kind || "object")]));
+  const selectedSourceIds = new Set(clipboard.selectedIds || []);
+  const pastedSelectedIds = [];
+  const rootIds = [];
+
+  for (const source of clipboard.objects) {
+    const record = deepClone(source);
+    record.id = idMap.get(source.id);
+    record.parentId = source.parentId && idMap.has(source.parentId) ? idMap.get(source.parentId) : null;
+    if (!record.parentId) {
+      record.position.x += offset;
+      record.position.z += offset;
+      rootIds.push(record.id);
+    }
+    if (selectedSourceIds.has(source.id)) {
+      record.name = `${source.name} cópia`;
+      pastedSelectedIds.push(record.id);
+    }
+    await addRecord(record, { select: false, checkpoint: false });
+  }
+
+  rebuildHierarchy();
+  pushHistorySnapshot(before);
+  const selection = pastedSelectedIds.length ? pastedSelectedIds : rootIds;
+  state.selectedIds = new Set(selection);
+  state.primaryId = selection.at(-1) || null;
+  setSelection(state.primaryId, { additive: true });
+  focusSelection();
+  setStatus(`${clipboard.objects.length} objeto${clipboard.objects.length === 1 ? " colado" : "s colados"}`);
+}
+
 async function duplicateSelection() {
   if (!state.selectedIds.size) return;
   const before = serializeScene();
@@ -1138,6 +1241,7 @@ function deleteSelection() {
   pushHistorySnapshot(before);
   renderHierarchy();
   renderInspector();
+  updateClipboardButtons();
   updateViewportStats();
   setStatus(`${names.length > 1 ? `${names.length} objetos excluídos` : `${names[0]} excluído`}`);
 }
@@ -1218,9 +1322,28 @@ function resetTransform() {
 
 function setTransformMode(mode) {
   state.transformMode = mode;
+  orbit.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
+  orbit.mouseButtons.RIGHT = THREE.MOUSE.PAN;
   transform.setMode(mode);
+  if (!state.rightHandActive) setSelection(state.primaryId, { additive: true });
   document.querySelectorAll("[data-mode]").forEach((button) => button.classList.toggle("active", button.dataset.mode === mode));
   setStatus({ translate: "Ferramenta mover", rotate: "Ferramenta rotacionar", scale: "Ferramenta escala" }[mode]);
+}
+
+function beginRightHand() {
+  if (state.rightHandActive) return;
+  state.rightHandActive = true;
+  transform.detach();
+  viewport.classList.add("pan-mode", "panning");
+  setStatus("Mão temporária — solte o botão direito para voltar");
+}
+
+function endRightHand() {
+  if (!state.rightHandActive) return;
+  state.rightHandActive = false;
+  viewport.classList.remove("pan-mode", "panning");
+  setSelection(state.primaryId, { additive: true });
+  setStatus({ translate: "Ferramenta mover", rotate: "Ferramenta rotacionar", scale: "Ferramenta escala" }[state.transformMode]);
 }
 
 function toggleTransformSpace() {
@@ -1407,9 +1530,14 @@ function pointerCoordinates(event) {
 let pointerStart = null;
 renderer.domElement.addEventListener("pointerdown", (event) => {
   pointerStart = { x: event.clientX, y: event.clientY };
+  if (event.button === 2) beginRightHand();
 });
 
 renderer.domElement.addEventListener("pointerup", (event) => {
+  if (event.button === 2) {
+    endRightHand();
+    return;
+  }
   if (!pointerStart || transform.dragging) return;
   if (Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) > 4) return;
   pointerCoordinates(event);
@@ -1432,6 +1560,8 @@ renderer.domElement.addEventListener("pointerup", (event) => {
     toggle: event.ctrlKey || event.metaKey,
   });
 });
+renderer.domElement.addEventListener("pointercancel", endRightHand);
+renderer.domElement.addEventListener("contextmenu", (event) => event.preventDefault());
 
 renderer.domElement.addEventListener("pointermove", (event) => {
   pointerCoordinates(event);
@@ -1618,6 +1748,8 @@ function bindUi() {
   $("run-button").addEventListener("click", runInPcsx2);
   $("undo-button").addEventListener("click", undo);
   $("redo-button").addEventListener("click", redo);
+  $("copy-button").addEventListener("click", copySelection);
+  $("paste-button").addEventListener("click", pasteClipboard);
   $("duplicate-button").addEventListener("click", duplicateSelection);
   $("multi-duplicate-button").addEventListener("click", duplicateSelection);
   $("delete-button").addEventListener("click", deleteSelection);
@@ -1724,7 +1856,13 @@ function bindUi() {
       return;
     }
     if (editing) return;
-    if (event.ctrlKey && event.key.toLowerCase() === "d") {
+    if (event.ctrlKey && event.key.toLowerCase() === "c") {
+      event.preventDefault();
+      copySelection();
+    } else if (event.ctrlKey && event.key.toLowerCase() === "v") {
+      event.preventDefault();
+      pasteClipboard();
+    } else if (event.ctrlKey && event.key.toLowerCase() === "d") {
       event.preventDefault();
       duplicateSelection();
     } else if (event.key === "Delete" || event.key === "Backspace") {
@@ -1736,6 +1874,11 @@ function bindUi() {
     else if (event.key.toLowerCase() === "f") focusSelection();
     else if (event.key === "Escape") setSelection(null);
   });
+
+  window.addEventListener("pointerup", (event) => {
+    if (event.button === 2) endRightHand();
+  });
+  window.addEventListener("blur", endRightHand);
 
   window.addEventListener("beforeunload", (event) => {
     if (!state.dirty) return;
@@ -1765,6 +1908,7 @@ function animate() {
 async function boot() {
   bindInspector();
   bindUi();
+  restoreClipboard();
   resize();
   animate();
   setLoading(1, "Abrindo cena…");

@@ -34,6 +34,11 @@
       <button id="redo-button" class="icon-button" title="Refazer (Ctrl+Y)" disabled>↷</button>
     </div>
 
+    <div class="toolbar toolbar-clipboard" aria-label="Área de transferência">
+      <button id="copy-button" class="compact-button" title="Copiar seleção (Ctrl+C)" disabled><span>⧉</span> Copiar</button>
+      <button id="paste-button" class="compact-button" title="Colar (Ctrl+V)" disabled><span>▣</span> Colar</button>
+    </div>
+
     <div class="toolbar mode-switch" aria-label="Ferramentas de transformação">
       <button data-mode="translate" class="mode-button active" title="Mover (W)"><span>↔</span> Mover</button>
       <button data-mode="rotate" class="mode-button" title="Rotacionar (E)"><span>⟳</span> Rotacionar</button>
@@ -311,11 +316,13 @@
   <footer class="statusbar">
     <div><span class="status-light"></span><span id="status-message">Editor pronto</span></div>
     <div class="shortcut-hints">
+      <span><kbd>Direito</kbd> mão</span>
       <span><kbd>W</kbd> mover</span>
       <span><kbd>E</kbd> rotacionar</span>
       <span><kbd>R</kbd> escala</span>
       <span><kbd>F</kbd> focar</span>
       <span><kbd>Del</kbd> excluir</span>
+      <span><kbd>Ctrl+C/V</kbd> copiar/colar</span>
     </div>
     <div id="cursor-position">X 0.00 · Y 0.00 · Z 0.00</div>
   </footer>

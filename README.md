@@ -7,6 +7,7 @@ Protótipo jogável de uma arena glacial inspirado nas duas imagens de referênc
 - Analógico esquerdo ou direcional: andar
 - Analógico direito: girar a câmera sobre o ombro
 - X: correr
+- Quadrado: pular
 - L1: trocar o ombro da câmera
 - R3: alinhar a câmera atrás do personagem
 - Select: voltar ao ponto inicial
@@ -36,6 +37,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\editor.ps1
 Abra `http://127.0.0.1:4173/editor/` no navegador. O editor oferece:
 
 - viewport 3D com câmera orbital e vistas superior, frontal e lateral;
+- Mão temporária em qualquer ferramenta ao segurar o botão direito;
 - seleção pela viewport ou hierarquia;
 - seleção múltipla com `Ctrl+clique` e transformação por pivô comum;
 - grupos, relações pai/filho, arrastar na hierarquia e preservação da transformação mundial;
@@ -47,6 +49,7 @@ Abra `http://127.0.0.1:4173/editor/` no navegador. O editor oferece:
 - importação múltipla de OBJ/MTL, GLTF/GLB, BIN e texturas;
 - biblioteca dos modelos disponíveis no projeto;
 - duplicação, exclusão, desfazer/refazer e transformação com snap;
+- copiar e colar modelos, grupos, primitivas e colisores com a hierarquia preservada;
 - salvamento direto para o runtime e botão para testar no PCSX2.
 
 Ao importar OBJ ou GLTF com arquivos externos, selecione também o MTL, BIN e as texturas relacionados. Eles serão copiados juntos para `assets/imported`.
@@ -55,7 +58,9 @@ O botão **Salvar cena** mantém o documento editável em `editor/scene.json` e 
 
 Prefabs são armazenados em `editor/prefabs`. Ao instanciar um prefab, novos IDs são gerados e a hierarquia interna é preservada; as instâncias já colocadas continuam independentes do arquivo original.
 
-Atalhos principais: `W` mover, `E` rotacionar, `R` redimensionar, `F` focar, `Delete` excluir, `Ctrl+D` duplicar, `Ctrl+Z` desfazer e `Ctrl+S` salvar. Use `Ctrl+clique` para adicionar ou remover objetos da seleção.
+Atalhos principais: `W` move, `E` rotaciona, `R` redimensiona, `F` foca e `Delete` exclui. Use `Ctrl+C`, `Ctrl+V` e `Ctrl+D` para copiar, colar e duplicar; `Ctrl+Z` desfaz e `Ctrl+S` salva. `Ctrl+clique` adiciona ou remove objetos da seleção.
+
+Em qualquer ferramenta, mantenha o botão direito pressionado para ativar temporariamente a Mão e arraste para percorrer a cena; ao soltar, o gizmo anterior retorna. Arraste com o botão esquerdo em uma área vazia para alterar o ângulo e use a roda para aproximar ou afastar. A área de transferência interna persiste no navegador e aceita seleções múltiplas, grupos completos e colisores.
 
 O cenário procedural original já estava consolidado em sete blocos OBJ; eles aparecem como filhos do grupo **Cenário congelado**. Todo modelo, primitiva, grupo ou colisor adicionado pelo editor permanece independente. Os sete obstáculos originais foram migrados para o grupo **Colisões** e agora são editados visualmente.
 

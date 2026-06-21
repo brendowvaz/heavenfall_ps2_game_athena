@@ -142,9 +142,15 @@ for (let i = 0; i < legacyCameraBlockers.length; i++) {
 }
 
 const PLAYER_RADIUS = 0.68;
+const PLAYER_GROUND_Y = 0.08;
+const JUMP_SPEED = 0.30;
+const GRAVITY = 0.014;
 const SPAWN = { x: 0.0, z: 18.0 };
 let playerX = SPAWN.x;
 let playerZ = SPAWN.z;
+let playerY = PLAYER_GROUND_Y;
+let playerVelocityY = 0.0;
+let playerGrounded = true;
 let playerYaw = 0.0;
 let cameraYaw = 0.0;
 let cameraPitch = 0.31;
@@ -260,12 +266,19 @@ function updatePlayerAndCamera() {
     if (pad.justPressed(Pads.SELECT)) {
         playerX = SPAWN.x;
         playerZ = SPAWN.z;
+        playerY = PLAYER_GROUND_Y;
+        playerVelocityY = 0.0;
+        playerGrounded = true;
         playerYaw = 0.0;
         cameraYaw = 0.0;
     }
     if (pad.justPressed(Pads.START)) showHud = !showHud;
     if (pad.justPressed(Pads.L1)) shoulderSide *= -1.0;
     if (pad.justPressed(Pads.R3)) cameraYaw = playerYaw;
+    if (pad.justPressed(Pads.SQUARE) && playerGrounded) {
+        playerVelocityY = JUMP_SPEED;
+        playerGrounded = false;
+    }
 
     const lookX = readAxis(pad.rx);
     const lookY = readAxis(pad.ry);
@@ -303,16 +316,26 @@ function updatePlayerAndCamera() {
         if (applyMovement(dx, dz)) playerYaw = Math.atan2(dx, -dz);
     }
 
-    playerObject.position = { x: playerX, y: 0.08, z: playerZ };
+    if (!playerGrounded) {
+        playerY += playerVelocityY;
+        playerVelocityY -= GRAVITY;
+        if (playerY <= PLAYER_GROUND_Y) {
+            playerY = PLAYER_GROUND_Y;
+            playerVelocityY = 0.0;
+            playerGrounded = true;
+        }
+    }
+
+    playerObject.position = { x: playerX, y: playerY, z: playerZ };
     playerObject.rotation = { x: 0.0, y: playerYaw, z: 0.0 };
 
     const shoulder = 1.65 * shoulderSide;
     const distance = 6.5;
     const targetX = playerX + forwardX * 1.65 + rightX * shoulder * 0.18;
-    const targetY = 1.35 + cameraPitch * 1.4;
+    const targetY = playerY + 1.27 + cameraPitch * 1.4;
     const targetZ = playerZ + forwardZ * 1.65 + rightZ * shoulder * 0.18;
     const desiredX = playerX - forwardX * distance + rightX * shoulder;
-    const desiredY = 2.8 + cameraPitch * 5.0;
+    const desiredY = playerY + 2.72 + cameraPitch * 5.0;
     const desiredZ = playerZ - forwardZ * distance + rightZ * shoulder;
 
     let cameraFactor = 1.0;
@@ -379,9 +402,9 @@ function drawHud() {
     if (showHud) {
         font.scale = 0.40;
         font.color = HUD_WHITE;
-        font.print(14, canvas.height - 67, "BUILD 11 - TEXTURAS ICE RUINS");
-        font.print(14, canvas.height - 51, "POS: " + playerX.toFixed(2) + " / " + playerZ.toFixed(2) + "  PAD: " + pad.lx + "," + pad.ly);
-        font.print(14, canvas.height - 35, "D-PAD/ANALOGICO E: MOVER  |  X: CORRER  |  ANALOGICO D: CAMERA");
+        font.print(14, canvas.height - 67, "BUILD 12 - PULO COM QUADRADO");
+        font.print(14, canvas.height - 51, "POS: " + playerX.toFixed(2) + " / " + playerY.toFixed(2) + " / " + playerZ.toFixed(2));
+        font.print(14, canvas.height - 35, "MOVER: D-PAD/ANALOGICO  |  QUADRADO: PULAR  |  X: CORRER");
         font.color = HUD_BLUE;
         font.print(14, canvas.height - 19, "L1: TROCAR OMBRO  |  R3: CENTRALIZAR  |  SELECT: REINICIAR");
     }

@@ -7,14 +7,14 @@
     "snap": 0.25,
     "camera": {
       "position": {
-        "x": 11.3176,
-        "y": 2.1438,
-        "z": -26.3181
+        "x": -7.866,
+        "y": 2.7099,
+        "z": -24.905
       },
       "target": {
-        "x": 3.6108,
-        "y": 1.5271,
-        "z": -26.4939
+        "x": 7.3855,
+        "y": -1.1126,
+        "z": -33.0675
       }
     }
   },
@@ -376,8 +376,8 @@
       "parentId": null,
       "position": {
         "x": -7.2814,
-        "y": 1.3319,
-        "z": -1.8342
+        "y": 0.653,
+        "z": -1.7025
       },
       "rotation": {
         "x": 0,
@@ -386,8 +386,8 @@
       },
       "scale": {
         "x": 0.3563,
-        "y": 0.5904,
-        "z": 1
+        "y": 0.7501,
+        "z": 0.1927
       },
       "color": "#68e0b2",
       "visible": true,
@@ -399,18 +399,18 @@
       }
     },
     {
-      "id": "collider-mqn4zjkj-b94qcs",
-      "name": "Colisor esfera",
+      "id": "collider-mqnsd74n-8zfift",
+      "name": "Colisor caixa",
       "source": {
         "kind": "collider",
         "asset": "",
-        "collider": "sphere"
+        "collider": "box"
       },
       "parentId": null,
       "position": {
-        "x": 3.6108,
-        "y": 3.3554,
-        "z": -27.0851
+        "x": 3.4754,
+        "y": 1,
+        "z": -27.1918
       },
       "rotation": {
         "x": 0,
@@ -418,12 +418,45 @@
         "z": 0
       },
       "scale": {
-        "x": 1,
+        "x": 0.5911,
         "y": 1,
-        "z": 1
+        "z": 0.6432
       },
       "color": "#68e0b2",
-      "visible": false,
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "collider": {
+        "trigger": false,
+        "cameraBlocker": true
+      }
+    },
+    {
+      "id": "collider-mqnsl5rv-g4qscv",
+      "name": "Colisor caixa",
+      "source": {
+        "kind": "collider",
+        "asset": "",
+        "collider": "box"
+      },
+      "parentId": null,
+      "position": {
+        "x": -3.5558,
+        "y": 0.9659,
+        "z": -27.1368
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 0.6118,
+        "y": 1,
+        "z": 0.5466
+      },
+      "color": "#68e0b2",
+      "visible": true,
       "locked": false,
       "runtime": true,
       "collider": {

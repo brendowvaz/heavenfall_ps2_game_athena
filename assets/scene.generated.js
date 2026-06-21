@@ -193,8 +193,8 @@ globalThis.EDITOR_COLLIDERS = [
     "shape": "box",
     "position": {
       "x": -7.2814,
-      "y": 1.3319,
-      "z": -1.8342
+      "y": 0.653,
+      "z": -1.7025
     },
     "rotation": {
       "x": 0,
@@ -203,8 +203,52 @@ globalThis.EDITOR_COLLIDERS = [
     },
     "scale": {
       "x": 0.3563,
-      "y": 0.5904,
-      "z": 1
+      "y": 0.7501,
+      "z": 0.1927
+    },
+    "trigger": false,
+    "cameraBlocker": true
+  },
+  {
+    "id": "collider-mqnsd74n-8zfift",
+    "name": "Colisor caixa",
+    "shape": "box",
+    "position": {
+      "x": 3.4754,
+      "y": 1,
+      "z": -27.1918
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": {
+      "x": 0.5911,
+      "y": 1,
+      "z": 0.6432
+    },
+    "trigger": false,
+    "cameraBlocker": true
+  },
+  {
+    "id": "collider-mqnsl5rv-g4qscv",
+    "name": "Colisor caixa",
+    "shape": "box",
+    "position": {
+      "x": -3.5558,
+      "y": 0.9659,
+      "z": -27.1368
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": {
+      "x": 0.6118,
+      "y": 1,
+      "z": 0.5466
     },
     "trigger": false,
     "cameraBlocker": true
