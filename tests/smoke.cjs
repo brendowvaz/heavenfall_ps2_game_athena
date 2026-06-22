@@ -7,10 +7,10 @@ const sourcePath = path.join(__dirname, "..", "main.js");
 let source = fs.readFileSync(sourcePath, "utf8");
 const editorSource = fs.readFileSync(path.join(__dirname, "..", "editor", "app.js"), "utf8");
 const editorHtml = fs.readFileSync(path.join(__dirname, "..", "editor", "index.html"), "utf8");
-for (const marker of ["applyPointerSnap", "togglePivotEditing", "finishBoxSelection", "toggleIsolation", "setupPanelAccordions", "collapsedHierarchy"]) {
+for (const marker of ["applyPointerSnap", "togglePivotEditing", "finishBoxSelection", "toggleIsolation", "setupPanelAccordions", "collapsedHierarchy", "applyRecordMaterial", "createLightObject", "applyCampfirePreset", "openCameraPreview"]) {
     if (!editorSource.includes(marker)) throw new Error(`Editor tool missing: ${marker}`);
 }
-for (const id of ["snap-mode", "pivot-button", "box-select-button", "selection-marquee", "isolate-selection-button"]) {
+for (const id of ["snap-mode", "pivot-button", "box-select-button", "selection-marquee", "isolate-selection-button", "material-section", "light-section", "light-flicker", "light-campfire-preset", "camera-section", "camera-mode", "camera-preview"]) {
     if (!editorHtml.includes(`id="${id}"`)) throw new Error(`Editor control missing: ${id}`);
 }
 source = source.replace(
@@ -20,6 +20,8 @@ source = source.replace(
 
 let vertexCount = 0;
 let drawCalls = 0;
+let nextLightId = 0;
+const lightSetCalls = [];
 const assetLoads = [];
 const manifest = require(path.join(__dirname, "..", "assets", "manifest.json"));
 let sandbox;
@@ -83,11 +85,36 @@ const context = {
         loadScript(filename) {
             const script = fs.readFileSync(path.join(__dirname, "..", "assets", filename), "utf8");
             vm.runInContext(script, sandbox, { filename });
+            if (filename === "scene.generated.js") {
+                for (let index = 0; index < 4; index++) {
+                    sandbox.EDITOR_LIGHTS.push({
+                        id: `smoke-global-${index}`,
+                        name: `Smoke global ${index}`,
+                        type: "directional",
+                        color: { r: 0.2, g: 0.2, b: 0.2 },
+                        intensity: 0.1,
+                        direction: { x: 0, y: 1, z: 0 }
+                    });
+                }
+                sandbox.EDITOR_POINT_LIGHTS.push({
+                    id: "smoke-campfire",
+                    name: "Smoke campfire",
+                    type: "point",
+                    color: { r: 1, g: 0.5, b: 0.2 },
+                    intensity: 2.5,
+                    distance: 30,
+                    position: { x: 0, y: 3, z: 0 },
+                    flicker: true,
+                    flickerAmount: 0.25,
+                    flickerSpeed: 7.5
+                });
+            }
         }
     },
     Lights: {
         DIRECTION: 0, AMBIENT: 1, DIFFUSE: 2,
-        new: () => ({}), set() {}
+        new: () => ({ id: ++nextLightId }),
+        set(light, property, x, y, z) { lightSetCalls.push({ id: light.id, property, x, y, z }); }
     },
     Pads: {
         SELECT: 1, START: 2, L1: 3, R3: 4, CROSS: 5,
@@ -100,6 +127,10 @@ const context = {
 sandbox = vm.createContext(context);
 vm.runInContext(source, sandbox, { filename: sourcePath, timeout: 5000 });
 
+if (!Array.isArray(context.EDITOR_LIGHTS) || !Array.isArray(context.EDITOR_POINT_LIGHTS) || !("EDITOR_CAMERA" in context)) {
+    throw new Error("Generated scene must expose lights and active camera contracts");
+}
+
 if (manifest.sceneVertices < 1000 || manifest.sceneVertices > 30000) {
     throw new Error(`Unexpected geometry budget: ${manifest.sceneVertices} vertices`);
 }
@@ -109,6 +140,16 @@ if (assetLoads.length !== expectedRuntimeObjects) {
 }
 if (drawCalls !== expectedRuntimeObjects * 2) {
     throw new Error(`Unexpected draw-call count over two frames: ${drawCalls}`);
+}
+if (nextLightId !== 4) {
+    throw new Error(`Athena light budget must remain at four slots, received ${nextLightId}`);
+}
+const diffuseUpdates = new Map();
+for (const call of lightSetCalls.filter((entry) => entry.property === context.Lights.DIFFUSE)) {
+    diffuseUpdates.set(call.id, (diffuseUpdates.get(call.id) || 0) + 1);
+}
+if (Math.max(...diffuseUpdates.values()) <= expectedRuntimeObjects) {
+    throw new Error("Simulated point lights must be updated for each runtime object");
 }
 if (!context.__levelTest.isPlayerValid(0, 18)) {
     throw new Error("Spawn point must be walkable");

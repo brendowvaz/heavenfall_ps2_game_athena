@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
-import { createReadStream } from "node:fs";
+import { createReadStream, readFileSync } from "node:fs";
 import {
   mkdir,
   readFile,
@@ -48,6 +48,8 @@ const mimeTypes = {
   ".svg": "image/svg+xml",
   ".woff2": "font/woff2",
 };
+
+const assetBoundsCache = new Map();
 
 let runState = {
   running: false,
@@ -154,18 +156,30 @@ function normalizeScene(input) {
       background: String(input?.settings?.background || "#07101d").slice(0, 16),
       gridSize: Math.max(10, finite(input?.settings?.gridSize, 120)),
       snap: Math.max(0, finite(input?.settings?.snap, 0.25)),
+      snapEnabled: input?.settings?.snapEnabled === true,
+      snapMode: ["grid", "surface", "vertex", "object"].includes(input?.settings?.snapMode) ? input.settings.snapMode : "grid",
       camera: {
         position: vector(input?.settings?.camera?.position, { x: 24, y: 20, z: 32 }),
         target: vector(input?.settings?.camera?.target, { x: 0, y: 2, z: 0 }),
       },
     },
     objects: objects.slice(0, 2000).map((item, index) => {
-      const allowedKinds = new Set(["model", "primitive", "group", "collider"]);
-      const kind = allowedKinds.has(item?.source?.kind) ? item.source.kind : "model";
+      const allowedKinds = new Set(["model", "primitive", "group", "collider", "light", "camera"]);
+      let kind = allowedKinds.has(item?.source?.kind) ? item.source.kind : "model";
       const asset = safeAssetPath(item?.source?.asset || item?.asset);
+      const legacyName = String(item?.name || "").toLocaleLowerCase("pt-BR");
+      if (kind === "model" && !asset) {
+        if (item?.light || item?.source?.light || legacyName.startsWith("luz ")) kind = "light";
+        else if (item?.camera || legacyName.includes("câmera") || legacyName.includes("camera")) kind = "camera";
+      }
+      const inferredLightType = legacyName.includes("ambiente") ? "ambient" : legacyName.includes("pontual") ? "point" : "directional";
+      const lightType = ["ambient", "directional", "point"].includes(item?.light?.type || item?.source?.light)
+        ? (item.light?.type || item.source.light)
+        : inferredLightType;
       const primitive = ["cube", "sphere", "cylinder", "cone", "plane"].includes(item?.source?.primitive)
         ? item.source.primitive
         : "cube";
+      const cameraNear = Math.max(0.01, finite(item?.camera?.near, 0.1));
       return {
         id: String(item?.id || `object-${Date.now()}-${index}`).replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96),
         name: String(item?.name || `Objeto ${index + 1}`).slice(0, 120),
@@ -176,6 +190,9 @@ function normalizeScene(input) {
           ...(kind === "collider" ? {
             collider: ["box", "sphere", "capsule"].includes(item?.source?.collider) ? item.source.collider : "box",
           } : {}),
+          ...(kind === "light" ? {
+            light: lightType,
+          } : {}),
         },
         parentId: typeof item?.parentId === "string" && item.parentId ? item.parentId : null,
         position: vector(item?.position, { x: 0, y: 0, z: 0 }),
@@ -185,9 +202,37 @@ function normalizeScene(input) {
         visible: item?.visible !== false,
         locked: item?.locked === true,
         runtime: item?.runtime !== false,
+        material: ["model", "primitive"].includes(kind) ? {
+          color: /^#[0-9a-f]{6}$/i.test(item?.material?.color || "") ? item.material.color : (kind === "primitive" ? "#8bd5f7" : "#ffffff"),
+          texture: safeAssetPath(item?.material?.texture),
+          opacity: Math.max(0, Math.min(1, finite(item?.material?.opacity, 1))),
+          roughness: Math.max(0, Math.min(1, finite(item?.material?.roughness, 0.72))),
+          metalness: Math.max(0, Math.min(1, finite(item?.material?.metalness, 0))),
+          emissive: /^#[0-9a-f]{6}$/i.test(item?.material?.emissive || "") ? item.material.emissive : "#000000",
+          emissiveIntensity: Math.max(0, finite(item?.material?.emissiveIntensity, 0)),
+          unlit: item?.material?.unlit === true,
+          doubleSided: item?.material?.doubleSided !== false,
+        } : undefined,
         collider: kind === "collider" ? {
           trigger: item?.collider?.trigger === true,
           cameraBlocker: item?.collider?.cameraBlocker !== false,
+        } : undefined,
+        light: kind === "light" ? {
+          type: lightType,
+          color: /^#[0-9a-f]{6}$/i.test(item?.light?.color || "") ? item.light.color : "#ffffff",
+          intensity: Math.max(0, finite(item?.light?.intensity, lightType === "ambient" ? 0.45 : 2)),
+          distance: Math.max(0.1, finite(item?.light?.distance, 12)),
+          castShadow: item?.light?.castShadow === true,
+          flicker: item?.light?.flicker === true,
+          flickerAmount: Math.max(0, Math.min(1, finite(item?.light?.flickerAmount, 0.24))),
+          flickerSpeed: Math.max(0.1, Math.min(40, finite(item?.light?.flickerSpeed, 7.5))),
+        } : undefined,
+        camera: kind === "camera" ? {
+          fov: Math.max(15, Math.min(120, finite(item?.camera?.fov, 52))),
+          near: cameraNear,
+          far: Math.max(cameraNear + 0.1, finite(item?.camera?.far, 500)),
+          active: item?.camera?.active === true,
+          mode: ["follow", "fixed", "lookAtPlayer"].includes(item?.camera?.mode) ? item.camera.mode : "follow",
         } : undefined,
         prefabId: typeof item?.prefabId === "string" ? item.prefabId.slice(0, 96) : undefined,
       };
@@ -212,6 +257,12 @@ function normalizeScene(input) {
       parentId = byId.get(parentId)?.parentId || null;
     }
     if (cyclic) item.parentId = null;
+  }
+  let activeCameraSeen = false;
+  for (const item of scene.objects) {
+    if (item.source.kind !== "camera" || !item.camera?.active) continue;
+    if (activeCameraSeen) item.camera.active = false;
+    else activeCameraSeen = true;
   }
   return scene;
 }
@@ -258,19 +309,72 @@ function worldTransforms(scene) {
   return output;
 }
 
+function runtimeColor(value) {
+  const color = new THREE.Color(/^#[0-9a-f]{6}$/i.test(value || "") ? value : "#ffffff");
+  return { r: color.r, g: color.g, b: color.b };
+}
+
+function assetBounds(asset) {
+  const normalized = safeAssetPath(asset);
+  if (!normalized || path.extname(normalized).toLowerCase() !== ".obj") {
+    return { center: new THREE.Vector3(), radius: 0 };
+  }
+  if (assetBoundsCache.has(normalized)) return assetBoundsCache.get(normalized);
+
+  const absolute = path.resolve(assetsRoot, normalized);
+  if (!isInside(assetsRoot, absolute)) return { center: new THREE.Vector3(), radius: 0 };
+  try {
+    const source = readFileSync(absolute, "utf8");
+    const minimum = new THREE.Vector3(Infinity, Infinity, Infinity);
+    const maximum = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+    let vertices = 0;
+    for (const line of source.split(/\r?\n/)) {
+      if (!/^\s*v\s+/.test(line)) continue;
+      const values = line.trim().split(/\s+/).slice(1, 4).map(Number);
+      if (values.length !== 3 || values.some((value) => !Number.isFinite(value))) continue;
+      minimum.min(new THREE.Vector3(values[0], values[1], values[2]));
+      maximum.max(new THREE.Vector3(values[0], values[1], values[2]));
+      vertices++;
+    }
+    const center = vertices > 0 ? minimum.clone().add(maximum).multiplyScalar(0.5) : new THREE.Vector3();
+    const bounds = { center, radius: vertices > 0 ? maximum.distanceTo(minimum) * 0.5 : 0 };
+    assetBoundsCache.set(normalized, bounds);
+    return bounds;
+  } catch {
+    const bounds = { center: new THREE.Vector3(), radius: 0 };
+    assetBoundsCache.set(normalized, bounds);
+    return bounds;
+  }
+}
+
+function runtimeBounds(asset, transform) {
+  const local = assetBounds(asset);
+  const euler = new THREE.Euler(transform.rotation.x, transform.rotation.y, transform.rotation.z, "XYZ");
+  const center = local.center.clone()
+    .multiply(new THREE.Vector3(transform.scale.x, transform.scale.y, transform.scale.z))
+    .applyEuler(euler)
+    .add(new THREE.Vector3(transform.position.x, transform.position.y, transform.position.z));
+  const radius = local.radius * Math.max(Math.abs(transform.scale.x), Math.abs(transform.scale.y), Math.abs(transform.scale.z));
+  return { center: { x: center.x, y: center.y, z: center.z }, radius };
+}
+
 function generateAthenaScene(scene) {
   const transforms = worldTransforms(scene);
   const objects = scene.objects
     .filter((item) => item.runtime && item.visible && item.source.asset && ["model", "primitive"].includes(item.source.kind))
     .map((item) => {
       const transform = transforms.get(item.id);
+      const bounds = runtimeBounds(item.source.asset, transform);
       return {
-      id: item.id,
-      name: item.name,
-      asset: item.source.asset,
-      position: transform.position,
-      rotation: transform.rotation,
-      scale: transform.scale,
+        id: item.id,
+        name: item.name,
+        asset: item.source.asset,
+        position: transform.position,
+        rotation: transform.rotation,
+        scale: transform.scale,
+        boundsCenter: bounds.center,
+        boundsRadius: bounds.radius,
+        material: item.material,
       };
     });
 
@@ -297,12 +401,79 @@ function generateAthenaScene(scene) {
       };
     });
 
+  const lights = scene.objects
+    .filter((item) => item.runtime && item.visible && item.source.kind === "light" && item.light.type !== "point")
+    .slice(0, 4)
+    .map((item) => {
+      const transform = transforms.get(item.id);
+      const direction = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(
+        transform.rotation.x,
+        transform.rotation.y,
+        transform.rotation.z,
+        "XYZ",
+      )).normalize();
+      return {
+        id: item.id,
+        name: item.name,
+        type: item.light.type,
+        color: runtimeColor(item.light.color),
+        intensity: item.light.intensity,
+        distance: item.light.distance,
+        position: transform.position,
+        direction: { x: direction.x, y: direction.y, z: direction.z },
+      };
+    });
+
+  const pointLights = scene.objects
+    .filter((item) => item.runtime && item.visible && item.source.kind === "light" && item.light.type === "point")
+    .slice(0, 4)
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      type: "point",
+      color: runtimeColor(item.light.color),
+      intensity: item.light.intensity,
+      distance: item.light.distance,
+      position: transforms.get(item.id).position,
+      flicker: item.light.flicker,
+      flickerAmount: item.light.flickerAmount,
+      flickerSpeed: item.light.flickerSpeed,
+      runtimeMode: "simulated-per-object",
+    }));
+
+  const activeCameraRecord = scene.objects.find((item) => item.runtime && item.visible && item.source.kind === "camera" && item.camera?.active);
+  const activeCameraTransform = activeCameraRecord ? transforms.get(activeCameraRecord.id) : null;
+  const activeCameraDirection = activeCameraTransform ? new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(
+    activeCameraTransform.rotation.x,
+    activeCameraTransform.rotation.y,
+    activeCameraTransform.rotation.z,
+    "XYZ",
+  )).normalize() : null;
+  const activeCamera = activeCameraRecord ? {
+    id: activeCameraRecord.id,
+    name: activeCameraRecord.name,
+    position: activeCameraTransform.position,
+    rotation: activeCameraTransform.rotation,
+    fov: activeCameraRecord.camera.fov,
+    near: activeCameraRecord.camera.near,
+    far: activeCameraRecord.camera.far,
+    mode: activeCameraRecord.camera.mode,
+    target: {
+      x: activeCameraTransform.position.x + activeCameraDirection.x * 10,
+      y: activeCameraTransform.position.y + activeCameraDirection.y * 10,
+      z: activeCameraTransform.position.z + activeCameraDirection.z * 10,
+    },
+  } : null;
+
   return [
     "// Generated by Athena Visual Editor. Do not edit by hand.",
     `// Scene: ${scene.name}`,
     "globalThis.EDITOR_COLLISION_VERSION = 2;",
     `globalThis.EDITOR_SCENE = ${JSON.stringify(objects, null, 2)};`,
     `globalThis.EDITOR_COLLIDERS = ${JSON.stringify(colliders, null, 2)};`,
+    `globalThis.EDITOR_LIGHTS = ${JSON.stringify(lights, null, 2)};`,
+    `globalThis.EDITOR_POINT_LIGHTS = ${JSON.stringify(pointLights, null, 2)};`,
+    `globalThis.EDITOR_CAMERA = ${JSON.stringify(activeCamera, null, 2)};`,
     "",
   ].join("\n");
 }
@@ -460,6 +631,13 @@ function startBuildAndRun() {
 }
 
 async function handleApi(request, response, url) {
+  if (url.pathname === "/api/capabilities" && request.method === "GET") {
+    sendJson(response, 200, {
+      editorSchemaVersion: 3,
+      features: ["materials", "lights", "point-light-runtime", "light-flicker", "cameras", "camera-modes", "camera-preview"],
+    });
+    return true;
+  }
   if (url.pathname === "/api/scene" && request.method === "GET") {
     try {
       const scene = normalizeScene(JSON.parse(await readFile(sceneFile, "utf8")));

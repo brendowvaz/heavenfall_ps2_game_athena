@@ -20,6 +20,8 @@ const state = {
   document: null,
   objects: new Map(),
   assets: [],
+  assetFiles: [],
+  textures: [],
   prefabs: [],
   selectedIds: new Set(),
   primaryId: null,
@@ -50,6 +52,9 @@ const state = {
   isolatedIds: null,
   collapsedHierarchy: new Set(),
   collapsedPanels: new Set(),
+  previewCameraId: null,
+  serverSchemaVersion: 0,
+  serverOutdated: false,
 };
 
 const scene = new THREE.Scene();
@@ -84,7 +89,8 @@ const transform = new TransformControls(camera, renderer.domElement);
 transform.setMode("translate");
 transform.setSpace("world");
 transform.setSize(0.82);
-scene.add(transform.getHelper());
+const transformHelper = transform.getHelper();
+scene.add(transformHelper);
 
 const editorRoot = new THREE.Group();
 editorRoot.name = "EditorObjects";
@@ -117,6 +123,13 @@ keyLight.shadow.camera.top = 45;
 keyLight.shadow.camera.bottom = -45;
 scene.add(keyLight);
 
+function updateEditorLightingRig() {
+  const hasSceneLights = state.document?.objects?.some((record) => record.source.kind === "light" && record.visible) === true;
+  hemisphere.intensity = hasSceneLights ? 0.08 : 2.35;
+  workLight.intensity = hasSceneLights ? 0.03 : 1.25;
+  keyLight.intensity = hasSceneLights ? 0.12 : 2.8;
+}
+
 const warmLight = new THREE.DirectionalLight(0xffae78, 0.72);
 warmLight.position.set(18, 9, -20);
 scene.add(warmLight);
@@ -138,6 +151,9 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const clock = new THREE.Clock();
+let editorElapsedTime = 0;
+const materialTextureLoader = new THREE.TextureLoader();
+const materialTextureCache = new Map();
 
 function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -162,17 +178,32 @@ function fileName(asset) {
 }
 
 function normalizeRecord(record = {}) {
-  const kind = ["model", "primitive", "group", "collider"].includes(record.source?.kind)
+  let kind = ["model", "primitive", "group", "collider", "light", "camera"].includes(record.source?.kind)
     ? record.source.kind
     : "model";
+  const legacyName = String(record.name || "").toLocaleLowerCase("pt-BR");
+  if (kind === "model" && !record.source?.asset) {
+    if (record.light || record.source?.light || legacyName.startsWith("luz ")) kind = "light";
+    else if (record.camera || legacyName.includes("câmera") || legacyName.includes("camera")) kind = "camera";
+  }
+  const materialColor = /^#[0-9a-f]{6}$/i.test(record.material?.color || "")
+    ? record.material.color
+    : kind === "primitive" && /^#[0-9a-f]{6}$/i.test(record.color || "") ? record.color : "#ffffff";
+  const inferredLightType = legacyName.includes("ambiente") ? "ambient" : legacyName.includes("pontual") ? "point" : "directional";
+  const lightType = ["ambient", "directional", "point"].includes(record.light?.type || record.source?.light)
+    ? (record.light?.type || record.source?.light)
+    : inferredLightType;
+  const cameraNear = Math.max(0.01, clampNumber(record.camera?.near, 0.1));
+  const cameraFar = Math.max(cameraNear + 0.1, clampNumber(record.camera?.far, 500));
   return {
     id: record.id || uid(kind),
-    name: record.name || (kind === "primitive" ? "Primitiva" : fileName(record.source?.asset)),
+    name: record.name || ({ primitive: "Primitiva", group: "Grupo", collider: "Colisor", light: "Luz", camera: "Câmera" }[kind] || fileName(record.source?.asset)),
     source: {
       kind,
       asset: record.source?.asset || "",
       ...(kind === "primitive" ? { primitive: record.source?.primitive || "cube" } : {}),
       ...(kind === "collider" ? { collider: ["box", "sphere", "capsule"].includes(record.source?.collider) ? record.source.collider : "box" } : {}),
+      ...(kind === "light" ? { light: lightType } : {}),
     },
     parentId: record.parentId || null,
     position: {
@@ -188,10 +219,44 @@ function normalizeRecord(record = {}) {
     visible: record.visible !== false,
     locked: record.locked === true,
     runtime: record.runtime !== false,
+    ...(["model", "primitive"].includes(kind) ? {
+      material: {
+        color: materialColor,
+        texture: String(record.material?.texture || ""),
+        opacity: THREE.MathUtils.clamp(clampNumber(record.material?.opacity, 1), 0, 1),
+        roughness: THREE.MathUtils.clamp(clampNumber(record.material?.roughness, 0.72), 0, 1),
+        metalness: THREE.MathUtils.clamp(clampNumber(record.material?.metalness, 0), 0, 1),
+        emissive: /^#[0-9a-f]{6}$/i.test(record.material?.emissive || "") ? record.material.emissive : "#000000",
+        emissiveIntensity: Math.max(0, clampNumber(record.material?.emissiveIntensity, 0)),
+        unlit: record.material?.unlit === true,
+        doubleSided: record.material?.doubleSided !== false,
+      },
+    } : {}),
     ...(kind === "collider" ? {
       collider: {
         trigger: record.collider?.trigger === true,
         cameraBlocker: record.collider?.cameraBlocker !== false,
+      },
+    } : {}),
+    ...(kind === "light" ? {
+      light: {
+        type: lightType,
+        color: /^#[0-9a-f]{6}$/i.test(record.light?.color || "") ? record.light.color : "#ffffff",
+        intensity: Math.max(0, clampNumber(record.light?.intensity, lightType === "ambient" ? 0.45 : 2)),
+        distance: Math.max(0.1, clampNumber(record.light?.distance, 12)),
+        castShadow: record.light?.castShadow === true,
+        flicker: record.light?.flicker === true,
+        flickerAmount: THREE.MathUtils.clamp(clampNumber(record.light?.flickerAmount, 0.24), 0, 1),
+        flickerSpeed: THREE.MathUtils.clamp(clampNumber(record.light?.flickerSpeed, 7.5), 0.1, 40),
+      },
+    } : {}),
+    ...(kind === "camera" ? {
+      camera: {
+        fov: THREE.MathUtils.clamp(clampNumber(record.camera?.fov, 52), 15, 120),
+        near: cameraNear,
+        far: cameraFar,
+        active: record.camera?.active === true,
+        mode: ["follow", "fixed", "lookAtPlayer"].includes(record.camera?.mode) ? record.camera.mode : "follow",
       },
     } : {}),
     ...(record.prefabId ? { prefabId: record.prefabId } : {}),
@@ -437,7 +502,7 @@ function primitiveGeometry(kind) {
 
 function createPrimitive(record) {
   const material = new THREE.MeshStandardMaterial({
-    color: record.color,
+    color: 0xffffff,
     roughness: 0.72,
     metalness: 0.03,
     side: THREE.DoubleSide,
@@ -483,6 +548,103 @@ function createCollider(record) {
     child.renderOrder = 800;
     child.userData.colliderVisual = true;
   });
+  return root;
+}
+
+function markEditorVisual(object) {
+  object.traverse((child) => {
+    child.userData.editorVisual = true;
+    child.renderOrder = 900;
+  });
+  return object;
+}
+
+function createLightObject(record) {
+  const root = new THREE.Group();
+  const settings = record.light;
+  let light;
+  if (settings.type === "ambient") {
+    light = new THREE.AmbientLight(settings.color, settings.intensity);
+  } else if (settings.type === "point") {
+    light = new THREE.PointLight(settings.color, settings.intensity, settings.distance, 2);
+    light.castShadow = settings.castShadow;
+    light.shadow.mapSize.set(1024, 1024);
+  } else {
+    light = new THREE.DirectionalLight(settings.color, settings.intensity);
+    light.castShadow = settings.castShadow;
+    light.shadow.mapSize.set(1024, 1024);
+    light.shadow.camera.left = -24;
+    light.shadow.camera.right = 24;
+    light.shadow.camera.top = 24;
+    light.shadow.camera.bottom = -24;
+    const target = new THREE.Object3D();
+    target.position.set(0, 0, -1);
+    root.add(target);
+    light.target = target;
+  }
+  light.userData.editorLight = true;
+  root.add(light);
+
+  const color = new THREE.Color(settings.color);
+  const visual = new THREE.Group();
+  const sphere = new THREE.Mesh(
+    new THREE.SphereGeometry(settings.type === "ambient" ? 0.42 : 0.24, 12, 8),
+    new THREE.MeshBasicMaterial({ color, wireframe: true, toneMapped: false }),
+  );
+  visual.add(sphere);
+  if (settings.type === "directional") {
+    const lineGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -2)]);
+    visual.add(new THREE.Line(lineGeometry, new THREE.LineBasicMaterial({ color, toneMapped: false })));
+    const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.42, 10), new THREE.MeshBasicMaterial({ color, toneMapped: false }));
+    arrow.rotation.x = -Math.PI / 2;
+    arrow.position.z = -2;
+    visual.add(arrow);
+  } else if (settings.type === "point") {
+    const range = new THREE.Mesh(
+      new THREE.SphereGeometry(settings.distance, 20, 12),
+      new THREE.MeshBasicMaterial({ color, wireframe: true, transparent: true, opacity: 0.12, depthWrite: false, toneMapped: false }),
+    );
+    range.userData.lightRange = true;
+    range.raycast = () => {};
+    visual.add(range);
+  }
+  markEditorVisual(visual);
+  root.add(visual);
+  root.userData.editorLight = light;
+  return root;
+}
+
+function createCameraObject(record) {
+  const root = new THREE.Group();
+  const settings = record.camera;
+  const previewCamera = new THREE.PerspectiveCamera(settings.fov, 640 / 448, settings.near, settings.far);
+  previewCamera.userData.editorPreviewCamera = true;
+  root.add(previewCamera);
+
+  const depth = 2;
+  const halfHeight = Math.tan(THREE.MathUtils.degToRad(settings.fov * 0.5)) * depth;
+  const halfWidth = halfHeight * previewCamera.aspect;
+  const corners = [
+    new THREE.Vector3(-halfWidth, halfHeight, -depth), new THREE.Vector3(halfWidth, halfHeight, -depth),
+    new THREE.Vector3(halfWidth, -halfHeight, -depth), new THREE.Vector3(-halfWidth, -halfHeight, -depth),
+  ];
+  const points = [];
+  for (const corner of corners) points.push(new THREE.Vector3(), corner);
+  for (let index = 0; index < corners.length; index++) points.push(corners[index], corners[(index + 1) % corners.length]);
+  const frustum = new THREE.LineSegments(
+    new THREE.BufferGeometry().setFromPoints(points),
+    new THREE.LineBasicMaterial({ color: 0x57cef5, transparent: true, opacity: 0.8, toneMapped: false }),
+  );
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(0.52, 0.34, 0.42),
+    new THREE.MeshBasicMaterial({ color: record.camera.active ? 0xffc15c : 0x57cef5, wireframe: true, toneMapped: false }),
+  );
+  body.position.z = 0.18;
+  const visual = new THREE.Group();
+  visual.add(frustum, body);
+  markEditorVisual(visual);
+  root.add(visual);
+  root.userData.previewCamera = previewCamera;
   return root;
 }
 
@@ -544,6 +706,98 @@ function prepareModel(object) {
   return { vertices: Math.round(vertices), triangles: Math.round(triangles) };
 }
 
+async function loadMaterialTexture(asset) {
+  if (!asset) return null;
+  if (!materialTextureCache.has(asset)) {
+    const url = `/assets/${asset.split("/").map(encodeURIComponent).join("/")}`;
+    materialTextureCache.set(asset, materialTextureLoader.loadAsync(url).then((texture) => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      return texture;
+    }).catch((error) => {
+      materialTextureCache.delete(asset);
+      throw error;
+    }));
+  }
+  return materialTextureCache.get(asset);
+}
+
+function captureMaterialSources(object) {
+  object.traverse((child) => {
+    if (!child.isMesh || child.userData.editorMaterialSources) return;
+    const materials = Array.isArray(child.material) ? child.material : [child.material];
+    child.userData.editorMaterialSources = materials.map((material) => ({
+      color: material?.color?.clone?.() || new THREE.Color(0xffffff),
+      map: material?.map || null,
+      vertexColors: material?.vertexColors === true,
+      alphaTest: material?.alphaTest || 0,
+    }));
+  });
+}
+
+function createEditorMaterial(settings, source, overrideTexture) {
+  const tint = source.color.clone().multiply(new THREE.Color(settings.color));
+  const common = {
+    color: tint,
+    map: overrideTexture || source.map,
+    transparent: settings.opacity < 0.999,
+    opacity: settings.opacity,
+    alphaTest: source.alphaTest,
+    side: settings.doubleSided ? THREE.DoubleSide : THREE.FrontSide,
+    vertexColors: source.vertexColors,
+    toneMapped: !settings.unlit,
+  };
+  const material = settings.unlit
+    ? new THREE.MeshBasicMaterial(common)
+    : new THREE.MeshStandardMaterial({
+      ...common,
+      roughness: settings.roughness,
+      metalness: settings.metalness,
+      emissive: settings.emissive,
+      emissiveIntensity: settings.emissiveIntensity,
+    });
+  material.userData.editorGenerated = true;
+  return material;
+}
+
+async function applyRecordMaterial(record, object = state.objects.get(record.id)) {
+  if (!object || !record.material || !["model", "primitive"].includes(record.source.kind)) return;
+  const token = (object.userData.materialUpdateToken || 0) + 1;
+  object.userData.materialUpdateToken = token;
+  let texture = null;
+  try {
+    if (record.material.texture) {
+      if (object.userData.materialTexturePath === record.material.texture && object.userData.materialOverrideTexture) {
+        texture = object.userData.materialOverrideTexture;
+      } else {
+        const sourceTexture = await loadMaterialTexture(record.material.texture);
+        texture = sourceTexture?.clone() || null;
+        if (texture) texture.needsUpdate = true;
+      }
+    }
+  } catch (error) {
+    toast(`Textura não carregada: ${error.message}`, "error");
+  }
+  if (object.userData.materialUpdateToken !== token) {
+    if (texture && texture !== object.userData.materialOverrideTexture) texture.dispose();
+    return;
+  }
+  if (object.userData.materialOverrideTexture !== texture) object.userData.materialOverrideTexture?.dispose?.();
+  object.userData.materialOverrideTexture = texture;
+  object.userData.materialTexturePath = record.material.texture;
+  captureMaterialSources(object);
+  object.traverse((child) => {
+    if (!child.isMesh || !child.userData.editorMaterialSources) return;
+    const previous = Array.isArray(child.material) ? child.material : [child.material];
+    const materials = child.userData.editorMaterialSources.map((source) => createEditorMaterial(record.material, source, texture));
+    for (const material of previous) {
+      if (material?.userData?.editorGenerated) material.dispose();
+    }
+    child.material = Array.isArray(child.material) ? materials : materials[0];
+  });
+}
+
 function createErrorPlaceholder(record) {
   const group = new THREE.Group();
   const mesh = new THREE.Mesh(
@@ -573,6 +827,18 @@ async function createEditorObject(record, generation = state.loadGeneration) {
     return group;
   }
 
+  if (record.source.kind === "light" || record.source.kind === "camera") {
+    const content = record.source.kind === "light" ? createLightObject(record) : createCameraObject(record);
+    content.userData.editorContent = true;
+    group.add(content);
+    group.userData.stats = { vertices: 0, triangles: 0 };
+    if (record.source.kind === "light") group.userData.editorLight = content.userData.editorLight;
+    if (record.source.kind === "camera") group.userData.previewCamera = content.userData.previewCamera;
+    updateEditorLightingRig();
+    updateViewportStats();
+    return group;
+  }
+
   setLoading(1, record.source.kind === "collider" ? `Criando ${record.name}…` : `Carregando ${record.name}…`);
   try {
     const content = record.source.kind === "primitive"
@@ -587,6 +853,7 @@ async function createEditorObject(record, generation = state.loadGeneration) {
     content.userData.editorContent = true;
     group.add(content);
     group.userData.stats = record.source.kind === "collider" ? { vertices: 0, triangles: 0 } : prepareModel(content);
+    await applyRecordMaterial(record, group);
   } catch (error) {
     console.error(error);
     group.add(createErrorPlaceholder(record));
@@ -724,6 +991,7 @@ function hideSelectedObjects() {
     applyEditorVisibility(record);
   }
   pushHistorySnapshot(before);
+  updateEditorLightingRig();
   const count = state.selectedIds.size;
   setSelection(null);
   setStatus(`${count} objeto${count === 1 ? " ocultado" : "s ocultados"}`);
@@ -739,6 +1007,7 @@ function showAllObjects() {
   state.isolationRoots.clear();
   state.isolatedIds = null;
   refreshEditorVisibility();
+  updateEditorLightingRig();
   renderHierarchy();
   updateIsolationUi();
   if (changed) pushHistorySnapshot(before);
@@ -854,7 +1123,7 @@ function renderHierarchy() {
     visit(null, 0);
   }
 
-  const icons = { group: "▱", collider: "▣", primitive: "◆", model: "◇" };
+  const icons = { group: "▱", collider: "▣", primitive: "◆", model: "◇", light: "✦", camera: "▣" };
   for (const { record, depth } of ordered) {
     if (query && !record.name.toLocaleLowerCase("pt-BR").includes(query)) continue;
     const hasChildren = (children.get(record.id) || []).length > 0;
@@ -909,6 +1178,7 @@ function renderHierarchy() {
       const before = serializeScene();
       record.visible = !record.visible;
       applyEditorVisibility(record);
+      if (record.source.kind === "light") updateEditorLightingRig();
       pushHistorySnapshot(before);
       setSelection(record.id);
     });
@@ -992,6 +1262,16 @@ function setVectorInputs(prefix, vector) {
   $(`${prefix}-z`).value = cleanNumber(vector.z);
 }
 
+function renderMaterialTextureOptions(record) {
+  const select = $("material-texture");
+  select.replaceChildren(new Option("Material original", ""));
+  for (const texture of state.textures) select.append(new Option(texture.path, texture.path));
+  if (record.material?.texture && !state.textures.some((texture) => texture.path === record.material.texture)) {
+    select.append(new Option(record.material.texture, record.material.texture));
+  }
+  select.value = record.material?.texture || "";
+}
+
 function renderInspector() {
   const record = currentRecord();
   const object = currentObject();
@@ -1015,7 +1295,7 @@ function renderInspector() {
   if (!record) return;
 
   $("object-name").value = record.name;
-  $("object-type-icon").textContent = ({ group: "▱", collider: "▣", primitive: "◆", model: "◇" })[record.source.kind] || "◇";
+  $("object-type-icon").textContent = ({ group: "▱", collider: "▣", primitive: "◆", model: "◇", light: "✦", camera: "▣" })[record.source.kind] || "◇";
   setVectorInputs("position", record.position);
   setVectorInputs("rotation", record.rotation);
   setVectorInputs("scale", record.scale);
@@ -1027,7 +1307,9 @@ function renderInspector() {
     ? `Primitiva · ${record.source.primitive}`
     : record.source.kind === "collider"
       ? `Colisor · ${record.source.collider}`
-      : record.source.kind === "group" ? "Grupo" : "Modelo 3D";
+      : record.source.kind === "light"
+        ? `Luz · ${{ ambient: "ambiente", directional: "direcional", point: "pontual" }[record.light.type]}`
+        : record.source.kind === "camera" ? "Câmera" : record.source.kind === "group" ? "Grupo" : "Modelo 3D";
   $("source-asset").textContent = record.source.asset || "—";
   $("source-id").textContent = record.id;
   const stats = object?.userData.stats;
@@ -1042,11 +1324,61 @@ function renderInspector() {
   parentSelect.value = record.parentId || "";
 
   const colliderMode = record.source.kind === "collider";
+  const materialMode = ["model", "primitive"].includes(record.source.kind);
+  const lightMode = record.source.kind === "light";
+  const cameraMode = record.source.kind === "camera";
   $("collider-section").hidden = !colliderMode;
+  $("material-section").hidden = !materialMode;
+  $("light-section").hidden = !lightMode;
+  $("camera-section").hidden = !cameraMode;
+  $("object-color-row").hidden = !colliderMode;
   if (colliderMode) {
     $("collider-shape").value = record.source.collider;
     $("collider-trigger").checked = record.collider?.trigger === true;
     $("collider-camera").checked = record.collider?.cameraBlocker !== false;
+  }
+  if (materialMode) {
+    renderMaterialTextureOptions(record);
+    $("material-color").value = record.material.color;
+    $("material-opacity").value = record.material.opacity;
+    $("material-roughness").value = record.material.roughness;
+    $("material-metalness").value = record.material.metalness;
+    $("material-emissive").value = record.material.emissive;
+    $("material-emissive-intensity").value = record.material.emissiveIntensity;
+    $("material-unlit").checked = record.material.unlit;
+    $("material-double-sided").checked = record.material.doubleSided;
+  }
+  if (lightMode) {
+    $("light-type").value = record.light.type;
+    $("light-color").value = record.light.color;
+    $("light-intensity").value = record.light.intensity;
+    $("light-distance").value = record.light.distance;
+    $("light-distance-row").hidden = record.light.type !== "point";
+    $("light-flicker").checked = record.light.flicker;
+    $("light-flicker-amount").value = record.light.flickerAmount;
+    $("light-flicker-speed").value = record.light.flickerSpeed;
+    $("light-flicker-row").hidden = record.light.type !== "point";
+    $("light-flicker-amount-row").hidden = record.light.type !== "point" || !record.light.flicker;
+    $("light-flicker-speed-row").hidden = record.light.type !== "point" || !record.light.flicker;
+    $("light-campfire-preset").hidden = record.light.type !== "point";
+    $("light-cast-shadow").checked = record.light.castShadow;
+    $("light-runtime-note").textContent = record.light.type === "point"
+      ? "PS2 · simulação local por objeto. Alcance e flicker funcionam no jogo; blocos menores dão mais precisão. As luzes compartilham 4 slots no total e sombras ficam apenas no preview."
+      : record.light.type === "directional"
+        ? "PS2 · luz global. A posição não limita o alcance; use a rotação para controlar a direção."
+        : "PS2 · luz global. Clareia toda a cena de forma uniforme.";
+  }
+  if (cameraMode) {
+    $("camera-mode").value = record.camera.mode;
+    $("camera-fov").value = record.camera.fov;
+    $("camera-near").value = record.camera.near;
+    $("camera-far").value = record.camera.far;
+    $("camera-active").checked = record.camera.active;
+    $("camera-runtime-note").textContent = record.camera.mode === "follow"
+      ? "PS2 · câmera de gameplay: segue o jogador e aceita o analógico direito."
+      : record.camera.mode === "fixed"
+        ? "PS2 · câmera fixa: usa exatamente a posição e a rotação deste objeto."
+        : "PS2 · câmera fixa que acompanha o jogador com o olhar.";
   }
 
   const transformInputs = inspector.querySelectorAll('.vector-inputs input, #reset-transform-button');
@@ -1066,7 +1398,10 @@ async function refreshAssetCatalog() {
     if (!response.ok) throw new Error("Falha ao listar assets");
     const data = await response.json();
     state.assets = data.models || [];
+    state.assetFiles = data.files || [];
+    state.textures = state.assetFiles.filter((asset) => [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tga"].includes(asset.extension));
     renderAssets();
+    if (currentRecord()?.material) renderInspector();
   } catch (error) {
     toast(error.message, "error");
   }
@@ -1238,6 +1573,7 @@ function setParent(id, parentId) {
 async function loadDocument(documentData, { preserveHistory = false, dirty = false } = {}) {
   state.loadGeneration += 1;
   const generation = state.loadGeneration;
+  closeCameraPreview();
   transform.detach();
   selectionBox.visible = false;
   state.selectedIds.clear();
@@ -1299,6 +1635,7 @@ async function loadDocument(documentData, { preserveHistory = false, dirty = fal
   if (generation !== state.loadGeneration) return;
   rebuildHierarchy();
   refreshEditorVisibility();
+  updateEditorLightingRig();
   renderHierarchy();
   renderInspector();
   updateClipboardButtons();
@@ -1355,6 +1692,66 @@ async function addCollider(shape) {
     collider: { trigger: false, cameraBlocker: true },
   });
   setStatus(`${labels[shape]} adicionado`);
+}
+
+async function addLight(type) {
+  const labels = { ambient: "Luz ambiente", directional: "Luz direcional", point: "Luz pontual" };
+  const position = type === "ambient"
+    ? orbit.target.clone()
+    : orbit.target.clone().add(type === "directional" ? new THREE.Vector3(6, 8, 6) : new THREE.Vector3(0, 4, 0));
+  const rotation = new THREE.Euler();
+  if (type === "directional") {
+    const helper = new THREE.Object3D();
+    helper.position.copy(position);
+    helper.lookAt(orbit.target);
+    rotation.setFromQuaternion(helper.quaternion, "XYZ");
+  }
+  await addRecord({
+    id: uid("light"),
+    name: labels[type] || "Luz",
+    source: { kind: "light", light: type, asset: "" },
+    position: { x: position.x, y: position.y, z: position.z },
+    rotation: {
+      x: THREE.MathUtils.radToDeg(rotation.x),
+      y: THREE.MathUtils.radToDeg(rotation.y),
+      z: THREE.MathUtils.radToDeg(rotation.z),
+    },
+    scale: { x: 1, y: 1, z: 1 },
+    color: "#ffc15c",
+    light: {
+      type,
+      color: type === "ambient" ? "#8db9d1" : "#fff1cf",
+      intensity: type === "ambient" ? 0.45 : 2,
+      distance: 12,
+      castShadow: type !== "ambient",
+      flicker: false,
+      flickerAmount: 0.24,
+      flickerSpeed: 7.5,
+    },
+  });
+  updateEditorLightingRig();
+  setStatus(`${labels[type]} adicionada`);
+}
+
+async function addCamera() {
+  const rotation = new THREE.Euler().setFromQuaternion(camera.quaternion, "XYZ");
+  const active = !state.document.objects.some((record) => record.source.kind === "camera" && record.camera?.active);
+  const record = await addRecord({
+    id: uid("camera"),
+    name: active ? "Câmera principal" : "Nova câmera",
+    source: { kind: "camera", asset: "" },
+    position: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
+    rotation: {
+      x: THREE.MathUtils.radToDeg(rotation.x),
+      y: THREE.MathUtils.radToDeg(rotation.y),
+      z: THREE.MathUtils.radToDeg(rotation.z),
+    },
+    scale: { x: 1, y: 1, z: 1 },
+    color: "#57cef5",
+    camera: { fov: camera.fov, near: 0.1, far: 500, active, mode: "follow" },
+  });
+  openCameraPreview(record.id);
+  setStatus("Câmera adicionada a partir da visão atual");
 }
 
 function primitiveLabel(kind) {
@@ -1508,6 +1905,7 @@ function deleteSelection() {
   if (!state.selectedIds.size) return;
   const before = serializeScene();
   const closure = selectionClosure();
+  if (state.previewCameraId && closure.has(state.previewCameraId)) closeCameraPreview();
   const names = selectedRecords().map((item) => item.name);
   transform.detach();
   const topLevel = [...closure].filter((id) => {
@@ -1531,6 +1929,7 @@ function deleteSelection() {
   renderInspector();
   updateClipboardButtons();
   updateViewportStats();
+  updateEditorLightingRig();
   setStatus(`${names.length > 1 ? `${names.length} objetos excluídos` : `${names[0]} excluído`}`);
 }
 
@@ -1559,6 +1958,90 @@ function updatePrimitiveColor(record, object) {
   object.traverse((child) => {
     if (child.isMesh && child.material?.color) child.material.color.set(record.color);
   });
+}
+
+function updateMaterialFromInspector() {
+  const record = currentRecord();
+  if (!record?.material) return;
+  stageFieldHistory();
+  record.material.color = $("material-color").value;
+  record.material.texture = $("material-texture").value;
+  record.material.opacity = THREE.MathUtils.clamp(clampNumber($("material-opacity").value, 1), 0, 1);
+  record.material.roughness = THREE.MathUtils.clamp(clampNumber($("material-roughness").value, 0.72), 0, 1);
+  record.material.metalness = THREE.MathUtils.clamp(clampNumber($("material-metalness").value, 0), 0, 1);
+  record.material.emissive = $("material-emissive").value;
+  record.material.emissiveIntensity = Math.max(0, clampNumber($("material-emissive-intensity").value, 0));
+  record.material.unlit = $("material-unlit").checked;
+  record.material.doubleSided = $("material-double-sided").checked;
+  record.color = record.material.color;
+  applyRecordMaterial(record);
+  markDirty();
+}
+
+function updateLightFromInspector() {
+  const record = currentRecord();
+  if (!record?.light) return;
+  stageFieldHistory();
+  record.light.type = $("light-type").value;
+  record.source.light = record.light.type;
+  record.light.color = $("light-color").value;
+  record.light.intensity = Math.max(0, clampNumber($("light-intensity").value, 1));
+  record.light.distance = Math.max(0.1, clampNumber($("light-distance").value, 12));
+  record.light.castShadow = $("light-cast-shadow").checked;
+  record.light.flicker = $("light-flicker").checked;
+  record.light.flickerAmount = THREE.MathUtils.clamp(clampNumber($("light-flicker-amount").value, 0.24), 0, 1);
+  record.light.flickerSpeed = THREE.MathUtils.clamp(clampNumber($("light-flicker-speed").value, 7.5), 0.1, 40);
+  rebuildLightVisual(record);
+  $("light-distance-row").hidden = record.light.type !== "point";
+  markDirty();
+}
+
+function applyCampfirePreset() {
+  const record = currentRecord();
+  if (!record?.light) return;
+  const before = serializeScene();
+  Object.assign(record.light, {
+    type: "point",
+    color: "#ff9a45",
+    intensity: 2.8,
+    distance: 8,
+    castShadow: false,
+    flicker: true,
+    flickerAmount: 0.28,
+    flickerSpeed: 7.5,
+  });
+  record.source.light = "point";
+  rebuildLightVisual(record);
+  pushHistorySnapshot(before);
+  renderInspector();
+  setStatus("Preset de fogueira aplicado à luz pontual");
+}
+
+function updateCameraFromInspector() {
+  const record = currentRecord();
+  if (!record?.camera) return;
+  stageFieldHistory();
+  record.camera.mode = $("camera-mode").value;
+  record.camera.fov = THREE.MathUtils.clamp(clampNumber($("camera-fov").value, 52), 15, 120);
+  record.camera.near = Math.max(0.01, clampNumber($("camera-near").value, 0.1));
+  record.camera.far = Math.max(record.camera.near + 0.1, clampNumber($("camera-far").value, 500));
+  rebuildCameraVisual(record);
+  markDirty();
+}
+
+function setActiveCamera(id, active) {
+  const record = recordById(id);
+  if (!record?.camera) return;
+  const before = serializeScene();
+  for (const candidate of state.document.objects) {
+    if (candidate.source.kind !== "camera") continue;
+    candidate.camera.active = active && candidate.id === id;
+    rebuildCameraVisual(candidate);
+  }
+  pushHistorySnapshot(before);
+  renderHierarchy();
+  renderInspector();
+  setStatus(active ? `${record.name} definida como câmera principal` : "Câmera principal removida");
 }
 
 function rebuildColliderVisual(record) {
@@ -1606,6 +2089,34 @@ function resetTransform() {
   pushHistorySnapshot(before);
   renderInspector();
   refreshSelectionVisuals();
+}
+
+function replaceEditorContent(record, factory) {
+  const object = state.objects.get(record.id);
+  if (!object) return null;
+  for (const child of [...object.children]) {
+    if (!child.userData.editorContent) continue;
+    object.remove(child);
+    disposeObject(child);
+  }
+  const content = factory(record);
+  content.userData.editorContent = true;
+  object.add(content);
+  object.userData.previewCamera = content.userData.previewCamera || null;
+  object.userData.editorLight = content.userData.editorLight || null;
+  refreshSelectionVisuals();
+  return object;
+}
+
+function rebuildLightVisual(record) {
+  if (record.source.kind !== "light") return;
+  replaceEditorContent(record, createLightObject);
+  updateEditorLightingRig();
+}
+
+function rebuildCameraVisual(record) {
+  if (record.source.kind !== "camera") return;
+  replaceEditorContent(record, createCameraObject);
 }
 
 function setBoxSelectTool(active) {
@@ -1738,6 +2249,7 @@ function snapPointFromPointer(event) {
   raycaster.setFromCamera(pointer, camera);
   const hits = raycaster.intersectObjects(editorRoot.children, true);
   for (const hit of hits) {
+    if (hit.object.userData.editorVisual) continue;
     const id = editorIdFromObject(hit.object);
     if (!id || state.selectedIds.has(id) || [...state.selectedIds].some((selectedId) => isDescendant(id, selectedId))) continue;
     const record = recordById(id);
@@ -1862,7 +2374,108 @@ function setAxisView(axisName) {
   setStatus(`${labels[axisName]} — clique em outro eixo para trocar a visão`);
 }
 
+let cameraPreviewRenderer = null;
+
+function ensureCameraPreviewRenderer() {
+  if (cameraPreviewRenderer) return cameraPreviewRenderer;
+  cameraPreviewRenderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "low-power" });
+  cameraPreviewRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  cameraPreviewRenderer.outputColorSpace = THREE.SRGBColorSpace;
+  cameraPreviewRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+  cameraPreviewRenderer.toneMappingExposure = renderer.toneMappingExposure;
+  cameraPreviewRenderer.shadowMap.enabled = true;
+  cameraPreviewRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  $("camera-preview-canvas").append(cameraPreviewRenderer.domElement);
+  return cameraPreviewRenderer;
+}
+
+function openCameraPreview(id = state.primaryId) {
+  const record = recordById(id);
+  if (!record || record.source.kind !== "camera") return;
+  try {
+    ensureCameraPreviewRenderer();
+  } catch (error) {
+    toast(`Preview indisponível: ${error.message}`, "error");
+    return;
+  }
+  state.previewCameraId = id;
+  $("camera-preview").hidden = false;
+  $("camera-preview-name").textContent = record.name;
+  setStatus(`Preview aberto: ${record.name}`);
+}
+
+function closeCameraPreview() {
+  state.previewCameraId = null;
+  $("camera-preview").hidden = true;
+}
+
+function cameraRecordAndObject(id = state.previewCameraId || state.primaryId) {
+  const record = recordById(id);
+  const object = state.objects.get(id);
+  if (!record || record.source.kind !== "camera" || !object?.userData.previewCamera) return null;
+  return { record, object, previewCamera: object.userData.previewCamera };
+}
+
+function enterCameraView(id = state.previewCameraId || state.primaryId) {
+  const entry = cameraRecordAndObject(id);
+  if (!entry) return;
+  const position = entry.previewCamera.getWorldPosition(new THREE.Vector3());
+  const quaternion = entry.previewCamera.getWorldQuaternion(new THREE.Quaternion());
+  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(quaternion);
+  camera.position.copy(position);
+  camera.quaternion.copy(quaternion);
+  camera.fov = entry.record.camera.fov;
+  camera.near = entry.record.camera.near;
+  camera.far = entry.record.camera.far;
+  camera.updateProjectionMatrix();
+  orbit.target.copy(position).add(forward.multiplyScalar(10));
+  orbit.update();
+  viewport.querySelector(".viewport-label").textContent = `CÂMERA · ${entry.record.name.toUpperCase()}`;
+  setStatus(`Visão da câmera ${entry.record.name}`);
+}
+
+function renderCameraPreview() {
+  if (!state.previewCameraId || $("camera-preview").hidden || !cameraPreviewRenderer) return;
+  const entry = cameraRecordAndObject(state.previewCameraId);
+  if (!entry || !isRecordEffectivelyVisible(entry.record)) {
+    closeCameraPreview();
+    return;
+  }
+  const container = $("camera-preview-canvas");
+  const width = Math.max(1, container.clientWidth);
+  const height = Math.max(1, container.clientHeight);
+  cameraPreviewRenderer.setSize(width, height, false);
+  entry.previewCamera.aspect = 640 / 448;
+  entry.previewCamera.fov = entry.record.camera.fov;
+  entry.previewCamera.near = entry.record.camera.near;
+  entry.previewCamera.far = entry.record.camera.far;
+  entry.previewCamera.updateProjectionMatrix();
+  entry.previewCamera.updateMatrixWorld(true);
+
+  const hidden = [];
+  editorRoot.traverse((object) => {
+    if (object.userData.editorVisual && object.visible) {
+      hidden.push(object);
+      object.visible = false;
+    }
+  });
+  const visibility = [grid.visible, axes.visible, selectionBox.visible, transformHelper.visible];
+  grid.visible = false;
+  axes.visible = false;
+  selectionBox.visible = false;
+  transformHelper.visible = false;
+  cameraPreviewRenderer.render(scene, entry.previewCamera);
+  [grid.visible, axes.visible, selectionBox.visible, transformHelper.visible] = visibility;
+  for (const object of hidden) object.visible = true;
+}
+
 async function saveScene({ quiet = false } = {}) {
+  if (state.serverOutdated) {
+    const message = "Servidor do editor desatualizado. Reinicie scripts/editor.ps1 antes de salvar luzes e câmeras.";
+    toast(message, "error", 10000);
+    setStatus("Reinicie o servidor do editor");
+    return false;
+  }
   try {
     syncAllRecords();
     saveCameraToDocument();
@@ -2279,7 +2892,10 @@ function bindInspector() {
       if (!record) return;
       stageFieldHistory();
       record[property] = event.target.checked;
-      if (property === "visible") applyEditorVisibility(record);
+      if (property === "visible") {
+        applyEditorVisibility(record);
+        if (record.source.kind === "light") updateEditorLightingRig();
+      }
       finishFieldHistory();
       setSelection(record.id);
     });
@@ -2319,12 +2935,56 @@ function bindInspector() {
     finishFieldHistory();
     markDirty();
   });
+
+  for (const id of ["material-color", "material-opacity", "material-roughness", "material-metalness", "material-emissive", "material-emissive-intensity"]) {
+    $(id).addEventListener("beforeinput", stageFieldHistory);
+    $(id).addEventListener("input", updateMaterialFromInspector);
+    $(id).addEventListener("change", finishFieldHistory);
+    $(id).addEventListener("blur", finishFieldHistory);
+  }
+  for (const id of ["material-texture", "material-unlit", "material-double-sided"]) {
+    $(id).addEventListener("change", () => {
+      updateMaterialFromInspector();
+      finishFieldHistory();
+    });
+  }
+
+  for (const id of ["light-color", "light-intensity", "light-distance", "light-flicker-amount", "light-flicker-speed"]) {
+    $(id).addEventListener("beforeinput", stageFieldHistory);
+    $(id).addEventListener("input", updateLightFromInspector);
+    $(id).addEventListener("change", finishFieldHistory);
+    $(id).addEventListener("blur", finishFieldHistory);
+  }
+  for (const id of ["light-type", "light-cast-shadow", "light-flicker"]) {
+    $(id).addEventListener("change", () => {
+      updateLightFromInspector();
+      finishFieldHistory();
+      renderInspector();
+    });
+  }
+  $("light-campfire-preset").addEventListener("click", applyCampfirePreset);
+
+  for (const id of ["camera-fov", "camera-near", "camera-far"]) {
+    $(id).addEventListener("beforeinput", stageFieldHistory);
+    $(id).addEventListener("input", updateCameraFromInspector);
+    $(id).addEventListener("change", finishFieldHistory);
+    $(id).addEventListener("blur", finishFieldHistory);
+  }
+  $("camera-mode").addEventListener("change", () => {
+    updateCameraFromInspector();
+    finishFieldHistory();
+    renderInspector();
+  });
+  $("camera-active").addEventListener("change", (event) => setActiveCamera(state.primaryId, event.target.checked));
+  $("camera-preview-button").addEventListener("click", () => openCameraPreview());
+  $("camera-use-view-button").addEventListener("click", () => enterCameraView());
 }
 
 function bindUi() {
   document.querySelectorAll("[data-mode]").forEach((button) => button.addEventListener("click", () => setTransformMode(button.dataset.mode)));
   document.querySelectorAll("[data-primitive]").forEach((button) => button.addEventListener("click", () => addPrimitive(button.dataset.primitive)));
   document.querySelectorAll("[data-collider]").forEach((button) => button.addEventListener("click", () => addCollider(button.dataset.collider)));
+  document.querySelectorAll("[data-light]").forEach((button) => button.addEventListener("click", () => addLight(button.dataset.light)));
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
   document.querySelectorAll("[data-axis-view]").forEach((button) => button.addEventListener("click", () => setAxisView(button.dataset.axisView)));
 
@@ -2371,6 +3031,9 @@ function bindUi() {
   $("multi-prefab-button").addEventListener("click", saveSelectionAsPrefab);
   $("create-prefab-button").addEventListener("click", saveSelectionAsPrefab);
   $("add-group-button").addEventListener("click", addGroup);
+  $("add-camera-button").addEventListener("click", addCamera);
+  $("camera-preview-close-button").addEventListener("click", closeCameraPreview);
+  $("camera-enter-view-button").addEventListener("click", () => enterCameraView());
   $("confirm-prefab-button").addEventListener("click", (event) => {
     event.preventDefault();
     const name = $("prefab-name-input").value.trim();
@@ -2531,10 +3194,28 @@ new ResizeObserver(resize).observe(viewport);
 function animate() {
   requestAnimationFrame(animate);
   const delta = clock.getDelta();
+  editorElapsedTime += delta;
   orbit.update(delta);
+  for (const record of state.document?.objects || []) {
+    if (record.source.kind !== "light" || record.light.type !== "point") continue;
+    const light = state.objects.get(record.id)?.userData.editorLight;
+    if (!light) continue;
+    if (!record.light.flicker) {
+      light.intensity = record.light.intensity;
+      continue;
+    }
+    let seed = 0;
+    for (let index = 0; index < record.id.length; index++) seed = (seed + record.id.charCodeAt(index) * (index + 1)) % 997;
+    const time = editorElapsedTime * record.light.flickerSpeed;
+    const wave = Math.sin(time * 1.11 + seed) * 0.52
+      + Math.sin(time * 2.73 + seed * 0.37) * 0.31
+      + Math.sin(time * 5.17 + seed * 0.13) * 0.17;
+    light.intensity = record.light.intensity * Math.max(0.1, 1 + wave * record.light.flickerAmount);
+  }
   if (selectionBox.visible) updateSelectionBounds();
   updateAxisGizmo();
   renderer.render(scene, camera);
+  renderCameraPreview();
 }
 
 async function boot() {
@@ -2547,15 +3228,26 @@ async function boot() {
   animate();
   setLoading(1, "Abrindo cena…");
   try {
-    const [sceneResponse] = await Promise.all([
+    const [sceneResponse, capabilitiesResponse] = await Promise.all([
       fetch("/api/scene", { cache: "no-store" }),
+      fetch("/api/capabilities", { cache: "no-store" }),
       refreshAssetCatalog(),
       refreshPrefabs(),
     ]);
+    if (capabilitiesResponse.ok) {
+      const capabilities = await capabilitiesResponse.json();
+      state.serverSchemaVersion = Number(capabilities.editorSchemaVersion) || 0;
+    }
+    state.serverOutdated = state.serverSchemaVersion < 3;
     const data = await sceneResponse.json();
     if (!sceneResponse.ok) throw new Error(data.error || "Falha ao abrir a cena");
     await loadDocument(data);
-    toast("Editor pronto. Selecione um objeto para começar.", "success", 2800);
+    if (state.serverOutdated) {
+      toast("Servidor desatualizado detectado. Reinicie scripts/editor.ps1 para salvar materiais, luzes e câmeras.", "error", 12000);
+      setStatus("Servidor desatualizado — reinicie o editor");
+    } else {
+      toast("Editor pronto. Selecione um objeto para começar.", "success", 2800);
+    }
   } catch (error) {
     toast(error.message, "error", 7000);
     setStatus("Não foi possível abrir a cena");

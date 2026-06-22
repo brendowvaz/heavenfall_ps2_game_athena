@@ -125,6 +125,21 @@
         </div>
       </section>
 
+      <section class="panel-section scene-tools-section">
+        <div class="section-heading compact">
+          <div>
+            <span class="eyebrow">COMPOSIÇÃO</span>
+            <h2>Luzes e câmeras</h2>
+          </div>
+        </div>
+        <div class="scene-tool-grid">
+          <button data-light="ambient"><span>☼</span>Ambiente</button>
+          <button data-light="directional"><span>↘</span>Direcional</button>
+          <button data-light="point"><span>✦</span>Pontual</button>
+          <button id="add-camera-button"><span>▣</span>Câmera</button>
+        </div>
+      </section>
+
       <section class="panel-section prefab-section">
         <div class="section-heading compact">
           <div>
@@ -185,6 +200,17 @@
       </div>
 
       <div id="selection-marquee" class="selection-marquee" hidden></div>
+
+      <div id="camera-preview" class="camera-preview" hidden>
+        <div class="camera-preview-header">
+          <span><strong id="camera-preview-name">Câmera</strong><small>640 × 448</small></span>
+          <div>
+            <button id="camera-enter-view-button" title="Usar esta visão na viewport">Visão</button>
+            <button id="camera-preview-close-button" title="Fechar preview">×</button>
+          </div>
+        </div>
+        <div id="camera-preview-canvas" class="camera-preview-canvas"></div>
+      </div>
 
       <div id="empty-hint" class="empty-hint" hidden>
         <div class="empty-symbol">◇</div>
@@ -308,9 +334,124 @@
           </label>
         </section>
 
+        <section id="material-section" class="inspector-section material-inspector" hidden>
+          <h3>Material</h3>
+          <label class="property-row color-property">
+            <span><strong>Cor base</strong><small>Multiplica a textura</small></span>
+            <input id="material-color" type="color" value="#ffffff">
+          </label>
+          <label class="property-row select-property">
+            <span><strong>Textura</strong><small>Imagem aplicada ao objeto</small></span>
+            <select id="material-texture"><option value="">Material original</option></select>
+          </label>
+          <label class="property-row number-property">
+            <span><strong>Opacidade</strong><small>0 transparente · 1 sólido</small></span>
+            <input id="material-opacity" type="number" min="0" max="1" step="0.05" value="1">
+          </label>
+          <label class="property-row number-property">
+            <span><strong>Rugosidade</strong><small>Reflexo difuso</small></span>
+            <input id="material-roughness" type="number" min="0" max="1" step="0.05" value="0.72">
+          </label>
+          <label class="property-row number-property">
+            <span><strong>Metal</strong><small>Resposta metálica</small></span>
+            <input id="material-metalness" type="number" min="0" max="1" step="0.05" value="0">
+          </label>
+          <label class="property-row color-property">
+            <span><strong>Emissão</strong><small>Cor que não depende de luz</small></span>
+            <input id="material-emissive" type="color" value="#000000">
+          </label>
+          <label class="property-row number-property">
+            <span><strong>Força emissiva</strong><small>Intensidade no preview</small></span>
+            <input id="material-emissive-intensity" type="number" min="0" max="10" step="0.1" value="0">
+          </label>
+          <label class="property-row switch-property">
+            <span><strong>Sem iluminação</strong><small>Material sempre visível</small></span>
+            <input id="material-unlit" type="checkbox">
+          </label>
+          <label class="property-row switch-property">
+            <span><strong>Dupla face</strong><small>Renderizar os dois lados</small></span>
+            <input id="material-double-sided" type="checkbox" checked>
+          </label>
+        </section>
+
+        <section id="light-section" class="inspector-section light-inspector" hidden>
+          <h3>Luz</h3>
+          <label class="property-row select-property">
+            <span><strong>Tipo</strong><small>Comportamento da iluminação</small></span>
+            <select id="light-type">
+              <option value="ambient">Ambiente</option>
+              <option value="directional">Direcional</option>
+              <option value="point">Pontual</option>
+            </select>
+          </label>
+          <label class="property-row color-property">
+            <span><strong>Cor</strong><small>Cor emitida pela luz</small></span>
+            <input id="light-color" type="color" value="#ffffff">
+          </label>
+          <label class="property-row number-property">
+            <span><strong>Intensidade</strong><small>Força da iluminação</small></span>
+            <input id="light-intensity" type="number" min="0" max="20" step="0.1" value="1">
+          </label>
+          <label id="light-distance-row" class="property-row number-property">
+            <span><strong>Alcance</strong><small>Raio da luz pontual</small></span>
+            <input id="light-distance" type="number" min="0.1" max="500" step="0.5" value="12">
+          </label>
+          <label id="light-flicker-row" class="property-row switch-property">
+            <span><strong>Flicker</strong><small>Oscilar como chama</small></span>
+            <input id="light-flicker" type="checkbox">
+          </label>
+          <label id="light-flicker-amount-row" class="property-row number-property">
+            <span><strong>Variação</strong><small>Força da oscilação</small></span>
+            <input id="light-flicker-amount" type="number" min="0" max="1" step="0.05" value="0.24">
+          </label>
+          <label id="light-flicker-speed-row" class="property-row number-property">
+            <span><strong>Velocidade</strong><small>Ritmo da chama</small></span>
+            <input id="light-flicker-speed" type="number" min="0.1" max="40" step="0.5" value="7.5">
+          </label>
+          <label class="property-row switch-property">
+            <span><strong>Sombras</strong><small>Ativar sombras no preview</small></span>
+            <input id="light-cast-shadow" type="checkbox">
+          </label>
+          <button id="light-campfire-preset" class="inspector-action-button">Aplicar preset de fogueira</button>
+          <p id="light-runtime-note" class="compatibility-note"></p>
+        </section>
+
+        <section id="camera-section" class="inspector-section camera-inspector" hidden>
+          <h3>Câmera</h3>
+          <label class="property-row select-property">
+            <span><strong>Modo no jogo</strong><small>Comportamento da câmera principal</small></span>
+            <select id="camera-mode">
+              <option value="follow">Seguir jogador</option>
+              <option value="fixed">Fixa</option>
+              <option value="lookAtPlayer">Fixa olhando jogador</option>
+            </select>
+          </label>
+          <label class="property-row number-property">
+            <span><strong>Campo de visão</strong><small>FOV vertical em graus</small></span>
+            <input id="camera-fov" type="number" min="15" max="120" step="1" value="52">
+          </label>
+          <label class="property-row number-property">
+            <span><strong>Plano próximo</strong><small>Início da renderização</small></span>
+            <input id="camera-near" type="number" min="0.01" max="100" step="0.01" value="0.1">
+          </label>
+          <label class="property-row number-property">
+            <span><strong>Plano distante</strong><small>Fim da renderização</small></span>
+            <input id="camera-far" type="number" min="1" max="5000" step="10" value="500">
+          </label>
+          <label class="property-row switch-property">
+            <span><strong>Câmera principal</strong><small>Usada como câmera inicial</small></span>
+            <input id="camera-active" type="checkbox">
+          </label>
+          <div class="camera-actions">
+            <button id="camera-preview-button">Abrir preview</button>
+            <button id="camera-use-view-button">Usar visão</button>
+          </div>
+          <p id="camera-runtime-note" class="compatibility-note"></p>
+        </section>
+
         <section class="inspector-section appearance-section">
           <h3>Aparência e saída</h3>
-          <label class="property-row color-property">
+          <label id="object-color-row" class="property-row color-property">
             <span>Cor no editor</span>
             <input id="object-color" type="color" value="#8bd5f7">
           </label>

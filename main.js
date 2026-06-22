@@ -35,8 +35,8 @@ console.log("[VeuAzul] Render inicializado em modo OBJ");
 os.chdir("assets");
 std.loadScript("collision.js");
 
-function configureData(data) {
-    data.pipeline = Render.PL_DEFAULT;
+function configureData(data, material) {
+    data.pipeline = material && material.unlit ? Render.PL_NO_LIGHTS : Render.PL_DEFAULT;
     data.texture_mapping = true;
     data.face_culling = Render.CULL_FACE_NONE;
     data.shade_model = Render.SHADE_GOURAUD;
@@ -48,8 +48,15 @@ function configureData(data) {
 // differences between PCSX2 HostFS and real hardware.
 globalThis.EDITOR_SCENE = [];
 globalThis.EDITOR_COLLIDERS = [];
+globalThis.EDITOR_LIGHTS = [];
+globalThis.EDITOR_POINT_LIGHTS = [];
+globalThis.EDITOR_CAMERA = null;
 if (std.exists("scene.generated.js")) {
     std.loadScript("scene.generated.js");
+}
+
+if (EDITOR_CAMERA) {
+    Render.setView(EDITOR_CAMERA.fov || 64.0, EDITOR_CAMERA.near || 0.5, EDITOR_CAMERA.far || 180.0);
 }
 
 const usingEditorColliders = EDITOR_COLLIDERS.length > 0;
@@ -91,7 +98,7 @@ const sceneObjects = [];
 for (let i = 0; i < EDITOR_SCENE.length; i++) {
     const definition = EDITOR_SCENE[i];
     console.log("[VeuAzul] Carregando objeto " + definition.name + " (" + definition.asset + ")");
-    const sceneData = configureData(new RenderData(definition.asset));
+    const sceneData = configureData(new RenderData(definition.asset), definition.material);
     const sceneObject = new RenderObject(sceneData);
     sceneObject.position = definition.position;
     sceneObject.rotation = definition.rotation;
@@ -103,10 +110,104 @@ const playerData = configureData(new RenderData("player.obj"));
 const playerObject = new RenderObject(playerData);
 console.log("[VeuAzul] " + sceneObjects.length + " objetos, jogador e colisoes prontos");
 
-const iceLight = Lights.new();
-Lights.set(iceLight, Lights.DIRECTION, -0.35, 0.85, 0.45);
-Lights.set(iceLight, Lights.AMBIENT, 0.15, 0.22, 0.32);
-Lights.set(iceLight, Lights.DIFFUSE, 0.78, 0.90, 1.0);
+const MAX_RUNTIME_LIGHTS = 4;
+const reservedPointSlots = Math.min(2, EDITOR_POINT_LIGHTS.length);
+const globalLightBudget = MAX_RUNTIME_LIGHTS - reservedPointSlots;
+const runtimeLights = [];
+for (let i = 0; i < EDITOR_LIGHTS.length && runtimeLights.length < globalLightBudget; i++) {
+        const definition = EDITOR_LIGHTS[i];
+        // Older generated scenes approximated point lights as global directional
+        // lights. Ignore them so their finite editor range is not misrepresented.
+        if (definition.type === "point") continue;
+        const light = Lights.new();
+        const intensity = Math.max(0.0, definition.intensity || 0.0);
+        const color = definition.color || { r: 1.0, g: 1.0, b: 1.0 };
+        const direction = definition.direction || { x: -0.35, y: 0.85, z: 0.45 };
+        Lights.set(light, Lights.DIRECTION, direction.x, direction.y, direction.z);
+        if (definition.type === "ambient") {
+            Lights.set(light, Lights.AMBIENT, Math.min(1.0, color.r * intensity), Math.min(1.0, color.g * intensity), Math.min(1.0, color.b * intensity));
+            Lights.set(light, Lights.DIFFUSE, 0.0, 0.0, 0.0);
+        } else {
+            Lights.set(light, Lights.AMBIENT, 0.0, 0.0, 0.0);
+            Lights.set(light, Lights.DIFFUSE, Math.min(1.0, color.r * intensity), Math.min(1.0, color.g * intensity), Math.min(1.0, color.b * intensity));
+        }
+        runtimeLights.push(light);
+}
+if (runtimeLights.length === 0 && EDITOR_POINT_LIGHTS.length === 0) {
+    const iceLight = Lights.new();
+    Lights.set(iceLight, Lights.DIRECTION, -0.35, 0.85, 0.45);
+    Lights.set(iceLight, Lights.AMBIENT, 0.15, 0.22, 0.32);
+    Lights.set(iceLight, Lights.DIFFUSE, 0.78, 0.90, 1.0);
+    runtimeLights.push(iceLight);
+}
+
+// AthenaEnv exposes directional lights, but not a native point-light range.
+// Reusing directional slots and changing them before each draw gives each
+// existing scene block a local response based on its exported spatial center.
+const runtimePointLights = [];
+for (let i = 0; i < EDITOR_POINT_LIGHTS.length && runtimeLights.length + runtimePointLights.length < MAX_RUNTIME_LIGHTS; i++) {
+    const definition = EDITOR_POINT_LIGHTS[i];
+    const light = Lights.new();
+    Lights.set(light, Lights.DIRECTION, 0.0, 1.0, 0.0);
+    Lights.set(light, Lights.AMBIENT, 0.0, 0.0, 0.0);
+    Lights.set(light, Lights.DIFFUSE, 0.0, 0.0, 0.0);
+    let seed = 0;
+    const seedText = definition.id || definition.name || String(i);
+    for (let character = 0; character < seedText.length; character++) {
+        seed = (seed + seedText.charCodeAt(character) * (character + 1)) % 997;
+    }
+    runtimePointLights.push({ light: light, definition: definition, seed: seed });
+}
+let pointLightTime = 0.0;
+
+function pointLightFlicker(entry) {
+    const definition = entry.definition;
+    if (!definition.flicker) return 1.0;
+    const speed = Math.max(0.1, definition.flickerSpeed || 7.5);
+    const amount = clamp(definition.flickerAmount === undefined ? 0.24 : definition.flickerAmount, 0.0, 1.0);
+    const time = pointLightTime * speed;
+    const wave = Math.sin(time * 1.11 + entry.seed) * 0.52
+        + Math.sin(time * 2.73 + entry.seed * 0.37) * 0.31
+        + Math.sin(time * 5.17 + entry.seed * 0.13) * 0.17;
+    return Math.max(0.1, 1.0 + wave * amount);
+}
+
+function applyPointLightsAt(x, y, z) {
+    for (let i = 0; i < runtimePointLights.length; i++) {
+        const entry = runtimePointLights[i];
+        const definition = entry.definition;
+        const position = definition.position || { x: 0.0, y: 0.0, z: 0.0 };
+        const dx = position.x - x;
+        const dy = position.y - y;
+        const dz = position.z - z;
+        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const range = Math.max(0.1, definition.distance || 12.0);
+        let attenuation = Math.max(0.0, 1.0 - distance / range);
+        attenuation *= attenuation;
+        const inverseDistance = distance > 0.0001 ? 1.0 / distance : 0.0;
+        const directionX = distance > 0.0001 ? dx * inverseDistance : 0.0;
+        const directionY = distance > 0.0001 ? dy * inverseDistance : 1.0;
+        const directionZ = distance > 0.0001 ? dz * inverseDistance : 0.0;
+        const color = definition.color || { r: 1.0, g: 0.6, b: 0.25 };
+        const strength = Math.max(0.0, definition.intensity || 0.0) * attenuation * pointLightFlicker(entry);
+        Lights.set(entry.light, Lights.DIRECTION, directionX, directionY, directionZ);
+        Lights.set(entry.light, Lights.DIFFUSE,
+            Math.min(1.0, color.r * strength),
+            Math.min(1.0, color.g * strength),
+            Math.min(1.0, color.b * strength)
+        );
+    }
+}
+
+function disablePointLights() {
+    for (let i = 0; i < runtimePointLights.length; i++) {
+        Lights.set(runtimePointLights[i].light, Lights.DIFFUSE, 0.0, 0.0, 0.0);
+    }
+}
+
+if (runtimePointLights.length > 0) {
+    console.log("[VeuAzul] " + runtimePointLights.length + " luz(es) pontual(is) simulada(s) por bloco");
+}
 
 Screen.setParam(Screen.DEPTH_TEST_ENABLE, true);
 Screen.setParam(Screen.DEPTH_TEST_METHOD, Screen.DEPTH_GEQUAL);
@@ -162,7 +263,7 @@ let playerY = PLAYER_GROUND_Y;
 let playerVelocityY = 0.0;
 let playerGrounded = true;
 let playerYaw = 0.0;
-let cameraYaw = 0.0;
+let cameraYaw = EDITOR_CAMERA ? EDITOR_CAMERA.rotation.y : 0.0;
 let cameraPitch = 0.31;
 let shoulderSide = 1.0;
 let showHud = true;
@@ -355,6 +456,19 @@ function updatePlayerAndCamera() {
     playerObject.position = { x: playerX, y: playerY, z: playerZ };
     playerObject.rotation = { x: 0.0, y: playerYaw, z: 0.0 };
 
+    const editorCameraMode = EDITOR_CAMERA ? (EDITOR_CAMERA.mode || "follow") : "follow";
+    if (EDITOR_CAMERA && (editorCameraMode === "fixed" || editorCameraMode === "lookAtPlayer")) {
+        Camera.position(EDITOR_CAMERA.position.x, EDITOR_CAMERA.position.y, EDITOR_CAMERA.position.z);
+        if (editorCameraMode === "lookAtPlayer") {
+            Camera.target(playerX, playerY + PLAYER_HEIGHT * 0.55, playerZ);
+        } else {
+            const fixedTarget = EDITOR_CAMERA.target || { x: playerX, y: playerY + 1.0, z: playerZ };
+            Camera.target(fixedTarget.x, fixedTarget.y, fixedTarget.z);
+        }
+        Camera.update();
+        return;
+    }
+
     const shoulder = 1.65 * shoulderSide;
     const distance = 6.5;
     const targetX = playerX + forwardX * 1.65 + rightX * shoulder * 0.18;
@@ -451,8 +565,16 @@ while (true) {
     updatePlayerAndCamera();
     Screen.clear(CLEAR_COLOR);
     Render.begin();
-    for (let i = 0; i < sceneObjects.length; i++) sceneObjects[i].render();
+    pointLightTime += 1.0 / 60.0;
+    for (let i = 0; i < sceneObjects.length; i++) {
+        const definition = EDITOR_SCENE[i];
+        const center = definition.boundsCenter || definition.position;
+        applyPointLightsAt(center.x, center.y, center.z);
+        sceneObjects[i].render();
+    }
+    applyPointLightsAt(playerX, playerY + PLAYER_HEIGHT * 0.5, playerZ);
     playerObject.render();
+    disablePointLights();
     drawHud();
     Screen.flip();
 }

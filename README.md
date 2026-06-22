@@ -46,6 +46,9 @@ Abra `http://127.0.0.1:4173/editor/` no navegador. O editor oferece:
 - gizmos de posição, rotação e escala;
 - inspector numérico, visibilidade, bloqueio e inclusão no runtime;
 - primitivas de cubo, esfera, cilindro, cone e plano;
+- materiais por objeto com textura, opacidade, rugosidade, metal, emissão e modo sem iluminação;
+- luzes ambiente, direcionais e pontuais com gizmos, alcance, flicker e preset de fogueira;
+- câmeras de cena com modos seguir, fixa e fixa olhando o jogador, além de preview em 640 × 448;
 - colisores visuais de caixa, esfera e cápsula, com trigger e bloqueio de câmera;
 - prefabs criados a partir de qualquer seleção, incluindo grupos e colisores;
 - importação múltipla de OBJ/MTL, GLTF/GLB, BIN e texturas;
@@ -65,6 +68,10 @@ Prefabs são armazenados em `editor/prefabs`. Ao instanciar um prefab, novos IDs
 Atalhos principais: `W` move, `E` rotaciona, `R` redimensiona, `B` ativa a seleção por caixa, `F` foca e `Delete` exclui. Use `/` para isolar a seleção, `H` para ocultá-la e `Alt+H` para revelar tudo. `Ctrl+C`, `Ctrl+V` e `Ctrl+D` copiam, colam e duplicam; `Ctrl+Z` desfaz e `Ctrl+S` salva. `Ctrl+clique` adiciona ou remove objetos da seleção.
 
 Em qualquer ferramenta, mantenha o botão direito pressionado para ativar temporariamente a Mão e arraste para percorrer a cena; ao soltar, o gizmo anterior retorna. Arraste com o botão esquerdo em uma área vazia para alterar o ângulo e use a roda para aproximar ou afastar. A área de transferência interna persiste no navegador e aceita seleções múltiplas, grupos completos e colisores.
+
+Materiais, luzes e câmeras são salvos junto com a cena. O preview de câmera usa a proporção nativa de 640 × 448 do projeto. No runtime, materiais sem iluminação selecionam o pipeline correspondente, luzes ambiente e direcionais são enviadas ao sistema `Lights` do Athena e a câmera principal executa o modo escolhido. A troca de textura é exibida no editor; no PS2, a textura efetiva ainda é resolvida pelo OBJ/MTL.
+
+Como o Athena atual não expõe uma luz pontual com alcance, o runtime a simula atualizando luzes direcionais antes de desenhar cada objeto. A intensidade usa a distância entre a luz e o centro espacial exportado de cada OBJ, com queda quadrática e flicker opcional. Isso permite fogueiras realmente locais sem clarear toda a cena. A precisão visual acompanha a divisão do cenário: blocos menores produzem bordas de luz mais suaves. O Athena oferece quatro slots de luz no total; o runtime compartilha esse orçamento entre luzes globais e pontuais, reservando até dois slots locais quando necessário. Sombras projetadas continuam exclusivas do preview.
 
 O cenário procedural original já estava consolidado em sete blocos OBJ; eles aparecem como filhos do grupo **Cenário congelado**. Todo modelo, primitiva, grupo ou colisor adicionado pelo editor permanece independente. Os sete obstáculos originais foram migrados para o grupo **Colisões** e agora são editados visualmente.
 

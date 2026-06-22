@@ -20,6 +20,23 @@ globalThis.EDITOR_SCENE = [
       "x": 1,
       "y": 1,
       "z": 1
+    },
+    "boundsCenter": {
+      "x": 0,
+      "y": 6.5,
+      "z": -4
+    },
+    "boundsRadius": 66.2815962390768,
+    "material": {
+      "color": "#ffffff",
+      "texture": "",
+      "opacity": 1,
+      "roughness": 0.72,
+      "metalness": 0,
+      "emissive": "#000000",
+      "emissiveIntensity": 0,
+      "unlit": false,
+      "doubleSided": true
     }
   },
   {
@@ -40,6 +57,23 @@ globalThis.EDITOR_SCENE = [
       "x": 1,
       "y": 1,
       "z": 1
+    },
+    "boundsCenter": {
+      "x": 0.125,
+      "y": -1.8025000000000002,
+      "z": 2.6930739999999993
+    },
+    "boundsRadius": 35.69324068811175,
+    "material": {
+      "color": "#ffffff",
+      "texture": "",
+      "opacity": 1,
+      "roughness": 0.72,
+      "metalness": 0,
+      "emissive": "#000000",
+      "emissiveIntensity": 0,
+      "unlit": false,
+      "doubleSided": true
     }
   },
   {
@@ -60,6 +94,23 @@ globalThis.EDITOR_SCENE = [
       "x": 1,
       "y": 1,
       "z": 1
+    },
+    "boundsCenter": {
+      "x": -1.1819445000000002,
+      "y": 11.244,
+      "z": -5.3754305
+    },
+    "boundsRadius": 57.54239269603368,
+    "material": {
+      "color": "#ffffff",
+      "texture": "",
+      "opacity": 1,
+      "roughness": 0.72,
+      "metalness": 0,
+      "emissive": "#000000",
+      "emissiveIntensity": 0,
+      "unlit": false,
+      "doubleSided": true
     }
   },
   {
@@ -80,6 +131,23 @@ globalThis.EDITOR_SCENE = [
       "x": 1,
       "y": 1,
       "z": 1
+    },
+    "boundsCenter": {
+      "x": 9.506,
+      "y": 10.5,
+      "z": -22.798097499999997
+    },
+    "boundsRadius": 39.26473477281498,
+    "material": {
+      "color": "#ffffff",
+      "texture": "",
+      "opacity": 1,
+      "roughness": 0.72,
+      "metalness": 0,
+      "emissive": "#000000",
+      "emissiveIntensity": 0,
+      "unlit": false,
+      "doubleSided": true
     }
   },
   {
@@ -100,6 +168,23 @@ globalThis.EDITOR_SCENE = [
       "x": 1,
       "y": 1,
       "z": 1
+    },
+    "boundsCenter": {
+      "x": 0.21799999999999997,
+      "y": 5.0249999999999995,
+      "z": 7.850872
+    },
+    "boundsRadius": 21.52875199709412,
+    "material": {
+      "color": "#ffffff",
+      "texture": "",
+      "opacity": 1,
+      "roughness": 0.72,
+      "metalness": 0,
+      "emissive": "#000000",
+      "emissiveIntensity": 0,
+      "unlit": false,
+      "doubleSided": true
     }
   },
   {
@@ -120,6 +205,23 @@ globalThis.EDITOR_SCENE = [
       "x": 1,
       "y": 1,
       "z": 1
+    },
+    "boundsCenter": {
+      "x": -3.395441999999999,
+      "y": -0.29810649999999983,
+      "z": 5.603596499999999
+    },
+    "boundsRadius": 25.041357831395214,
+    "material": {
+      "color": "#ffffff",
+      "texture": "",
+      "opacity": 1,
+      "roughness": 0.72,
+      "metalness": 0,
+      "emissive": "#000000",
+      "emissiveIntensity": 0,
+      "unlit": false,
+      "doubleSided": true
     }
   },
   {
@@ -140,6 +242,23 @@ globalThis.EDITOR_SCENE = [
       "x": 1,
       "y": 1,
       "z": 1
+    },
+    "boundsCenter": {
+      "x": 4.2066665,
+      "y": 3.9878869999999997,
+      "z": 21
+    },
+    "boundsRadius": 1.4100656277093095,
+    "material": {
+      "color": "#ffffff",
+      "texture": "",
+      "opacity": 1,
+      "roughness": 0.72,
+      "metalness": 0,
+      "emissive": "#000000",
+      "emissiveIntensity": 0,
+      "unlit": false,
+      "doubleSided": true
     }
   },
   {
@@ -160,6 +279,23 @@ globalThis.EDITOR_SCENE = [
       "x": 1,
       "y": 1,
       "z": 1
+    },
+    "boundsCenter": {
+      "x": 8.2656,
+      "y": 1,
+      "z": 2.2385
+    },
+    "boundsRadius": 1.7320508075688772,
+    "material": {
+      "color": "#8bd5f7",
+      "texture": "",
+      "opacity": 1,
+      "roughness": 0.72,
+      "metalness": 0,
+      "emissive": "#000000",
+      "emissiveIntensity": 0,
+      "unlit": false,
+      "doubleSided": true
     }
   }
 ];
@@ -315,3 +451,51 @@ globalThis.EDITOR_COLLIDERS = [
     "cameraBlocker": true
   }
 ];
+globalThis.EDITOR_LIGHTS = [
+  {
+    "id": "light-mqomhtc0-isim6o",
+    "name": "Luz direcional",
+    "type": "directional",
+    "color": {
+      "r": 1,
+      "g": 0.8796223968851662,
+      "b": 0.623960391667596
+    },
+    "intensity": 2,
+    "distance": 12,
+    "position": {
+      "x": -0.9809,
+      "y": 1.8985,
+      "z": -24.0625
+    },
+    "direction": {
+      "x": 0.2983628731973174,
+      "y": 0.6859945082018456,
+      "z": 0.6636197183736703
+    }
+  },
+  {
+    "id": "light-mqooopqh-0605k1",
+    "name": "Luz ambiente",
+    "type": "ambient",
+    "color": {
+      "r": 0.2663556047920505,
+      "g": 0.48514994004665124,
+      "b": 0.6375968739867731
+    },
+    "intensity": 0.45,
+    "distance": 12,
+    "position": {
+      "x": -3.8074,
+      "y": 19.2825,
+      "z": -0.8471
+    },
+    "direction": {
+      "x": 0,
+      "y": 0,
+      "z": -1
+    }
+  }
+];
+globalThis.EDITOR_POINT_LIGHTS = [];
+globalThis.EDITOR_CAMERA = null;

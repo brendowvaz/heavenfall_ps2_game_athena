@@ -5,16 +5,18 @@
     "background": "#07101d",
     "gridSize": 120,
     "snap": 0.25,
+    "snapEnabled": false,
+    "snapMode": "grid",
     "camera": {
       "position": {
-        "x": -5.1974,
-        "y": 6.1038,
-        "z": 6.7748
+        "x": -4.0139,
+        "y": 21.7031,
+        "z": 0.9131
       },
       "target": {
-        "x": 3.2145,
-        "y": -0.0916,
-        "z": 5.1486
+        "x": -3.8074,
+        "y": 19.2825,
+        "z": -0.8471
       }
     }
   },
@@ -73,7 +75,18 @@
       "color": "#8bd5f7",
       "visible": true,
       "locked": false,
-      "runtime": true
+      "runtime": true,
+      "material": {
+        "color": "#ffffff",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true
+      }
     },
     {
       "id": "legacy-scene-1",
@@ -101,7 +114,18 @@
       "color": "#8bd5f7",
       "visible": true,
       "locked": false,
-      "runtime": true
+      "runtime": true,
+      "material": {
+        "color": "#ffffff",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true
+      }
     },
     {
       "id": "legacy-scene-2",
@@ -129,7 +153,18 @@
       "color": "#8bd5f7",
       "visible": true,
       "locked": false,
-      "runtime": true
+      "runtime": true,
+      "material": {
+        "color": "#ffffff",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true
+      }
     },
     {
       "id": "legacy-scene-3",
@@ -157,7 +192,18 @@
       "color": "#8bd5f7",
       "visible": true,
       "locked": false,
-      "runtime": true
+      "runtime": true,
+      "material": {
+        "color": "#ffffff",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true
+      }
     },
     {
       "id": "legacy-scene-4",
@@ -185,7 +231,18 @@
       "color": "#8bd5f7",
       "visible": true,
       "locked": false,
-      "runtime": true
+      "runtime": true,
+      "material": {
+        "color": "#ffffff",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true
+      }
     },
     {
       "id": "legacy-scene-5",
@@ -213,7 +270,18 @@
       "color": "#8bd5f7",
       "visible": true,
       "locked": false,
-      "runtime": true
+      "runtime": true,
+      "material": {
+        "color": "#ffffff",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true
+      }
     },
     {
       "id": "legacy-scene-6",
@@ -241,7 +309,18 @@
       "color": "#8bd5f7",
       "visible": true,
       "locked": false,
-      "runtime": true
+      "runtime": true,
+      "material": {
+        "color": "#ffffff",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true
+      }
     },
     {
       "id": "player-reference",
@@ -269,7 +348,18 @@
       "color": "#d7f3ff",
       "visible": true,
       "locked": true,
-      "runtime": false
+      "runtime": false,
+      "material": {
+        "color": "#ffffff",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true
+      }
     },
     {
       "id": "collision-root",
@@ -373,7 +463,7 @@
         "asset": "",
         "collider": "box"
       },
-      "parentId": null,
+      "parentId": "collision-root",
       "position": {
         "x": -7.2814,
         "y": 0.653,
@@ -406,7 +496,7 @@
         "asset": "",
         "collider": "box"
       },
-      "parentId": null,
+      "parentId": "collision-root",
       "position": {
         "x": 3.4754,
         "y": 1,
@@ -439,7 +529,7 @@
         "asset": "",
         "collider": "box"
       },
-      "parentId": null,
+      "parentId": "collision-root",
       "position": {
         "x": -3.5558,
         "y": 0.9659,
@@ -472,7 +562,7 @@
         "asset": "editor_primitives/cube.obj",
         "primitive": "cube"
       },
-      "parentId": null,
+      "parentId": "collision-root",
       "position": {
         "x": 8.2656,
         "y": 1,
@@ -491,7 +581,18 @@
       "color": "#8bd5f7",
       "visible": true,
       "locked": false,
-      "runtime": true
+      "runtime": true,
+      "material": {
+        "color": "#8bd5f7",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true
+      }
     },
     {
       "id": "collider-mqnvkvze-oxwuul",
@@ -501,7 +602,7 @@
         "asset": "",
         "collider": "box"
       },
-      "parentId": null,
+      "parentId": "collision-root",
       "position": {
         "x": 8.2655,
         "y": 1,
@@ -524,6 +625,84 @@
       "collider": {
         "trigger": false,
         "cameraBlocker": true
+      }
+    },
+    {
+      "id": "light-mqomhtc0-isim6o",
+      "name": "Luz direcional",
+      "source": {
+        "kind": "light",
+        "asset": "",
+        "light": "directional"
+      },
+      "parentId": null,
+      "position": {
+        "x": -0.9809,
+        "y": 1.8985,
+        "z": -24.0625
+      },
+      "rotation": {
+        "x": 134.0502,
+        "y": -17.3593,
+        "z": 162.8591
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#ffc15c",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "light": {
+        "type": "directional",
+        "color": "#fff1cf",
+        "intensity": 2,
+        "distance": 12,
+        "castShadow": true,
+        "flicker": false,
+        "flickerAmount": 0.24,
+        "flickerSpeed": 7.5
+      }
+    },
+    {
+      "id": "light-mqooopqh-0605k1",
+      "name": "Luz ambiente",
+      "source": {
+        "kind": "light",
+        "asset": "",
+        "light": "ambient"
+      },
+      "parentId": null,
+      "position": {
+        "x": -3.8074,
+        "y": 19.2825,
+        "z": -0.8471
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#ffc15c",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "light": {
+        "type": "ambient",
+        "color": "#8db9d1",
+        "intensity": 0.45,
+        "distance": 12,
+        "castShadow": false,
+        "flicker": false,
+        "flickerAmount": 0.24,
+        "flickerSpeed": 7.5
       }
     }
   ]
