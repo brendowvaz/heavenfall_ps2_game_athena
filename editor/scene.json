@@ -420,6 +420,11 @@
       "collider": {
         "trigger": false,
         "cameraBlocker": true
+      },
+      "events": {
+        "onEnter": [],
+        "onExit": [],
+        "onInteract": []
       }
     },
     {
@@ -453,6 +458,11 @@
       "collider": {
         "trigger": false,
         "cameraBlocker": true
+      },
+      "events": {
+        "onEnter": [],
+        "onExit": [],
+        "onInteract": []
       }
     },
     {
@@ -486,6 +496,11 @@
       "collider": {
         "trigger": false,
         "cameraBlocker": true
+      },
+      "events": {
+        "onEnter": [],
+        "onExit": [],
+        "onInteract": []
       }
     },
     {
@@ -519,6 +534,11 @@
       "collider": {
         "trigger": false,
         "cameraBlocker": true
+      },
+      "events": {
+        "onEnter": [],
+        "onExit": [],
+        "onInteract": []
       }
     },
     {
@@ -552,6 +572,11 @@
       "collider": {
         "trigger": false,
         "cameraBlocker": true
+      },
+      "events": {
+        "onEnter": [],
+        "onExit": [],
+        "onInteract": []
       }
     },
     {
@@ -625,6 +650,11 @@
       "collider": {
         "trigger": false,
         "cameraBlocker": true
+      },
+      "events": {
+        "onEnter": [],
+        "onExit": [],
+        "onInteract": []
       }
     },
     {

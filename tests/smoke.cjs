@@ -7,15 +7,15 @@ const sourcePath = path.join(__dirname, "..", "main.js");
 let source = fs.readFileSync(sourcePath, "utf8");
 const editorSource = fs.readFileSync(path.join(__dirname, "..", "editor", "app.js"), "utf8");
 const editorHtml = fs.readFileSync(path.join(__dirname, "..", "editor", "index.html"), "utf8");
-for (const marker of ["applyPointerSnap", "togglePivotEditing", "finishBoxSelection", "toggleIsolation", "setupPanelAccordions", "collapsedHierarchy", "applyRecordMaterial", "createLightObject", "applyCampfirePreset", "openCameraPreview"]) {
+for (const marker of ["applyPointerSnap", "togglePivotEditing", "finishBoxSelection", "toggleIsolation", "setupPanelAccordions", "collapsedHierarchy", "applyRecordMaterial", "createLightObject", "applyCampfirePreset", "openCameraPreview", "renderTriggerEvents", "addTriggerAction"]) {
     if (!editorSource.includes(marker)) throw new Error(`Editor tool missing: ${marker}`);
 }
-for (const id of ["snap-mode", "pivot-button", "box-select-button", "selection-marquee", "isolate-selection-button", "material-section", "light-section", "light-flicker", "light-campfire-preset", "camera-section", "camera-mode", "camera-preview"]) {
+for (const id of ["snap-mode", "pivot-button", "box-select-button", "selection-marquee", "isolate-selection-button", "material-section", "light-section", "light-flicker", "light-campfire-preset", "camera-section", "camera-mode", "camera-preview", "trigger-events-editor", "event-action-type", "event-add-button"]) {
     if (!editorHtml.includes(`id="${id}"`)) throw new Error(`Editor control missing: ${id}`);
 }
 source = source.replace(
     "while (true) {",
-    "globalThis.__levelTest = { baseWalkable, isPlayerValid, applyMovement, colliderHits, updateVerticalMovement, getColliders: () => collisionShapes, setPlayer: (state) => { playerX = state.x; playerY = state.y; playerZ = state.z; playerVelocityY = state.velocityY; playerGrounded = state.grounded; }, getPlayer: () => ({ x: playerX, y: playerY, z: playerZ, velocityY: playerVelocityY, grounded: playerGrounded }) }; for (let __smokeFrame = 0; __smokeFrame < 2; __smokeFrame++) {"
+    "globalThis.__levelTest = { baseWalkable, isPlayerValid, applyMovement, colliderHits, updateVerticalMovement, executeAction: executeRuntimeAction, getRuntimeMessage: () => runtimeMessageText, getVisibility: (id) => runtimeObjectVisibility[id], getColliders: () => collisionShapes, setPlayer: (state) => { playerX = state.x; playerY = state.y; playerZ = state.z; playerVelocityY = state.velocityY; playerGrounded = state.grounded; }, getPlayer: () => ({ x: playerX, y: playerY, z: playerZ, velocityY: playerVelocityY, grounded: playerGrounded }) }; for (let __smokeFrame = 0; __smokeFrame < 2; __smokeFrame++) {"
 );
 
 let vertexCount = 0;
@@ -86,6 +86,22 @@ const context = {
             const script = fs.readFileSync(path.join(__dirname, "..", "assets", filename), "utf8");
             vm.runInContext(script, sandbox, { filename });
             if (filename === "scene.generated.js") {
+                sandbox.EDITOR_COLLIDERS.push({
+                    id: "smoke-trigger",
+                    name: "Smoke trigger",
+                    shape: "sphere",
+                    position: { x: 0, y: 1, z: 18 },
+                    rotation: { x: 0, y: 0, z: 0 },
+                    scale: { x: 1, y: 1, z: 1 },
+                    trigger: true,
+                    cameraBlocker: false
+                });
+                sandbox.EDITOR_EVENTS.push({
+                    triggerId: "smoke-trigger",
+                    onEnter: [{ id: "smoke-message", type: "message", text: "Evento executado no runtime", duration: 120 }],
+                    onExit: [],
+                    onInteract: []
+                });
                 for (let index = 0; index < 4; index++) {
                     sandbox.EDITOR_LIGHTS.push({
                         id: `smoke-global-${index}`,
@@ -118,7 +134,7 @@ const context = {
     },
     Pads: {
         SELECT: 1, START: 2, L1: 3, R3: 4, CROSS: 5,
-        LEFT: 6, RIGHT: 7, UP: 8, DOWN: 9, SQUARE: 10,
+        LEFT: 6, RIGHT: 7, UP: 8, DOWN: 9, SQUARE: 10, TRIANGLE: 11,
         get: () => neutralPad
     },
     Draw: { point() {}, rect() {} }
@@ -127,8 +143,8 @@ const context = {
 sandbox = vm.createContext(context);
 vm.runInContext(source, sandbox, { filename: sourcePath, timeout: 5000 });
 
-if (!Array.isArray(context.EDITOR_LIGHTS) || !Array.isArray(context.EDITOR_POINT_LIGHTS) || !("EDITOR_CAMERA" in context)) {
-    throw new Error("Generated scene must expose lights and active camera contracts");
+if (!Array.isArray(context.EDITOR_LIGHTS) || !Array.isArray(context.EDITOR_POINT_LIGHTS) || !Array.isArray(context.EDITOR_EVENTS) || !("EDITOR_CAMERA" in context)) {
+    throw new Error("Generated scene must expose lights, events and active camera contracts");
 }
 
 if (manifest.sceneVertices < 1000 || manifest.sceneVertices > 30000) {
@@ -151,6 +167,20 @@ for (const call of lightSetCalls.filter((entry) => entry.property === context.Li
 if (Math.max(...diffuseUpdates.values()) <= expectedRuntimeObjects) {
     throw new Error("Simulated point lights must be updated for each runtime object");
 }
+if (context.__levelTest.getRuntimeMessage() !== "Evento executado no runtime") {
+    throw new Error("Trigger onEnter message must execute in the runtime loop");
+}
+const postLoopPlayer = context.__levelTest.getPlayer();
+const visibilityTarget = context.EDITOR_SCENE[0].id;
+context.__levelTest.executeAction({ type: "visibility", targetIds: [visibilityTarget], mode: "hide" });
+if (context.__levelTest.getVisibility(visibilityTarget) !== false) {
+    throw new Error("Visibility actions must affect runtime objects");
+}
+context.__levelTest.executeAction({ type: "teleport", position: { x: 2, y: 0.08, z: 16 } });
+if (context.__levelTest.getPlayer().x !== 2 || context.__levelTest.getPlayer().z !== 16) {
+    throw new Error("Teleport actions must affect the runtime player");
+}
+context.__levelTest.setPlayer(postLoopPlayer);
 if (!context.__levelTest.isPlayerValid(0, 18)) {
     throw new Error("Spawn point must be walkable");
 }

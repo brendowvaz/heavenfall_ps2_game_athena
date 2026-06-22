@@ -50,6 +50,7 @@ Abra `http://127.0.0.1:4173/editor/` no navegador. O editor oferece:
 - luzes ambiente, direcionais e pontuais com gizmos, alcance, flicker e preset de fogueira;
 - câmeras de cena com modos seguir, fixa e fixa olhando o jogador, além de preview em 640 × 448;
 - colisores visuais de caixa, esfera e cápsula, com trigger e bloqueio de câmera;
+- componentes de trigger com eventos de entrada, saída e interação executados no PS2;
 - prefabs criados a partir de qualquer seleção, incluindo grupos e colisores;
 - importação múltipla de OBJ/MTL, GLTF/GLB, BIN e texturas;
 - biblioteca dos modelos disponíveis no projeto;
@@ -62,6 +63,8 @@ Ao importar OBJ ou GLTF com arquivos externos, selecione também o MTL, BIN e as
 O botão **Salvar cena** mantém o documento editável em `editor/scene.json` e gera `assets/scene.generated.js`. O `main.js` lê esse arquivo no AthenaEnv, aplica a transformação mundial a cada `RenderObject` e usa os colisores exportados no movimento do jogador e da câmera.
 
 As dimensões dos colisores seguem a visualização do editor: na caixa, `scale` representa as meias-extensões; na esfera e na cápsula, representa os raios locais. Posição, rotação XYZ, escala hierárquica e altura são exportadas em coordenadas mundiais. Triggers são detectados sem bloquear, e **Bloquear câmera** afeta somente a câmera.
+
+Triggers podem executar ações **Ao entrar**, **Ao sair** ou **Ao interagir** com `Triângulo`. As ações disponíveis nesta etapa mostram mensagens na HUD, mostram/ocultam objetos ou grupos e teletransportam o jogador. Grupos usados como alvo são resolvidos para seus modelos filhos durante a exportação, e todas as ações são executadas pelo `main.js` no PS2.
 
 Prefabs são armazenados em `editor/prefabs`. Ao instanciar um prefab, novos IDs são gerados e a hierarquia interna é preservada; as instâncias já colocadas continuam independentes do arquivo original.
 

@@ -29,6 +29,16 @@ const scene = normalizeScene({
       rotation: { x: 0, y: 0, z: 0 },
       scale: { x: 0.5, y: 2, z: 1 },
       collider: { trigger: true, cameraBlocker: false },
+      events: {
+        onEnter: [
+          { id: "welcome", type: "message", text: "Bem-vindo às ruínas", duration: 150 },
+          { id: "hide-cube", type: "visibility", targetId: "lit-cube", mode: "hide" },
+        ],
+        onExit: [],
+        onInteract: [
+          { id: "teleport", type: "teleport", position: { x: 3, y: 0.08, z: 9 } },
+        ],
+      },
     },
     {
       id: "disabled",
@@ -85,6 +95,13 @@ assert(exported.rotationOrder === "XYZ", "Collider rotation order must be explic
 assert(exported.scaleMeaning === "halfExtents", "Box scale semantics must be explicit");
 assert(exported.trigger === true && exported.cameraBlocker === false,
   "Trigger and camera flags must survive export independently");
+assert(sandbox.EDITOR_EVENTS.length === 1, "Trigger components must enter the runtime event contract");
+assert(sandbox.EDITOR_EVENTS[0].onEnter[0].text === "Bem-vindo às ruínas",
+  "Message actions must survive export");
+assert(sandbox.EDITOR_EVENTS[0].onEnter[1].targetIds[0] === "lit-cube",
+  "Visibility targets must resolve to runtime object ids");
+assert(sandbox.EDITOR_EVENTS[0].onInteract[0].position.z === 9,
+  "Teleport actions must survive export");
 
 assert(sandbox.EDITOR_SCENE.length === 1, "Runtime models must be exported independently from colliders");
 assert(sandbox.EDITOR_SCENE[0].boundsRadius > 0, "OBJ spatial bounds must be exported for local lighting");

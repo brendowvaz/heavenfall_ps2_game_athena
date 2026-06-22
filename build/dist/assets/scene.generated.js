@@ -451,6 +451,7 @@ globalThis.EDITOR_COLLIDERS = [
     "cameraBlocker": true
   }
 ];
+globalThis.EDITOR_EVENTS = [];
 globalThis.EDITOR_LIGHTS = [
   {
     "id": "light-mqomhtc0-isim6o",

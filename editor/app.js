@@ -177,6 +177,39 @@ function fileName(asset) {
   return String(asset || "").split("/").pop() || "Objeto";
 }
 
+const eventPhases = ["onEnter", "onExit", "onInteract"];
+const eventActionTypes = ["message", "visibility", "teleport"];
+
+function normalizeEventAction(action = {}) {
+  const type = eventActionTypes.includes(action.type) ? action.type : "message";
+  return {
+    id: String(action.id || uid("action")).replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96),
+    type,
+    ...(type === "message" ? {
+      text: String(action.text || "Uma passagem foi encontrada.").slice(0, 160),
+      duration: Math.round(THREE.MathUtils.clamp(clampNumber(action.duration, 180), 1, 3600)),
+    } : {}),
+    ...(type === "visibility" ? {
+      targetId: typeof action.targetId === "string" ? action.targetId : "",
+      mode: ["toggle", "show", "hide"].includes(action.mode) ? action.mode : "toggle",
+    } : {}),
+    ...(type === "teleport" ? {
+      position: {
+        x: clampNumber(action.position?.x),
+        y: clampNumber(action.position?.y, 0.08),
+        z: clampNumber(action.position?.z, 18),
+      },
+    } : {}),
+  };
+}
+
+function normalizeRecordEvents(events = {}) {
+  return Object.fromEntries(eventPhases.map((phase) => [
+    phase,
+    (Array.isArray(events?.[phase]) ? events[phase] : []).slice(0, 32).map(normalizeEventAction),
+  ]));
+}
+
 function normalizeRecord(record = {}) {
   let kind = ["model", "primitive", "group", "collider", "light", "camera"].includes(record.source?.kind)
     ? record.source.kind
@@ -237,6 +270,7 @@ function normalizeRecord(record = {}) {
         trigger: record.collider?.trigger === true,
         cameraBlocker: record.collider?.cameraBlocker !== false,
       },
+      events: normalizeRecordEvents(record.events || record.collider?.events),
     } : {}),
     ...(kind === "light" ? {
       light: {
@@ -1272,6 +1306,120 @@ function renderMaterialTextureOptions(record) {
   select.value = record.material?.texture || "";
 }
 
+function eventPhaseLabel(phase) {
+  return { onEnter: "Entrar", onExit: "Sair", onInteract: "Interagir" }[phase] || phase;
+}
+
+function eventActionSummary(action) {
+  if (action.type === "message") return action.text;
+  if (action.type === "teleport") return `Jogador → ${action.position.x}, ${action.position.y}, ${action.position.z}`;
+  const target = recordById(action.targetId)?.name || action.targetId || "Sem alvo";
+  const mode = { toggle: "Alternar", show: "Mostrar", hide: "Ocultar" }[action.mode] || action.mode;
+  return `${mode}: ${target}`;
+}
+
+function updateEventDraftUi() {
+  const type = $("event-action-type").value;
+  $("event-message-row").hidden = type !== "message";
+  $("event-duration-row").hidden = type !== "message";
+  $("event-target-row").hidden = type !== "visibility";
+  $("event-visibility-row").hidden = type !== "visibility";
+  $("event-teleport-row").hidden = type !== "teleport";
+}
+
+function removeTriggerAction(recordId, phase, actionId) {
+  const record = recordById(recordId);
+  if (!record?.events?.[phase]) return;
+  const before = serializeScene();
+  record.events[phase] = record.events[phase].filter((action) => action.id !== actionId);
+  pushHistorySnapshot(before);
+  renderInspector();
+  setStatus("Ação removida do trigger");
+}
+
+function renderTriggerEvents(record) {
+  const container = $("trigger-events-editor");
+  container.hidden = record.collider?.trigger !== true;
+  if (container.hidden) return;
+  record.events ||= normalizeRecordEvents();
+
+  const targetSelect = $("event-target");
+  const previousTarget = targetSelect.value;
+  targetSelect.replaceChildren(new Option("Selecione um objeto", ""));
+  for (const candidate of state.document.objects) {
+    if (!["model", "primitive", "group"].includes(candidate.source.kind)) continue;
+    targetSelect.append(new Option(candidate.name, candidate.id));
+  }
+  if ([...targetSelect.options].some((option) => option.value === previousTarget)) targetSelect.value = previousTarget;
+
+  const list = $("event-action-list");
+  list.replaceChildren();
+  let count = 0;
+  for (const phase of eventPhases) {
+    for (const action of record.events[phase]) {
+      count++;
+      const row = document.createElement("div");
+      row.className = "event-action-item";
+      const phaseLabel = document.createElement("em");
+      phaseLabel.textContent = eventPhaseLabel(phase);
+      const summary = document.createElement("span");
+      summary.textContent = eventActionSummary(action);
+      summary.title = summary.textContent;
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "×";
+      remove.title = "Remover ação";
+      remove.addEventListener("click", () => removeTriggerAction(record.id, phase, action.id));
+      row.append(phaseLabel, summary, remove);
+      list.append(row);
+    }
+  }
+  if (!count) {
+    const empty = document.createElement("div");
+    empty.className = "event-action-empty";
+    empty.textContent = "Nenhuma ação configurada";
+    list.append(empty);
+  }
+  updateEventDraftUi();
+}
+
+function addTriggerAction() {
+  const record = currentRecord();
+  if (!record?.collider?.trigger) return;
+  const phase = $("event-when").value;
+  const type = $("event-action-type").value;
+  let action;
+  if (type === "visibility") {
+    const targetId = $("event-target").value;
+    if (!targetId) {
+      toast("Selecione o objeto que receberá a ação.", "error");
+      return;
+    }
+    action = { type, targetId, mode: $("event-visibility-mode").value };
+  } else if (type === "teleport") {
+    action = {
+      type,
+      position: {
+        x: clampNumber($("event-teleport-x").value),
+        y: clampNumber($("event-teleport-y").value, 0.08),
+        z: clampNumber($("event-teleport-z").value, 18),
+      },
+    };
+  } else {
+    action = {
+      type: "message",
+      text: $("event-message").value.trim() || "Uma passagem foi encontrada.",
+      duration: clampNumber($("event-duration").value, 180),
+    };
+  }
+  const before = serializeScene();
+  record.events ||= normalizeRecordEvents();
+  record.events[phase].push(normalizeEventAction(action));
+  pushHistorySnapshot(before);
+  renderInspector();
+  setStatus(`Ação adicionada: ${eventPhaseLabel(phase)}`);
+}
+
 function renderInspector() {
   const record = currentRecord();
   const object = currentObject();
@@ -1336,6 +1484,7 @@ function renderInspector() {
     $("collider-shape").value = record.source.collider;
     $("collider-trigger").checked = record.collider?.trigger === true;
     $("collider-camera").checked = record.collider?.cameraBlocker !== false;
+    renderTriggerEvents(record);
   }
   if (materialMode) {
     renderMaterialTextureOptions(record);
@@ -2471,7 +2620,7 @@ function renderCameraPreview() {
 
 async function saveScene({ quiet = false } = {}) {
   if (state.serverOutdated) {
-    const message = "Servidor do editor desatualizado. Reinicie scripts/editor.ps1 antes de salvar luzes e câmeras.";
+    const message = "Servidor do editor desatualizado. Reinicie scripts/editor.ps1 antes de salvar componentes e eventos.";
     toast(message, "error", 10000);
     setStatus("Reinicie o servidor do editor");
     return false;
@@ -2935,6 +3084,8 @@ function bindInspector() {
     finishFieldHistory();
     markDirty();
   });
+  $("event-action-type").addEventListener("change", updateEventDraftUi);
+  $("event-add-button").addEventListener("click", addTriggerAction);
 
   for (const id of ["material-color", "material-opacity", "material-roughness", "material-metalness", "material-emissive", "material-emissive-intensity"]) {
     $(id).addEventListener("beforeinput", stageFieldHistory);
@@ -3238,12 +3389,12 @@ async function boot() {
       const capabilities = await capabilitiesResponse.json();
       state.serverSchemaVersion = Number(capabilities.editorSchemaVersion) || 0;
     }
-    state.serverOutdated = state.serverSchemaVersion < 3;
+    state.serverOutdated = state.serverSchemaVersion < 4;
     const data = await sceneResponse.json();
     if (!sceneResponse.ok) throw new Error(data.error || "Falha ao abrir a cena");
     await loadDocument(data);
     if (state.serverOutdated) {
-      toast("Servidor desatualizado detectado. Reinicie scripts/editor.ps1 para salvar materiais, luzes e câmeras.", "error", 12000);
+      toast("Servidor desatualizado detectado. Reinicie scripts/editor.ps1 para salvar componentes e eventos.", "error", 12000);
       setStatus("Servidor desatualizado — reinicie o editor");
     } else {
       toast("Editor pronto. Selecione um objeto para começar.", "success", 2800);

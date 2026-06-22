@@ -147,6 +147,36 @@ function safeAssetPath(value) {
   return normalized;
 }
 
+const eventPhases = ["onEnter", "onExit", "onInteract"];
+const eventActionTypes = ["message", "visibility", "teleport"];
+
+function normalizeEventAction(action, index) {
+  const type = eventActionTypes.includes(action?.type) ? action.type : "message";
+  return {
+    id: String(action?.id || `action-${index}`).replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96),
+    type,
+    ...(type === "message" ? {
+      text: String(action?.text || "Uma passagem foi encontrada.").slice(0, 160),
+      duration: Math.round(Math.max(1, Math.min(3600, finite(action?.duration, 180)))),
+    } : {}),
+    ...(type === "visibility" ? {
+      targetId: typeof action?.targetId === "string" ? action.targetId.slice(0, 96) : "",
+      mode: ["toggle", "show", "hide"].includes(action?.mode) ? action.mode : "toggle",
+    } : {}),
+    ...(type === "teleport" ? {
+      position: vector(action?.position, { x: 0, y: 0.08, z: 18 }),
+    } : {}),
+  };
+}
+
+function normalizeEvents(events) {
+  return Object.fromEntries(eventPhases.map((phase) => [
+    phase,
+    (Array.isArray(events?.[phase]) ? events[phase] : []).slice(0, 32)
+      .map((action, index) => normalizeEventAction(action, index)),
+  ]));
+}
+
 function normalizeScene(input) {
   const objects = Array.isArray(input?.objects) ? input.objects : [];
   const scene = {
@@ -217,6 +247,7 @@ function normalizeScene(input) {
           trigger: item?.collider?.trigger === true,
           cameraBlocker: item?.collider?.cameraBlocker !== false,
         } : undefined,
+        events: kind === "collider" ? normalizeEvents(item?.events || item?.collider?.events) : undefined,
         light: kind === "light" ? {
           type: lightType,
           color: /^#[0-9a-f]{6}$/i.test(item?.light?.color || "") ? item.light.color : "#ffffff",
@@ -401,6 +432,39 @@ function generateAthenaScene(scene) {
       };
     });
 
+  const recordById = new Map(scene.objects.map((item) => [item.id, item]));
+  function isRuntimeDescendant(item, ancestorId) {
+    let current = item;
+    const visited = new Set();
+    while (current?.parentId && !visited.has(current.parentId)) {
+      if (current.parentId === ancestorId) return true;
+      visited.add(current.parentId);
+      current = recordById.get(current.parentId);
+    }
+    return false;
+  }
+  function runtimeTargets(targetId) {
+    return scene.objects
+      .filter((item) => item.runtime && item.visible && ["model", "primitive"].includes(item.source.kind)
+        && (item.id === targetId || isRuntimeDescendant(item, targetId)))
+      .map((item) => item.id);
+  }
+  const events = scene.objects
+    .filter((item) => item.runtime && item.visible && item.source.kind === "collider" && item.collider?.trigger)
+    .map((item) => ({
+      triggerId: item.id,
+      onEnter: item.events.onEnter.map((action) => action.type === "visibility"
+        ? { ...action, targetIds: runtimeTargets(action.targetId) }
+        : action),
+      onExit: item.events.onExit.map((action) => action.type === "visibility"
+        ? { ...action, targetIds: runtimeTargets(action.targetId) }
+        : action),
+      onInteract: item.events.onInteract.map((action) => action.type === "visibility"
+        ? { ...action, targetIds: runtimeTargets(action.targetId) }
+        : action),
+    }))
+    .filter((item) => item.onEnter.length || item.onExit.length || item.onInteract.length);
+
   const lights = scene.objects
     .filter((item) => item.runtime && item.visible && item.source.kind === "light" && item.light.type !== "point")
     .slice(0, 4)
@@ -471,6 +535,7 @@ function generateAthenaScene(scene) {
     "globalThis.EDITOR_COLLISION_VERSION = 2;",
     `globalThis.EDITOR_SCENE = ${JSON.stringify(objects, null, 2)};`,
     `globalThis.EDITOR_COLLIDERS = ${JSON.stringify(colliders, null, 2)};`,
+    `globalThis.EDITOR_EVENTS = ${JSON.stringify(events, null, 2)};`,
     `globalThis.EDITOR_LIGHTS = ${JSON.stringify(lights, null, 2)};`,
     `globalThis.EDITOR_POINT_LIGHTS = ${JSON.stringify(pointLights, null, 2)};`,
     `globalThis.EDITOR_CAMERA = ${JSON.stringify(activeCamera, null, 2)};`,
@@ -633,8 +698,8 @@ function startBuildAndRun() {
 async function handleApi(request, response, url) {
   if (url.pathname === "/api/capabilities" && request.method === "GET") {
     sendJson(response, 200, {
-      editorSchemaVersion: 3,
-      features: ["materials", "lights", "point-light-runtime", "light-flicker", "cameras", "camera-modes", "camera-preview"],
+      editorSchemaVersion: 4,
+      features: ["materials", "lights", "point-light-runtime", "light-flicker", "cameras", "camera-modes", "camera-preview", "components", "trigger-events"],
     });
     return true;
   }

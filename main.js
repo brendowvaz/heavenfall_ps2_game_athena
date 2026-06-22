@@ -48,6 +48,7 @@ function configureData(data, material) {
 // differences between PCSX2 HostFS and real hardware.
 globalThis.EDITOR_SCENE = [];
 globalThis.EDITOR_COLLIDERS = [];
+globalThis.EDITOR_EVENTS = [];
 globalThis.EDITOR_LIGHTS = [];
 globalThis.EDITOR_POINT_LIGHTS = [];
 globalThis.EDITOR_CAMERA = null;
@@ -95,6 +96,7 @@ if (EDITOR_SCENE.length === 0) {
 }
 
 const sceneObjects = [];
+const runtimeObjectVisibility = {};
 for (let i = 0; i < EDITOR_SCENE.length; i++) {
     const definition = EDITOR_SCENE[i];
     console.log("[VeuAzul] Carregando objeto " + definition.name + " (" + definition.asset + ")");
@@ -104,6 +106,7 @@ for (let i = 0; i < EDITOR_SCENE.length; i++) {
     sceneObject.rotation = definition.rotation;
     sceneObject.scale = definition.scale;
     sceneObjects.push(sceneObject);
+    runtimeObjectVisibility[definition.id] = true;
 }
 
 const playerData = configureData(new RenderData("player.obj"));
@@ -270,6 +273,68 @@ let showHud = true;
 let titleTimer = 330;
 let collisionFlash = 0;
 let activeTriggerIds = [];
+let previousTriggerIds = [];
+let runtimeMessageText = "";
+let runtimeMessageTimer = 0;
+
+function arrayContains(items, value) {
+    for (let i = 0; i < items.length; i++) if (items[i] === value) return true;
+    return false;
+}
+
+function executeRuntimeAction(action) {
+    if (!action) return;
+    if (action.type === "message") {
+        runtimeMessageText = action.text || "";
+        runtimeMessageTimer = Math.max(1, action.duration || 180);
+        return;
+    }
+    if (action.type === "visibility") {
+        const targets = action.targetIds || (action.targetId ? [action.targetId] : []);
+        for (let i = 0; i < targets.length; i++) {
+            const id = targets[i];
+            if (runtimeObjectVisibility[id] === undefined) continue;
+            if (action.mode === "show") runtimeObjectVisibility[id] = true;
+            else if (action.mode === "hide") runtimeObjectVisibility[id] = false;
+            else runtimeObjectVisibility[id] = !runtimeObjectVisibility[id];
+        }
+        return;
+    }
+    if (action.type === "teleport") {
+        const position = action.position || { x: 0.0, y: PLAYER_GROUND_Y, z: 18.0 };
+        playerX = position.x;
+        playerY = position.y;
+        playerZ = position.z;
+        playerVelocityY = 0.0;
+        playerGrounded = playerY <= PLAYER_GROUND_Y + 0.001;
+    }
+}
+
+function runTriggerPhase(triggerId, phase) {
+    for (let i = 0; i < EDITOR_EVENTS.length; i++) {
+        const definition = EDITOR_EVENTS[i];
+        if (definition.triggerId !== triggerId) continue;
+        const actions = definition[phase] || [];
+        for (let actionIndex = 0; actionIndex < actions.length; actionIndex++) {
+            executeRuntimeAction(actions[actionIndex]);
+        }
+    }
+}
+
+function processRuntimeEvents() {
+    for (let i = 0; i < activeTriggerIds.length; i++) {
+        const id = activeTriggerIds[i];
+        if (!arrayContains(previousTriggerIds, id)) runTriggerPhase(id, "onEnter");
+    }
+    for (let i = 0; i < previousTriggerIds.length; i++) {
+        const id = previousTriggerIds[i];
+        if (!arrayContains(activeTriggerIds, id)) runTriggerPhase(id, "onExit");
+    }
+    if (pad.justPressed(Pads.TRIANGLE)) {
+        for (let i = 0; i < activeTriggerIds.length; i++) runTriggerPhase(activeTriggerIds[i], "onInteract");
+    }
+    previousTriggerIds = activeTriggerIds.slice();
+}
 
 function colliderHits(x, z, radius, collider) {
     const normalized = collider.qw === undefined ? Collision3D.normalize(collider, 0) : collider;
@@ -452,6 +517,7 @@ function updatePlayerAndCamera() {
 
     updateVerticalMovement();
     updateActiveTriggers();
+    processRuntimeEvents();
 
     playerObject.position = { x: playerX, y: playerY, z: playerZ };
     playerObject.rotation = { x: 0.0, y: playerYaw, z: 0.0 };
@@ -547,7 +613,19 @@ function drawHud() {
         font.print(14, canvas.height - 51, "POS: " + playerX.toFixed(2) + " / " + playerY.toFixed(2) + " / " + playerZ.toFixed(2) + "  TRG: " + activeTriggerIds.length);
         font.print(14, canvas.height - 35, "MOVER: D-PAD/ANALOGICO  |  QUADRADO: PULAR  |  X: CORRER");
         font.color = HUD_BLUE;
-        font.print(14, canvas.height - 19, "L1: TROCAR OMBRO  |  R3: CENTRALIZAR  |  SELECT: REINICIAR");
+        font.print(14, canvas.height - 19, "TRIANGULO: INTERAGIR  |  R3: CENTRALIZAR  |  SELECT: REINICIAR");
+    }
+
+    if (runtimeMessageTimer > 0 && runtimeMessageText) {
+        const firstLine = runtimeMessageText.substring(0, 58);
+        const secondLine = runtimeMessageText.length > 58 ? runtimeMessageText.substring(58, 116) : "";
+        const boxHeight = secondLine ? 48 : 34;
+        Draw.rect(28, canvas.height - 132, canvas.width - 56, boxHeight, Color.new(4, 11, 18, 104));
+        font.scale = 0.46;
+        font.color = Color.new(225, 238, 245, 128);
+        font.print(42, canvas.height - 120, firstLine);
+        if (secondLine) font.print(42, canvas.height - 103, secondLine);
+        runtimeMessageTimer--;
     }
 
     if (collisionFlash > 0) {
@@ -570,7 +648,7 @@ while (true) {
         const definition = EDITOR_SCENE[i];
         const center = definition.boundsCenter || definition.position;
         applyPointLightsAt(center.x, center.y, center.z);
-        sceneObjects[i].render();
+        if (runtimeObjectVisibility[definition.id] !== false) sceneObjects[i].render();
     }
     applyPointLightsAt(playerX, playerY + PLAYER_HEIGHT * 0.5, playerZ);
     playerObject.render();
