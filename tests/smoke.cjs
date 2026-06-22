@@ -5,6 +5,14 @@ const vm = require("vm");
 
 const sourcePath = path.join(__dirname, "..", "main.js");
 let source = fs.readFileSync(sourcePath, "utf8");
+const editorSource = fs.readFileSync(path.join(__dirname, "..", "editor", "app.js"), "utf8");
+const editorHtml = fs.readFileSync(path.join(__dirname, "..", "editor", "index.html"), "utf8");
+for (const marker of ["applyPointerSnap", "togglePivotEditing", "finishBoxSelection", "toggleIsolation", "setupPanelAccordions", "collapsedHierarchy"]) {
+    if (!editorSource.includes(marker)) throw new Error(`Editor tool missing: ${marker}`);
+}
+for (const id of ["snap-mode", "pivot-button", "box-select-button", "selection-marquee", "isolate-selection-button"]) {
+    if (!editorHtml.includes(`id="${id}"`)) throw new Error(`Editor control missing: ${id}`);
+}
 source = source.replace(
     "while (true) {",
     "globalThis.__levelTest = { baseWalkable, isPlayerValid, applyMovement, colliderHits, updateVerticalMovement, getColliders: () => collisionShapes, setPlayer: (state) => { playerX = state.x; playerY = state.y; playerZ = state.z; playerVelocityY = state.velocityY; playerGrounded = state.grounded; }, getPlayer: () => ({ x: playerX, y: playerY, z: playerZ, velocityY: playerVelocityY, grounded: playerGrounded }) }; for (let __smokeFrame = 0; __smokeFrame < 2; __smokeFrame++) {"

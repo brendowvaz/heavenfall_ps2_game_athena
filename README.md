@@ -39,8 +39,10 @@ Abra `http://127.0.0.1:4173/editor/` no navegador. O editor oferece:
 - viewport 3D com câmera orbital, vistas superior, frontal e lateral e gizmo de eixos X/Y/Z clicável;
 - Mão temporária em qualquer ferramenta ao segurar o botão direito;
 - seleção pela viewport ou hierarquia;
-- seleção múltipla com `Ctrl+clique` e transformação por pivô comum;
-- grupos, relações pai/filho, arrastar na hierarquia e preservação da transformação mundial;
+- seleção múltipla com `Ctrl+clique`, seleção por caixa com `B` e transformação por pivô comum ou editável;
+- grupos, relações pai/filho, pais expansíveis/recolhíveis, arrastar na hierarquia e preservação da transformação mundial;
+- seções dos painéis laterais em acordeão, com o estado do layout preservado no navegador;
+- ocultar, bloquear e isolar objetos ou grupos pela hierarquia;
 - gizmos de posição, rotação e escala;
 - inspector numérico, visibilidade, bloqueio e inclusão no runtime;
 - primitivas de cubo, esfera, cilindro, cone e plano;
@@ -48,7 +50,7 @@ Abra `http://127.0.0.1:4173/editor/` no navegador. O editor oferece:
 - prefabs criados a partir de qualquer seleção, incluindo grupos e colisores;
 - importação múltipla de OBJ/MTL, GLTF/GLB, BIN e texturas;
 - biblioteca dos modelos disponíveis no projeto;
-- duplicação, exclusão, desfazer/refazer e transformação com snap;
+- duplicação, exclusão, desfazer/refazer e snap por grade, superfície, vértice ou centro de objeto;
 - copiar e colar modelos, grupos, primitivas e colisores com a hierarquia preservada;
 - salvamento direto para o runtime e botão para testar no PCSX2.
 
@@ -60,7 +62,7 @@ As dimensões dos colisores seguem a visualização do editor: na caixa, `scale`
 
 Prefabs são armazenados em `editor/prefabs`. Ao instanciar um prefab, novos IDs são gerados e a hierarquia interna é preservada; as instâncias já colocadas continuam independentes do arquivo original.
 
-Atalhos principais: `W` move, `E` rotaciona, `R` redimensiona, `F` foca e `Delete` exclui. Use `Ctrl+C`, `Ctrl+V` e `Ctrl+D` para copiar, colar e duplicar; `Ctrl+Z` desfaz e `Ctrl+S` salva. `Ctrl+clique` adiciona ou remove objetos da seleção.
+Atalhos principais: `W` move, `E` rotaciona, `R` redimensiona, `B` ativa a seleção por caixa, `F` foca e `Delete` exclui. Use `/` para isolar a seleção, `H` para ocultá-la e `Alt+H` para revelar tudo. `Ctrl+C`, `Ctrl+V` e `Ctrl+D` copiam, colam e duplicam; `Ctrl+Z` desfaz e `Ctrl+S` salva. `Ctrl+clique` adiciona ou remove objetos da seleção.
 
 Em qualquer ferramenta, mantenha o botão direito pressionado para ativar temporariamente a Mão e arraste para percorrer a cena; ao soltar, o gizmo anterior retorna. Arraste com o botão esquerdo em uma área vazia para alterar o ângulo e use a roda para aproximar ou afastar. A área de transferência interna persiste no navegador e aceita seleções múltiplas, grupos completos e colisores.
 

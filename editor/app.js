@@ -14,6 +14,7 @@ const inspectorEmpty = $("inspector-empty");
 const loadingIndicator = $("loading-indicator");
 const loadingLabel = $("loading-label");
 const toastStack = $("toast-stack");
+const selectionMarquee = $("selection-marquee");
 
 const state = {
   document: null,
@@ -37,6 +38,18 @@ const state = {
   clipboard: null,
   pasteCount: 0,
   rightHandActive: false,
+  snapMode: "grid",
+  pivotCustom: false,
+  pivotEditing: false,
+  pivotPosition: new THREE.Vector3(),
+  pivotSelectionKey: "",
+  boxSelectTool: false,
+  boxSelecting: false,
+  boxSelectStart: null,
+  isolationRoots: new Set(),
+  isolatedIds: null,
+  collapsedHierarchy: new Set(),
+  collapsedPanels: new Set(),
 };
 
 const scene = new THREE.Scene();
@@ -232,7 +245,7 @@ function applyRecordTransform(record, object) {
     THREE.MathUtils.degToRad(record.rotation.z),
   );
   object.scale.set(record.scale.x, record.scale.y, record.scale.z);
-  object.visible = record.visible;
+  applyEditorVisibility(record, object);
   object.updateMatrixWorld(true);
 }
 
@@ -277,6 +290,99 @@ function restoreClipboard() {
     state.clipboard = null;
   }
   updateClipboardButtons();
+}
+
+const editorLayoutStorageKey = "athena-visual-editor-layout-v1";
+
+function restoreLayoutState() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(editorLayoutStorageKey) || "null");
+    state.collapsedHierarchy = new Set(Array.isArray(stored?.hierarchy) ? stored.hierarchy : []);
+    state.collapsedPanels = new Set(Array.isArray(stored?.panels) ? stored.panels : []);
+  } catch {
+    state.collapsedHierarchy.clear();
+    state.collapsedPanels.clear();
+  }
+}
+
+function saveLayoutState() {
+  try {
+    localStorage.setItem(editorLayoutStorageKey, JSON.stringify({
+      hierarchy: [...state.collapsedHierarchy],
+      panels: [...state.collapsedPanels],
+    }));
+  } catch {
+    // O layout continua funcionando durante a sessão se o armazenamento estiver bloqueado.
+  }
+}
+
+function panelAccordionKey(section, index) {
+  const side = section.closest(".left-panel") ? "left" : "right";
+  const semanticClass = [...section.classList].find((name) => name.endsWith("-section") && !["panel-section", "inspector-section", "accordion-section"].includes(name));
+  return `${side}:${section.id || semanticClass || `section-${index}`}`;
+}
+
+function applyPanelAccordion(section, collapsed) {
+  section.classList.toggle("is-collapsed", collapsed);
+  const toggle = section.querySelector(":scope > .accordion-header .accordion-toggle");
+  if (toggle) {
+    toggle.textContent = collapsed ? "▸" : "▾";
+    toggle.title = collapsed ? "Expandir seção" : "Recolher seção";
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+  }
+}
+
+function setupPanelAccordions() {
+  const sections = [...document.querySelectorAll(".left-panel > .panel-section, .right-panel .inspector-section")];
+  sections.forEach((section, index) => {
+    if (section.classList.contains("accordion-section")) return;
+    let header = [...section.children].find((child) => child.classList?.contains("section-heading") || child.classList?.contains("inspector-section-title"));
+    if (!header) {
+      const title = [...section.children].find((child) => child.tagName === "H3");
+      if (!title) return;
+      header = document.createElement("div");
+      header.className = "inspector-section-title";
+      section.insertBefore(header, title);
+      header.append(title);
+    }
+
+    section.classList.add("accordion-section");
+    header.classList.add("accordion-header");
+    const content = document.createElement("div");
+    content.className = "accordion-content";
+    for (const child of [...section.children]) {
+      if (child !== header) content.append(child);
+    }
+    section.append(content);
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "accordion-toggle";
+    toggle.setAttribute("aria-label", "Minimizar ou maximizar seção");
+    if (section.closest(".left-panel")) {
+      let actions = header.querySelector(":scope > .heading-actions");
+      if (!actions) {
+        actions = document.createElement("div");
+        actions.className = "heading-actions";
+        header.append(actions);
+      }
+      actions.prepend(toggle);
+    } else {
+      header.prepend(toggle);
+    }
+
+    const key = panelAccordionKey(section, index);
+    section.dataset.accordionKey = key;
+    applyPanelAccordion(section, state.collapsedPanels.has(key));
+    header.addEventListener("click", (event) => {
+      if (event.target.closest("button:not(.accordion-toggle), input, select, label")) return;
+      const collapsed = !section.classList.contains("is-collapsed");
+      if (collapsed) state.collapsedPanels.add(key);
+      else state.collapsedPanels.delete(key);
+      applyPanelAccordion(section, collapsed);
+      saveLayoutState();
+    });
+  });
 }
 
 function pushHistorySnapshot(snapshot) {
@@ -526,13 +632,151 @@ function isDescendant(id, ancestorId) {
   return false;
 }
 
+function isRecordEffectivelyLocked(record) {
+  let current = record;
+  const visited = new Set();
+  while (current && !visited.has(current.id)) {
+    if (current.locked) return true;
+    visited.add(current.id);
+    current = current.parentId ? recordById(current.parentId) : null;
+  }
+  return false;
+}
+
+function isRecordEffectivelyVisible(record) {
+  if (!record || (state.isolatedIds && !state.isolatedIds.has(record.id))) return false;
+  let current = record;
+  const visited = new Set();
+  while (current && !visited.has(current.id)) {
+    if (!current.visible) return false;
+    visited.add(current.id);
+    current = current.parentId ? recordById(current.parentId) : null;
+  }
+  return record.source.kind !== "collider" || state.collidersVisible;
+}
+
+function applyEditorVisibility(record, object = state.objects.get(record.id)) {
+  if (!object) return;
+  object.visible = record.visible
+    && (!state.isolatedIds || state.isolatedIds.has(record.id))
+    && (record.source.kind !== "collider" || state.collidersVisible);
+}
+
+function refreshEditorVisibility() {
+  for (const record of state.document?.objects || []) applyEditorVisibility(record);
+  refreshSelectionVisuals();
+}
+
+function isolationIdsFor(rootIds) {
+  const ids = new Set();
+  for (const rootId of rootIds) {
+    const root = recordById(rootId);
+    if (!root) continue;
+    ids.add(rootId);
+    for (const record of state.document.objects) {
+      if (isDescendant(record.id, rootId)) ids.add(record.id);
+    }
+    let current = root;
+    const visited = new Set();
+    while (current?.parentId && !visited.has(current.parentId)) {
+      ids.add(current.parentId);
+      visited.add(current.parentId);
+      current = recordById(current.parentId);
+    }
+  }
+  return ids;
+}
+
+function updateIsolationUi() {
+  const active = Boolean(state.isolatedIds);
+  const button = $("isolate-selection-button");
+  button.disabled = !active && state.selectedIds.size === 0;
+  button.classList.toggle("active", active);
+  button.title = active ? "Sair do isolamento (/)" : "Isolar seleção (/)";
+}
+
+function setIsolation(rootIds = null) {
+  if (!rootIds?.size) {
+    state.isolationRoots.clear();
+    state.isolatedIds = null;
+    setStatus("Isolamento encerrado");
+  } else {
+    state.isolationRoots = new Set(rootIds);
+    state.isolatedIds = isolationIdsFor(state.isolationRoots);
+    setStatus(`${rootIds.size} objeto${rootIds.size === 1 ? " isolado" : "s isolados"}`);
+  }
+  refreshEditorVisibility();
+  renderHierarchy();
+  updateIsolationUi();
+  setSelection(state.primaryId, { additive: true });
+}
+
+function toggleIsolation(ids = state.selectedIds) {
+  if (state.isolatedIds) setIsolation(null);
+  else if (ids.size) setIsolation(new Set(ids));
+}
+
+function hideSelectedObjects() {
+  if (!state.selectedIds.size) return;
+  const before = serializeScene();
+  for (const record of selectedRecords()) {
+    record.visible = false;
+    applyEditorVisibility(record);
+  }
+  pushHistorySnapshot(before);
+  const count = state.selectedIds.size;
+  setSelection(null);
+  setStatus(`${count} objeto${count === 1 ? " ocultado" : "s ocultados"}`);
+}
+
+function showAllObjects() {
+  const before = serializeScene();
+  let changed = false;
+  for (const record of state.document.objects) {
+    if (!record.visible) changed = true;
+    record.visible = true;
+  }
+  state.isolationRoots.clear();
+  state.isolatedIds = null;
+  refreshEditorVisibility();
+  renderHierarchy();
+  updateIsolationUi();
+  if (changed) pushHistorySnapshot(before);
+  setStatus("Todos os objetos estão visíveis");
+}
+
 function transformSelectionIds() {
   return [...state.selectedIds].filter((id) => {
     const record = recordById(id);
     const object = state.objects.get(id);
-    if (!record || !object || record.locked || !record.visible || !object.visible) return false;
+    if (!record || !object || isRecordEffectivelyLocked(record) || !isRecordEffectivelyVisible(record)) return false;
     return ![...state.selectedIds].some((otherId) => otherId !== id && isDescendant(id, otherId));
   });
+}
+
+function selectionIdentity() {
+  return [...state.selectedIds].sort().join("|");
+}
+
+function updatePivotUi() {
+  $("pivot-button").classList.toggle("active", state.pivotCustom || state.pivotEditing);
+  $("pivot-button").textContent = state.pivotEditing ? "Concluir" : "Pivô";
+  $("pivot-reset-button").disabled = !state.pivotCustom;
+}
+
+function resetPivotForSelection() {
+  state.pivotSelectionKey = selectionIdentity();
+  state.pivotCustom = false;
+  state.pivotEditing = false;
+  if (updateSelectionBounds()) state.pivotPosition.copy(selectionBounds.getCenter(new THREE.Vector3()));
+  updatePivotUi();
+}
+
+function prepareSelectionPivot(position) {
+  selectionPivot.position.copy(position);
+  selectionPivot.rotation.set(0, 0, 0);
+  selectionPivot.scale.set(1, 1, 1);
+  selectionPivot.updateMatrixWorld(true);
 }
 
 function setSelection(id, { additive = false, toggle = false } = {}) {
@@ -542,19 +786,23 @@ function setSelection(id, { additive = false, toggle = false } = {}) {
     else state.selectedIds.add(id);
   }
   state.primaryId = id && state.selectedIds.has(id) ? id : [...state.selectedIds].at(-1) || null;
+  if (state.pivotSelectionKey !== selectionIdentity()) resetPivotForSelection();
   transform.detach();
   selectionBox.visible = false;
   const targets = transformSelectionIds();
-  if (!state.rightHandActive) {
-    if (targets.length === 1 && state.selectedIds.size === 1) {
+  if (!state.rightHandActive && !state.boxSelectTool) {
+    if (state.pivotEditing && targets.length > 0) {
+      prepareSelectionPivot(state.pivotPosition);
+      transform.setMode("translate");
+      transform.attach(selectionPivot);
+    } else if (targets.length === 1 && state.selectedIds.size === 1 && !state.pivotCustom) {
+      transform.setMode(state.transformMode);
       transform.attach(state.objects.get(targets[0]));
     } else if (targets.length > 0) {
       updateSelectionBounds();
-      const center = selectionBounds.getCenter(new THREE.Vector3());
-      selectionPivot.position.copy(center);
-      selectionPivot.rotation.set(0, 0, 0);
-      selectionPivot.scale.set(1, 1, 1);
-      selectionPivot.updateMatrixWorld(true);
+      const center = state.pivotCustom ? state.pivotPosition : selectionBounds.getCenter(new THREE.Vector3());
+      prepareSelectionPivot(center);
+      transform.setMode(state.transformMode);
       transform.attach(selectionPivot);
     }
   }
@@ -563,6 +811,8 @@ function setSelection(id, { additive = false, toggle = false } = {}) {
   renderInspector();
   $("create-prefab-button").disabled = state.selectedIds.size === 0;
   updateClipboardButtons();
+  updateIsolationUi();
+  updatePivotUi();
 }
 
 function updateSelectionBounds() {
@@ -570,7 +820,7 @@ function updateSelectionBounds() {
   for (const id of state.selectedIds) {
     const record = recordById(id);
     const object = state.objects.get(id);
-    if (record?.visible && object?.visible) selectionBounds.expandByObject(object, true);
+    if (record && object && isRecordEffectivelyVisible(record)) selectionBounds.expandByObject(object, true);
   }
   return !selectionBounds.isEmpty();
 }
@@ -593,7 +843,7 @@ function renderHierarchy() {
   const visit = (parentId, depth) => {
     for (const record of children.get(parentId) || []) {
       ordered.push({ record, depth });
-      visit(record.id, depth + 1);
+      if (!state.collapsedHierarchy.has(record.id)) visit(record.id, depth + 1);
     }
   };
   if (query) {
@@ -607,19 +857,32 @@ function renderHierarchy() {
   const icons = { group: "▱", collider: "▣", primitive: "◆", model: "◇" };
   for (const { record, depth } of ordered) {
     if (query && !record.name.toLocaleLowerCase("pt-BR").includes(query)) continue;
+    const hasChildren = (children.get(record.id) || []).length > 0;
+    const collapsed = state.collapsedHierarchy.has(record.id);
     const row = document.createElement("div");
-    row.className = `object-row${state.selectedIds.has(record.id) ? " selected" : ""}${record.visible ? "" : " hidden-object"}`;
+    row.className = `object-row${state.selectedIds.has(record.id) ? " selected" : ""}${record.visible ? "" : " hidden-object"}${isRecordEffectivelyLocked(record) ? " locked-object" : ""}${state.isolationRoots.has(record.id) ? " isolated-object" : ""}${state.isolatedIds && !state.isolatedIds.has(record.id) ? " isolation-hidden" : ""}`;
     row.dataset.id = record.id;
-    row.draggable = true;
+    row.draggable = !isRecordEffectivelyLocked(record);
     row.style.setProperty("--depth", depth);
     row.setAttribute("role", "treeitem");
+    if (hasChildren) row.setAttribute("aria-expanded", String(!collapsed));
     row.innerHTML = `
+      <button class="tree-toggle${hasChildren ? "" : " empty"}" title="${collapsed ? "Expandir" : "Recolher"}" ${hasChildren ? "" : "disabled"}>${hasChildren ? (collapsed ? "▸" : "▾") : ""}</button>
       <span class="object-icon">${icons[record.source.kind] || "◇"}</span>
       <span class="object-name"></span>
       <button class="visibility-button" title="${record.visible ? "Ocultar" : "Mostrar"}">${record.visible ? "◉" : "○"}</button>
       <button class="lock-button" title="${record.locked ? "Desbloquear" : "Bloquear"}">${record.locked ? "▣" : "□"}</button>
+      <button class="isolate-button${state.isolationRoots.has(record.id) ? " active" : ""}" title="${state.isolationRoots.has(record.id) ? "Sair do isolamento" : "Isolar objeto"}">◎</button>
     `;
     row.querySelector(".object-name").textContent = record.name;
+    row.querySelector(".tree-toggle").addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (!hasChildren) return;
+      if (collapsed) state.collapsedHierarchy.delete(record.id);
+      else state.collapsedHierarchy.add(record.id);
+      saveLayoutState();
+      renderHierarchy();
+    });
     row.addEventListener("click", (event) => setSelection(record.id, {
       additive: event.ctrlKey || event.metaKey || event.shiftKey,
       toggle: event.ctrlKey || event.metaKey,
@@ -645,8 +908,7 @@ function renderHierarchy() {
       event.stopPropagation();
       const before = serializeScene();
       record.visible = !record.visible;
-      const object = state.objects.get(record.id);
-      if (object) object.visible = record.visible && (record.source.kind !== "collider" || state.collidersVisible);
+      applyEditorVisibility(record);
       pushHistorySnapshot(before);
       setSelection(record.id);
     });
@@ -656,6 +918,14 @@ function renderHierarchy() {
       record.locked = !record.locked;
       pushHistorySnapshot(before);
       setSelection(record.id);
+    });
+    row.querySelector(".isolate-button").addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (state.isolationRoots.has(record.id)) setIsolation(null);
+      else {
+        setSelection(record.id);
+        setIsolation(new Set([record.id]));
+      }
     });
     objectList.append(row);
   }
@@ -735,7 +1005,7 @@ function renderInspector() {
     const count = state.selectedIds.size;
     $("multi-selection-count").textContent = `${count} objetos selecionados`;
     updateSelectionBounds();
-    const pivot = selectionBounds.getCenter(new THREE.Vector3());
+    const pivot = state.pivotCustom ? state.pivotPosition : selectionBounds.getCenter(new THREE.Vector3());
     $("multi-pivot").textContent = `${pivot.x.toFixed(2)}, ${pivot.y.toFixed(2)}, ${pivot.z.toFixed(2)}`;
     let triangles = 0;
     for (const selected of selectedObjects()) triangles += selected.userData.stats?.triangles || 0;
@@ -780,7 +1050,7 @@ function renderInspector() {
   }
 
   const transformInputs = inspector.querySelectorAll('.vector-inputs input, #reset-transform-button');
-  for (const input of transformInputs) input.disabled = record.locked;
+  for (const input of transformInputs) input.disabled = isRecordEffectivelyLocked(record);
 }
 
 function updateViewportStats() {
@@ -937,8 +1207,7 @@ function rebuildHierarchy() {
     applyRecordTransform(record, object);
   }
   for (const record of state.document?.objects || []) {
-    const object = state.objects.get(record.id);
-    if (object) object.visible = record.visible && (record.source.kind !== "collider" || state.collidersVisible);
+    applyEditorVisibility(record);
   }
   editorRoot.updateMatrixWorld(true);
 }
@@ -973,6 +1242,16 @@ async function loadDocument(documentData, { preserveHistory = false, dirty = fal
   selectionBox.visible = false;
   state.selectedIds.clear();
   state.primaryId = null;
+  state.pivotSelectionKey = "";
+  state.pivotCustom = false;
+  state.pivotEditing = false;
+  state.isolationRoots.clear();
+  state.isolatedIds = null;
+  state.boxSelectTool = false;
+  state.boxSelecting = false;
+  selectionMarquee.hidden = true;
+  viewport.classList.remove("box-select-mode");
+  orbit.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
   for (const object of [...editorRoot.children]) {
     editorRoot.remove(object);
     disposeObject(object);
@@ -987,6 +1266,8 @@ async function loadDocument(documentData, { preserveHistory = false, dirty = fal
       background: documentData?.settings?.background || "#07101d",
       gridSize: clampNumber(documentData?.settings?.gridSize, 120),
       snap: clampNumber(documentData?.settings?.snap, 0.25),
+      snapEnabled: documentData?.settings?.snapEnabled === true,
+      snapMode: ["grid", "surface", "vertex", "object"].includes(documentData?.settings?.snapMode) ? documentData.settings.snapMode : "grid",
       camera: documentData?.settings?.camera || {
         position: { x: 24, y: 20, z: 32 }, target: { x: 0, y: 2, z: 0 },
       },
@@ -1001,6 +1282,10 @@ async function loadDocument(documentData, { preserveHistory = false, dirty = fal
   }
 
   $("scene-name").value = state.document.name;
+  $("snap-toggle").checked = state.document.settings.snapEnabled;
+  $("snap-mode").value = state.document.settings.snapMode;
+  $("snap-step").value = state.document.settings.snap;
+  updateSnap();
   const background = new THREE.Color(state.document.settings.background);
   scene.background = background;
   scene.fog.color.copy(background);
@@ -1013,10 +1298,13 @@ async function loadDocument(documentData, { preserveHistory = false, dirty = fal
   await Promise.all(normalizedObjects.map((record) => createEditorObject(record, generation)));
   if (generation !== state.loadGeneration) return;
   rebuildHierarchy();
+  refreshEditorVisibility();
   renderHierarchy();
   renderInspector();
   updateClipboardButtons();
   updateViewportStats();
+  updatePivotUi();
+  updateIsolationUi();
   markDirty(dirty);
   setStatus(`${state.document.name} carregada`);
 }
@@ -1290,7 +1578,7 @@ function rebuildColliderVisual(record) {
 function updateTransformFromInspector() {
   const record = currentRecord();
   const object = currentObject();
-  if (!record || !object || record.locked) return;
+  if (!record || !object || isRecordEffectivelyLocked(record)) return;
   stageFieldHistory();
   record.position = {
     x: clampNumber($("position-x").value), y: clampNumber($("position-y").value), z: clampNumber($("position-z").value),
@@ -1309,7 +1597,7 @@ function updateTransformFromInspector() {
 function resetTransform() {
   const record = currentRecord();
   const object = currentObject();
-  if (!record || !object || record.locked) return;
+  if (!record || !object || isRecordEffectivelyLocked(record)) return;
   const before = serializeScene();
   record.position = { x: 0, y: 0, z: 0 };
   record.rotation = { x: 0, y: 0, z: 0 };
@@ -1320,13 +1608,64 @@ function resetTransform() {
   refreshSelectionVisuals();
 }
 
+function setBoxSelectTool(active) {
+  state.boxSelectTool = active;
+  state.boxSelecting = false;
+  state.boxSelectStart = null;
+  selectionMarquee.hidden = true;
+  viewport.classList.toggle("box-select-mode", active);
+  $("box-select-button").classList.toggle("active", active);
+  document.querySelectorAll("[data-mode]").forEach((button) => {
+    button.classList.toggle("active", !active && button.dataset.mode === state.transformMode);
+  });
+  orbit.mouseButtons.LEFT = active ? null : THREE.MOUSE.ROTATE;
+  if (active) {
+    state.pivotEditing = false;
+    transform.detach();
+    setStatus("Seleção por caixa — arraste na viewport; Ctrl adiciona ou remove");
+  } else if (!state.rightHandActive) {
+    setSelection(state.primaryId, { additive: true });
+  }
+  updatePivotUi();
+}
+
+function togglePivotEditing() {
+  if (!transformSelectionIds().length) {
+    toast("Selecione ao menos um objeto visível e desbloqueado.", "error");
+    return;
+  }
+  if (state.boxSelectTool) setBoxSelectTool(false);
+  state.pivotCustom = true;
+  state.pivotEditing = !state.pivotEditing;
+  if (state.pivotEditing && !Number.isFinite(state.pivotPosition.x)) {
+    updateSelectionBounds();
+    state.pivotPosition.copy(selectionBounds.getCenter(new THREE.Vector3()));
+  }
+  setSelection(state.primaryId, { additive: true });
+  setStatus(state.pivotEditing
+    ? "Editando pivô — mova o gizmo e clique em Concluir"
+    : "Pivô personalizado ativo para a seleção");
+}
+
+function resetPivotToCenter() {
+  state.pivotCustom = false;
+  state.pivotEditing = false;
+  if (updateSelectionBounds()) state.pivotPosition.copy(selectionBounds.getCenter(new THREE.Vector3()));
+  setSelection(state.primaryId, { additive: true });
+  setStatus("Pivô restaurado ao centro da seleção");
+}
+
 function setTransformMode(mode) {
+  if (state.boxSelectTool) setBoxSelectTool(false);
+  state.pivotEditing = false;
   state.transformMode = mode;
   orbit.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
   orbit.mouseButtons.RIGHT = THREE.MOUSE.PAN;
   transform.setMode(mode);
   if (!state.rightHandActive) setSelection(state.primaryId, { additive: true });
   document.querySelectorAll("[data-mode]").forEach((button) => button.classList.toggle("active", button.dataset.mode === mode));
+  $("box-select-button").classList.remove("active");
+  updatePivotUi();
   setStatus({ translate: "Ferramenta mover", rotate: "Ferramenta rotacionar", scale: "Ferramenta escala" }[mode]);
 }
 
@@ -1343,7 +1682,9 @@ function endRightHand() {
   state.rightHandActive = false;
   viewport.classList.remove("pan-mode", "panning");
   setSelection(state.primaryId, { additive: true });
-  setStatus({ translate: "Ferramenta mover", rotate: "Ferramenta rotacionar", scale: "Ferramenta escala" }[state.transformMode]);
+  setStatus(state.boxSelectTool
+    ? "Seleção por caixa — arraste na viewport"
+    : ({ translate: "Ferramenta mover", rotate: "Ferramenta rotacionar", scale: "Ferramenta escala" }[state.transformMode]));
 }
 
 function toggleTransformSpace() {
@@ -1354,10 +1695,75 @@ function toggleTransformSpace() {
 
 function updateSnap() {
   const enabled = $("snap-toggle").checked;
-  const value = state.document?.settings.snap || 0.25;
-  transform.setTranslationSnap(enabled ? value : null);
+  const mode = $("snap-mode").value;
+  const value = Math.max(0.01, clampNumber($("snap-step").value, state.document?.settings.snap || 0.25));
+  state.snapMode = mode;
+  $("snap-step").disabled = mode !== "grid";
+  $("snap-step").value = value;
+  if (state.document) {
+    state.document.settings.snap = value;
+    state.document.settings.snapEnabled = enabled;
+    state.document.settings.snapMode = mode;
+  }
+  transform.setTranslationSnap(enabled && mode === "grid" ? value : null);
   transform.setRotationSnap(enabled ? THREE.MathUtils.degToRad(15) : null);
   transform.setScaleSnap(enabled ? 0.1 : null);
+  setStatus(enabled
+    ? `Snap ativo: ${{ grid: `grade ${value}`, surface: "superfície", vertex: "vértice", object: "centro do objeto" }[mode]}`
+    : "Snap desativado");
+}
+
+function editorIdFromObject(object) {
+  let current = object;
+  while (current && current !== editorRoot) {
+    if (current.userData.editorId) return current.userData.editorId;
+    current = current.parent;
+  }
+  return null;
+}
+
+function closestHitVertex(hit) {
+  const position = hit.object.geometry?.getAttribute?.("position");
+  if (!position || !hit.face) return hit.point.clone();
+  const candidates = [hit.face.a, hit.face.b, hit.face.c]
+    .filter((index) => Number.isInteger(index) && index < position.count)
+    .map((index) => new THREE.Vector3().fromBufferAttribute(position, index).applyMatrix4(hit.object.matrixWorld));
+  if (!candidates.length) return hit.point.clone();
+  candidates.sort((a, b) => a.distanceToSquared(hit.point) - b.distanceToSquared(hit.point));
+  return candidates[0];
+}
+
+function snapPointFromPointer(event) {
+  pointerCoordinates(event);
+  raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObjects(editorRoot.children, true);
+  for (const hit of hits) {
+    const id = editorIdFromObject(hit.object);
+    if (!id || state.selectedIds.has(id) || [...state.selectedIds].some((selectedId) => isDescendant(id, selectedId))) continue;
+    const record = recordById(id);
+    if (!record || !isRecordEffectivelyVisible(record)) continue;
+    if (state.snapMode === "vertex") return closestHitVertex(hit);
+    if (state.snapMode === "object") {
+      const object = state.objects.get(id);
+      const bounds = object ? new THREE.Box3().setFromObject(object, true) : null;
+      if (bounds && !bounds.isEmpty()) return bounds.getCenter(new THREE.Vector3());
+    }
+    return hit.point.clone();
+  }
+  return null;
+}
+
+function applyPointerSnap(event) {
+  if (!transform.dragging || transform.getMode() !== "translate" || !$("snap-toggle").checked || state.snapMode === "grid") return false;
+  const point = snapPointFromPointer(event);
+  const target = transform.object;
+  if (!point || !target?.parent) return false;
+  target.parent.updateMatrixWorld(true);
+  target.position.copy(target.parent.worldToLocal(point.clone()));
+  target.updateMatrixWorld(true);
+  transform.dispatchEvent({ type: "objectChange" });
+  setStatus(`Snap em ${{ vertex: "vértice", surface: "superfície", object: "objeto" }[state.snapMode]}: ${point.x.toFixed(2)}, ${point.y.toFixed(2)}, ${point.z.toFixed(2)}`);
+  return true;
 }
 
 function focusSelection() {
@@ -1588,15 +1994,118 @@ function pointerCoordinates(event) {
   pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 }
 
+function marqueePoint(event) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  return {
+    x: THREE.MathUtils.clamp(event.clientX - rect.left, 0, rect.width),
+    y: THREE.MathUtils.clamp(event.clientY - rect.top, 0, rect.height),
+  };
+}
+
+function updateMarquee(point) {
+  const start = state.boxSelectStart;
+  if (!start) return;
+  selectionMarquee.style.left = `${Math.min(start.x, point.x)}px`;
+  selectionMarquee.style.top = `${Math.min(start.y, point.y)}px`;
+  selectionMarquee.style.width = `${Math.abs(point.x - start.x)}px`;
+  selectionMarquee.style.height = `${Math.abs(point.y - start.y)}px`;
+}
+
+function projectedObjectRect(object, viewportRect) {
+  const bounds = new THREE.Box3().setFromObject(object, true);
+  if (bounds.isEmpty()) return null;
+  const center = bounds.getCenter(new THREE.Vector3()).applyMatrix4(camera.matrixWorldInverse);
+  if (center.z >= 0) return null;
+  const points = [];
+  for (const x of [bounds.min.x, bounds.max.x]) {
+    for (const y of [bounds.min.y, bounds.max.y]) {
+      for (const z of [bounds.min.z, bounds.max.z]) {
+        const point = new THREE.Vector3(x, y, z).project(camera);
+        points.push({
+          x: (point.x * 0.5 + 0.5) * viewportRect.width,
+          y: (-point.y * 0.5 + 0.5) * viewportRect.height,
+        });
+      }
+    }
+  }
+  return {
+    left: Math.min(...points.map((point) => point.x)),
+    right: Math.max(...points.map((point) => point.x)),
+    top: Math.min(...points.map((point) => point.y)),
+    bottom: Math.max(...points.map((point) => point.y)),
+  };
+}
+
+function finishBoxSelection(event) {
+  const end = marqueePoint(event);
+  const start = state.boxSelectStart;
+  state.boxSelecting = false;
+  state.boxSelectStart = null;
+  selectionMarquee.hidden = true;
+  orbit.enabled = true;
+  if (!start) return;
+
+  const area = {
+    left: Math.min(start.x, end.x), right: Math.max(start.x, end.x),
+    top: Math.min(start.y, end.y), bottom: Math.max(start.y, end.y),
+  };
+  const viewportRect = renderer.domElement.getBoundingClientRect();
+  const hits = [];
+  camera.updateMatrixWorld(true);
+  for (const record of state.document.objects) {
+    if (!isRecordEffectivelyVisible(record) || isRecordEffectivelyLocked(record)) continue;
+    const object = state.objects.get(record.id);
+    if (!object) continue;
+    const projected = projectedObjectRect(object, viewportRect);
+    if (!projected) continue;
+    const intersects = projected.right >= area.left && projected.left <= area.right
+      && projected.bottom >= area.top && projected.top <= area.bottom;
+    if (intersects) hits.push(record.id);
+  }
+
+  const additive = event.ctrlKey || event.metaKey || event.shiftKey;
+  const toggle = event.ctrlKey || event.metaKey;
+  const next = additive ? new Set(state.selectedIds) : new Set();
+  for (const id of hits) {
+    if (toggle && next.has(id)) next.delete(id);
+    else next.add(id);
+  }
+  state.selectedIds = next;
+  state.primaryId = hits.filter((id) => next.has(id)).at(-1) || [...next].at(-1) || null;
+  setSelection(state.primaryId, { additive: true });
+  setStatus(`${next.size} objeto${next.size === 1 ? " selecionado" : "s selecionados"} pela caixa`);
+}
+
+function cancelBoxSelection() {
+  state.boxSelecting = false;
+  state.boxSelectStart = null;
+  selectionMarquee.hidden = true;
+  orbit.enabled = true;
+}
+
 let pointerStart = null;
 renderer.domElement.addEventListener("pointerdown", (event) => {
   pointerStart = { x: event.clientX, y: event.clientY };
   if (event.button === 2) beginRightHand();
+  if (event.button === 0 && state.boxSelectTool) {
+    state.boxSelecting = true;
+    state.boxSelectStart = marqueePoint(event);
+    selectionMarquee.hidden = false;
+    updateMarquee(state.boxSelectStart);
+    orbit.enabled = false;
+    renderer.domElement.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  }
 });
 
 renderer.domElement.addEventListener("pointerup", (event) => {
   if (event.button === 2) {
     endRightHand();
+    return;
+  }
+  if (event.button === 0 && state.boxSelecting) {
+    renderer.domElement.releasePointerCapture?.(event.pointerId);
+    finishBoxSelection(event);
     return;
   }
   if (!pointerStart || transform.dragging) return;
@@ -1619,17 +2128,27 @@ renderer.domElement.addEventListener("pointerup", (event) => {
       }
       current = current.parent;
     }
-    if (selected) break;
+    const record = selected ? recordById(selected) : null;
+    if (record && isRecordEffectivelyVisible(record) && !isRecordEffectivelyLocked(record)) break;
+    selected = null;
   }
   setSelection(selected, {
     additive: event.ctrlKey || event.metaKey || event.shiftKey,
     toggle: event.ctrlKey || event.metaKey,
   });
 });
-renderer.domElement.addEventListener("pointercancel", endRightHand);
+renderer.domElement.addEventListener("pointercancel", () => {
+  endRightHand();
+  cancelBoxSelection();
+});
 renderer.domElement.addEventListener("contextmenu", (event) => event.preventDefault());
 
 renderer.domElement.addEventListener("pointermove", (event) => {
+  if (state.boxSelecting) {
+    updateMarquee(marqueePoint(event));
+    return;
+  }
+  if (applyPointerSnap(event)) return;
   pointerCoordinates(event);
   raycaster.setFromCamera(pointer, camera);
   const point = new THREE.Vector3();
@@ -1643,8 +2162,13 @@ transform.addEventListener("dragging-changed", (event) => {
 });
 
 transform.addEventListener("mouseDown", () => {
+  if (state.pivotEditing) {
+    state.dragSnapshot = null;
+    state.multiTransformStart = null;
+    return;
+  }
   state.dragSnapshot = serializeScene();
-  if (transform.object === selectionPivot && state.selectedIds.size > 1) {
+  if (transform.object === selectionPivot) {
     selectionPivot.updateMatrixWorld(true);
     const matrices = new Map();
     for (const id of transformSelectionIds()) {
@@ -1660,6 +2184,12 @@ transform.addEventListener("mouseDown", () => {
 });
 
 transform.addEventListener("objectChange", () => {
+  if (state.pivotEditing && transform.object === selectionPivot) {
+    state.pivotPosition.copy(selectionPivot.position);
+    updatePivotUi();
+    setStatus(`Pivô: ${selectionPivot.position.x.toFixed(2)}, ${selectionPivot.position.y.toFixed(2)}, ${selectionPivot.position.z.toFixed(2)}`);
+    return;
+  }
   if (transform.object === selectionPivot && state.multiTransformStart) {
     selectionPivot.updateMatrixWorld(true);
     const delta = selectionPivot.matrixWorld.clone().multiply(state.multiTransformStart.pivot.clone().invert());
@@ -1688,10 +2218,18 @@ transform.addEventListener("objectChange", () => {
 });
 
 transform.addEventListener("mouseUp", () => {
+  if (state.pivotEditing) {
+    state.pivotPosition.copy(selectionPivot.position);
+    setStatus("Pivô reposicionado — clique em Concluir para transformar os objetos");
+    return;
+  }
   pushHistorySnapshot(state.dragSnapshot);
   state.dragSnapshot = null;
   state.multiTransformStart = null;
-  if (state.selectedIds.size > 1) setSelection(state.primaryId, { additive: true });
+  if (transform.object === selectionPivot || state.selectedIds.size > 1) {
+    if (state.pivotCustom) state.pivotPosition.copy(selectionPivot.position);
+    setSelection(state.primaryId, { additive: true });
+  }
 });
 
 function bindInspector() {
@@ -1741,9 +2279,7 @@ function bindInspector() {
       if (!record) return;
       stageFieldHistory();
       record[property] = event.target.checked;
-      if (property === "visible" && currentObject()) {
-        currentObject().visible = record.visible && (record.source.kind !== "collider" || state.collidersVisible);
-      }
+      if (property === "visible") applyEditorVisibility(record);
       finishFieldHistory();
       setSelection(record.id);
     });
@@ -1793,7 +2329,22 @@ function bindUi() {
   document.querySelectorAll("[data-axis-view]").forEach((button) => button.addEventListener("click", () => setAxisView(button.dataset.axisView)));
 
   $("space-button").addEventListener("click", toggleTransformSpace);
-  $("snap-toggle").addEventListener("change", updateSnap);
+  $("box-select-button").addEventListener("click", () => setBoxSelectTool(!state.boxSelectTool));
+  $("pivot-button").addEventListener("click", togglePivotEditing);
+  $("pivot-reset-button").addEventListener("click", resetPivotToCenter);
+  $("isolate-selection-button").addEventListener("click", () => toggleIsolation());
+  for (const id of ["snap-toggle", "snap-mode"]) {
+    $(id).addEventListener("change", () => {
+      const before = serializeScene();
+      updateSnap();
+      pushHistorySnapshot(before);
+    });
+  }
+  $("snap-step").addEventListener("change", () => {
+    const before = serializeScene();
+    updateSnap();
+    pushHistorySnapshot(before);
+  });
   $("grid-button").addEventListener("click", () => {
     grid.visible = !grid.visible;
     axes.visible = grid.visible;
@@ -1801,13 +2352,8 @@ function bindUi() {
   });
   $("collider-visibility-button").addEventListener("click", () => {
     state.collidersVisible = !state.collidersVisible;
-    for (const record of state.document.objects) {
-      if (record.source.kind !== "collider") continue;
-      const object = state.objects.get(record.id);
-      if (object) object.visible = record.visible && state.collidersVisible;
-    }
+    refreshEditorVisibility();
     $("collider-visibility-button").classList.toggle("active", state.collidersVisible);
-    refreshSelectionVisuals();
   });
   $("focus-button").addEventListener("click", focusSelection);
   $("save-button").addEventListener("click", () => saveScene());
@@ -1938,14 +2484,32 @@ function bindUi() {
     } else if (event.key.toLowerCase() === "w") setTransformMode("translate");
     else if (event.key.toLowerCase() === "e") setTransformMode("rotate");
     else if (event.key.toLowerCase() === "r") setTransformMode("scale");
+    else if (event.key.toLowerCase() === "b") setBoxSelectTool(!state.boxSelectTool);
+    else if (event.key === "/" || event.code === "NumpadDivide") {
+      event.preventDefault();
+      toggleIsolation();
+    }
+    else if (event.altKey && event.key.toLowerCase() === "h") {
+      event.preventDefault();
+      showAllObjects();
+    }
+    else if (event.key.toLowerCase() === "h") hideSelectedObjects();
     else if (event.key.toLowerCase() === "f") focusSelection();
-    else if (event.key === "Escape") setSelection(null);
+    else if (event.key === "Escape") {
+      if (state.boxSelectTool) setBoxSelectTool(false);
+      else if (state.pivotEditing) togglePivotEditing();
+      else if (state.isolatedIds) setIsolation(null);
+      else setSelection(null);
+    }
   });
 
   window.addEventListener("pointerup", (event) => {
     if (event.button === 2) endRightHand();
   });
-  window.addEventListener("blur", endRightHand);
+  window.addEventListener("blur", () => {
+    endRightHand();
+    cancelBoxSelection();
+  });
 
   window.addEventListener("beforeunload", (event) => {
     if (!state.dirty) return;
@@ -1974,6 +2538,8 @@ function animate() {
 }
 
 async function boot() {
+  restoreLayoutState();
+  setupPanelAccordions();
   bindInspector();
   bindUi();
   restoreClipboard();

@@ -43,14 +43,24 @@
       <button data-mode="translate" class="mode-button active" title="Mover (W)"><span>↔</span> Mover</button>
       <button data-mode="rotate" class="mode-button" title="Rotacionar (E)"><span>⟳</span> Rotacionar</button>
       <button data-mode="scale" class="mode-button" title="Redimensionar (R)"><span>⤢</span> Escala</button>
+      <button id="box-select-button" class="mode-button" title="Seleção por caixa (B)"><span>▧</span> Caixa</button>
     </div>
 
     <div class="toolbar toolbar-options">
       <button id="space-button" class="compact-button" title="Alternar espaço local/global">Global</button>
+      <button id="pivot-button" class="compact-button" title="Editar pivô da seleção">Pivô</button>
+      <button id="pivot-reset-button" class="compact-button" title="Restaurar pivô ao centro" disabled>Centro</button>
       <label class="toggle-chip" title="Encaixar transformações">
         <input id="snap-toggle" type="checkbox">
         <span>Snap</span>
       </label>
+      <select id="snap-mode" class="toolbar-select" title="Modo de snap" aria-label="Modo de snap">
+        <option value="grid">Grade</option>
+        <option value="surface">Superfície</option>
+        <option value="vertex">Vértice</option>
+        <option value="object">Objeto</option>
+      </select>
+      <input id="snap-step" class="toolbar-number" type="number" min="0.01" max="100" step="0.05" value="0.25" title="Passo da grade" aria-label="Passo da grade">
     </div>
 
     <div class="top-actions">
@@ -69,6 +79,7 @@
             <h2>Hierarquia</h2>
           </div>
           <div class="heading-actions">
+            <button id="isolate-selection-button" class="mini-button" title="Isolar seleção (/)" disabled>◎</button>
             <button id="new-scene-button" class="mini-button" title="Nova cena">＋</button>
             <button id="open-scene-button" class="mini-button" title="Abrir cena JSON">⌁</button>
           </div>
@@ -172,6 +183,8 @@
         <button data-axis-view="y" class="axis-node axis-y positive" title="Vista pelo eixo +Y">Y</button>
         <button data-axis-view="z" class="axis-node axis-z positive" title="Vista pelo eixo +Z">Z</button>
       </div>
+
+      <div id="selection-marquee" class="selection-marquee" hidden></div>
 
       <div id="empty-hint" class="empty-hint" hidden>
         <div class="empty-symbol">◇</div>
@@ -335,6 +348,8 @@
       <span><kbd>W</kbd> mover</span>
       <span><kbd>E</kbd> rotacionar</span>
       <span><kbd>R</kbd> escala</span>
+      <span><kbd>B</kbd> caixa</span>
+      <span><kbd>/</kbd> isolar</span>
       <span><kbd>F</kbd> focar</span>
       <span><kbd>Del</kbd> excluir</span>
       <span><kbd>Ctrl+C/V</kbd> copiar/colar</span>
