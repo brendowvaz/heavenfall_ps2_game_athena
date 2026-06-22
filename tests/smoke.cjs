@@ -7,10 +7,10 @@ const sourcePath = path.join(__dirname, "..", "main.js");
 let source = fs.readFileSync(sourcePath, "utf8");
 const editorSource = fs.readFileSync(path.join(__dirname, "..", "editor", "app.js"), "utf8");
 const editorHtml = fs.readFileSync(path.join(__dirname, "..", "editor", "index.html"), "utf8");
-for (const marker of ["applyPointerSnap", "togglePivotEditing", "finishBoxSelection", "toggleIsolation", "setupPanelAccordions", "collapsedHierarchy", "applyRecordMaterial", "createLightObject", "applyCampfirePreset", "openCameraPreview", "renderTriggerEvents", "addTriggerAction"]) {
+for (const marker of ["applyPointerSnap", "togglePivotEditing", "finishBoxSelection", "toggleIsolation", "setupPanelAccordions", "collapsedHierarchy", "applyRecordMaterial", "createLightObject", "applyCampfirePreset", "openCameraPreview", "renderTriggerEvents", "addTriggerAction", "renderUiPreview", "addUiElement", "switchProjectScene", "createProjectScene"]) {
     if (!editorSource.includes(marker)) throw new Error(`Editor tool missing: ${marker}`);
 }
-for (const id of ["snap-mode", "pivot-button", "box-select-button", "selection-marquee", "isolate-selection-button", "material-section", "light-section", "light-flicker", "light-campfire-preset", "camera-section", "camera-mode", "camera-preview", "trigger-events-editor", "event-action-type", "event-add-button"]) {
+for (const id of ["snap-mode", "pivot-button", "box-select-button", "selection-marquee", "isolate-selection-button", "material-section", "light-section", "light-flicker", "light-campfire-preset", "camera-section", "camera-mode", "camera-preview", "trigger-events-editor", "event-action-type", "event-add-button", "scene-picker", "duplicate-scene-button", "ui-mode-button", "ui-editor", "ui-canvas", "ui-inspector"]) {
     if (!editorHtml.includes(`id="${id}"`)) throw new Error(`Editor control missing: ${id}`);
 }
 source = source.replace(
@@ -20,6 +20,8 @@ source = source.replace(
 
 let vertexCount = 0;
 let drawCalls = 0;
+const fontPrints = [];
+const rectCalls = [];
 let nextLightId = 0;
 const lightSetCalls = [];
 const assetLoads = [];
@@ -27,7 +29,7 @@ const manifest = require(path.join(__dirname, "..", "assets", "manifest.json"));
 let sandbox;
 
 class MockFont {
-    print() {}
+    print(x, y, text) { fontPrints.push({ x, y, text }); }
 }
 
 class MockRenderData {
@@ -124,6 +126,10 @@ const context = {
                     flickerAmount: 0.25,
                     flickerSpeed: 7.5
                 });
+                sandbox.EDITOR_UI.push(
+                    { id: "smoke-panel", type: "panel", x: 12, y: 24, width: 180, height: 40, background: { r: 10, g: 20, b: 30, a: 96 } },
+                    { id: "smoke-text", type: "text", x: 20, y: 30, width: 160, height: 20, text: "UI runtime", fontScale: 0.5, color: { r: 240, g: 230, b: 210, a: 128 }, align: "left" }
+                );
             }
         }
     },
@@ -137,14 +143,18 @@ const context = {
         LEFT: 6, RIGHT: 7, UP: 8, DOWN: 9, SQUARE: 10, TRIANGLE: 11,
         get: () => neutralPad
     },
-    Draw: { point() {}, rect() {} }
+    Draw: { point() {}, rect(x, y, width, height, color) { rectCalls.push({ x, y, width, height, color }); } }
 };
 
 sandbox = vm.createContext(context);
 vm.runInContext(source, sandbox, { filename: sourcePath, timeout: 5000 });
 
-if (!Array.isArray(context.EDITOR_LIGHTS) || !Array.isArray(context.EDITOR_POINT_LIGHTS) || !Array.isArray(context.EDITOR_EVENTS) || !("EDITOR_CAMERA" in context)) {
-    throw new Error("Generated scene must expose lights, events and active camera contracts");
+if (!Array.isArray(context.EDITOR_LIGHTS) || !Array.isArray(context.EDITOR_POINT_LIGHTS) || !Array.isArray(context.EDITOR_EVENTS) || !Array.isArray(context.EDITOR_UI) || !("EDITOR_CAMERA" in context)) {
+    throw new Error("Generated scene must expose lights, events, interface and active camera contracts");
+}
+if (!fontPrints.some((entry) => entry.text === "UI runtime")) throw new Error("Exported UI text must be drawn by Font in the runtime loop");
+if (!rectCalls.some((entry) => entry.x === 12 && entry.y === 24 && entry.width === 180 && entry.height === 40)) {
+    throw new Error("Exported UI panels must be drawn by Draw.rect in runtime coordinates");
 }
 
 if (manifest.sceneVertices < 1000 || manifest.sceneVertices > 30000) {

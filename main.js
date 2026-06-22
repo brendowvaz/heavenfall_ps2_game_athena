@@ -52,6 +52,7 @@ globalThis.EDITOR_EVENTS = [];
 globalThis.EDITOR_LIGHTS = [];
 globalThis.EDITOR_POINT_LIGHTS = [];
 globalThis.EDITOR_CAMERA = null;
+globalThis.EDITOR_UI = [];
 if (std.exists("scene.generated.js")) {
     std.loadScript("scene.generated.js");
 }
@@ -591,6 +592,48 @@ function drawAtmosphere() {
     }
 }
 
+function editorUiColor(definition, fallbackAlpha) {
+    const value = definition || { r: 255, g: 255, b: 255, a: fallbackAlpha };
+    return Color.new(
+        value.r === undefined ? 255 : value.r,
+        value.g === undefined ? 255 : value.g,
+        value.b === undefined ? 255 : value.b,
+        value.a === undefined ? fallbackAlpha : value.a
+    );
+}
+
+function drawEditorInterface() {
+    if (!EDITOR_UI || EDITOR_UI.length === 0) return;
+    const scaleX = canvas.width / 640.0;
+    const scaleY = canvas.height / 448.0;
+    const fontScaleFactor = Math.min(scaleX, scaleY);
+    for (let i = 0; i < EDITOR_UI.length; i++) {
+        const item = EDITOR_UI[i];
+        const x = item.x * scaleX;
+        const y = item.y * scaleY;
+        const width = item.width * scaleX;
+        const height = item.height * scaleY;
+        if (item.type === "panel") {
+            Draw.rect(x, y, width, height, editorUiColor(item.background, 104));
+            continue;
+        }
+        if (item.type !== "text") continue;
+        const text = item.text || "";
+        const lines = text.split("\n");
+        const textScale = Math.max(0.15, item.fontScale || 0.55) * fontScaleFactor;
+        font.scale = textScale;
+        font.color = editorUiColor(item.color, 128);
+        for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+            const line = lines[lineIndex];
+            const estimatedWidth = line.length * 14.0 * textScale;
+            let lineX = x;
+            if (item.align === "center") lineX = x + Math.max(0.0, (width - estimatedWidth) * 0.5);
+            else if (item.align === "right") lineX = x + Math.max(0.0, width - estimatedWidth);
+            font.print(lineX, y + lineIndex * 20.0 * textScale, line);
+        }
+    }
+}
+
 function drawHud() {
     Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
     drawAtmosphere();
@@ -634,6 +677,8 @@ function drawHud() {
         font.print(canvas.width - 156, 16, "LIMITE DA AREA");
         collisionFlash--;
     }
+
+    drawEditorInterface();
 
     Screen.setParam(Screen.DEPTH_TEST_ENABLE, true);
     Screen.setParam(Screen.DEPTH_TEST_METHOD, Screen.DEPTH_GEQUAL);

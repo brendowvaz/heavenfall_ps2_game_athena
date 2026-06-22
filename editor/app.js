@@ -53,6 +53,10 @@ const state = {
   collapsedHierarchy: new Set(),
   collapsedPanels: new Set(),
   previewCameraId: null,
+  scenes: [],
+  activeSceneId: null,
+  uiMode: false,
+  selectedUiId: null,
   serverSchemaVersion: 0,
   serverOutdated: false,
 };
@@ -208,6 +212,27 @@ function normalizeRecordEvents(events = {}) {
     phase,
     (Array.isArray(events?.[phase]) ? events[phase] : []).slice(0, 32).map(normalizeEventAction),
   ]));
+}
+
+function normalizeUiElement(item = {}, index = 0) {
+  const type = ["panel", "text"].includes(item.type) ? item.type : "text";
+  return {
+    id: String(item.id || uid("ui")).replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96),
+    name: String(item.name || (type === "panel" ? "Painel" : "Texto")).slice(0, 120),
+    type,
+    x: THREE.MathUtils.clamp(clampNumber(item.x, type === "panel" ? 24 : 32), 0, 640),
+    y: THREE.MathUtils.clamp(clampNumber(item.y, type === "panel" ? 24 : 32), 0, 448),
+    width: THREE.MathUtils.clamp(clampNumber(item.width, type === "panel" ? 240 : 280), 1, 640),
+    height: THREE.MathUtils.clamp(clampNumber(item.height, type === "panel" ? 72 : 28), 1, 448),
+    text: String(item.text || (type === "text" ? "Novo texto" : "")).slice(0, 240),
+    fontScale: THREE.MathUtils.clamp(clampNumber(item.fontScale, 0.55), 0.15, 3),
+    color: /^#[0-9a-f]{6}$/i.test(item.color || "") ? item.color : "#ffffff",
+    background: /^#[0-9a-f]{6}$/i.test(item.background || "") ? item.background : "#07121b",
+    opacity: THREE.MathUtils.clamp(clampNumber(item.opacity, type === "panel" ? 0.82 : 1), 0, 1),
+    align: ["left", "center", "right"].includes(item.align) ? item.align : "left",
+    visible: item.visible !== false,
+    runtime: item.runtime !== false,
+  };
 }
 
 function normalizeRecord(record = {}) {
@@ -1083,6 +1108,11 @@ function prepareSelectionPivot(position) {
 }
 
 function setSelection(id, { additive = false, toggle = false } = {}) {
+  if (id && state.selectedUiId) {
+    state.selectedUiId = null;
+    renderUiElements();
+    renderUiPreview();
+  }
   if (!additive) state.selectedIds.clear();
   if (id && state.objects.has(id)) {
     if (toggle && state.selectedIds.has(id)) state.selectedIds.delete(id);
@@ -1234,6 +1264,191 @@ function renderHierarchy() {
     objectList.append(row);
   }
   $("empty-hint").hidden = records.length !== 0;
+}
+
+function currentUiElement() {
+  return state.document?.ui?.find((item) => item.id === state.selectedUiId) || null;
+}
+
+function renderUiElements() {
+  const list = $("ui-element-list");
+  list.replaceChildren();
+  for (const item of state.document?.ui || []) {
+    const row = document.createElement("div");
+    row.className = `ui-element-row${item.id === state.selectedUiId ? " selected" : ""}`;
+    row.innerHTML = `<span>${item.type === "panel" ? "▰" : "T"}</span><strong></strong><button title="${item.visible ? "Ocultar" : "Mostrar"}">${item.visible ? "◉" : "○"}</button>`;
+    row.querySelector("strong").textContent = item.name;
+    row.addEventListener("click", () => {
+      setUiMode(true);
+      selectUiElement(item.id);
+    });
+    row.querySelector("button").addEventListener("click", (event) => {
+      event.stopPropagation();
+      const before = serializeScene();
+      item.visible = !item.visible;
+      pushHistorySnapshot(before);
+      renderUiElements();
+      renderUiPreview();
+    });
+    list.append(row);
+  }
+}
+
+function applyUiPreviewStyle(node, item) {
+  node.style.left = `${item.x / 6.4}%`;
+  node.style.top = `${item.y / 4.48}%`;
+  node.style.width = `${item.width / 6.4}%`;
+  node.style.height = `${item.height / 4.48}%`;
+  node.style.setProperty("--ui-background", item.background);
+  node.style.setProperty("--ui-opacity", item.opacity);
+  node.style.setProperty("--ui-color", item.color);
+  node.style.setProperty("--ui-font-scale", item.fontScale);
+  node.classList.toggle("align-center", item.align === "center");
+  node.classList.toggle("align-right", item.align === "right");
+  node.hidden = !item.visible;
+  if (item.type === "text") node.firstChild.textContent = item.text;
+}
+
+function beginUiPointerEdit(event, item, node, resizing) {
+  if (event.button !== 0) return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (state.selectedUiId !== item.id) {
+    state.selectedUiId = item.id;
+    state.selectedIds.clear();
+    state.primaryId = null;
+    transform.detach();
+    selectionBox.visible = false;
+    node.classList.add("selected");
+    renderHierarchy();
+    renderUiElements();
+    renderInspector();
+  }
+  const before = serializeScene();
+  const start = { x: event.clientX, y: event.clientY, item: deepClone(item) };
+  const canvasRect = $("ui-canvas").getBoundingClientRect();
+  node.setPointerCapture?.(event.pointerId);
+  const move = (moveEvent) => {
+    const deltaX = (moveEvent.clientX - start.x) * 640 / Math.max(1, canvasRect.width);
+    const deltaY = (moveEvent.clientY - start.y) * 448 / Math.max(1, canvasRect.height);
+    if (resizing) {
+      item.width = cleanNumber(THREE.MathUtils.clamp(start.item.width + deltaX, 1, 640 - item.x));
+      item.height = cleanNumber(THREE.MathUtils.clamp(start.item.height + deltaY, 1, 448 - item.y));
+    } else {
+      item.x = cleanNumber(THREE.MathUtils.clamp(start.item.x + deltaX, 0, 640 - item.width));
+      item.y = cleanNumber(THREE.MathUtils.clamp(start.item.y + deltaY, 0, 448 - item.height));
+    }
+    applyUiPreviewStyle(node, item);
+    renderUiInspector(item);
+    markDirty();
+  };
+  const finish = (upEvent) => {
+    node.releasePointerCapture?.(upEvent.pointerId);
+    node.removeEventListener("pointermove", move);
+    node.removeEventListener("pointerup", finish);
+    node.removeEventListener("pointercancel", finish);
+    pushHistorySnapshot(before);
+    renderUiPreview();
+  };
+  node.addEventListener("pointermove", move);
+  node.addEventListener("pointerup", finish);
+  node.addEventListener("pointercancel", finish);
+}
+
+function renderUiPreview() {
+  const canvas = $("ui-canvas");
+  canvas.replaceChildren();
+  canvas.style.background = state.document?.settings?.background || "#07101d";
+  for (const item of state.document?.ui || []) {
+    const node = document.createElement("div");
+    node.className = `ui-preview-element ${item.type}${item.id === state.selectedUiId ? " selected" : ""}`;
+    node.dataset.uiId = item.id;
+    if (item.type === "text") node.append(document.createTextNode(item.text));
+    applyUiPreviewStyle(node, item);
+    node.addEventListener("pointerdown", (event) => beginUiPointerEdit(event, item, node, event.target.classList.contains("ui-resize-handle")));
+    if (item.id === state.selectedUiId) {
+      const handle = document.createElement("span");
+      handle.className = "ui-resize-handle";
+      node.append(handle);
+    }
+    canvas.append(node);
+  }
+  canvas.onpointerdown = (event) => {
+    if (event.target === canvas) selectUiElement(null);
+  };
+}
+
+function selectUiElement(id) {
+  state.selectedUiId = state.document?.ui?.some((item) => item.id === id) ? id : null;
+  state.selectedIds.clear();
+  state.primaryId = null;
+  transform.detach();
+  selectionBox.visible = false;
+  renderHierarchy();
+  renderUiElements();
+  renderUiPreview();
+  renderInspector();
+}
+
+function setUiMode(active) {
+  state.uiMode = Boolean(active);
+  $("ui-editor").hidden = !state.uiMode;
+  viewport.classList.toggle("ui-mode", state.uiMode);
+  $("ui-mode-button").classList.toggle("active", state.uiMode);
+  $("open-ui-editor-button").textContent = state.uiMode ? "Fechar" : "Editar";
+  orbit.enabled = !state.uiMode;
+  transformHelper.visible = !state.uiMode;
+  if (state.uiMode) {
+    setSelection(null);
+    renderUiPreview();
+    setStatus("Editor de interface · 640 × 448");
+  } else {
+    state.selectedUiId = null;
+    renderUiElements();
+    renderInspector();
+    setStatus(`${state.document?.name || "Cena"} · modo 3D`);
+  }
+}
+
+function addUiElement(type) {
+  const before = serializeScene();
+  const item = normalizeUiElement({
+    id: uid("ui"),
+    name: type === "panel" ? "Novo painel" : "Novo texto",
+    type,
+    x: type === "panel" ? 200 : 180,
+    y: type === "panel" ? 174 : 200,
+    width: type === "panel" ? 240 : 280,
+    height: type === "panel" ? 72 : 32,
+    text: type === "text" ? "Novo texto" : "",
+  });
+  state.document.ui.push(item);
+  pushHistorySnapshot(before);
+  setUiMode(true);
+  selectUiElement(item.id);
+  setStatus(`${item.name} adicionado à interface`);
+}
+
+function duplicateUiElement() {
+  const item = currentUiElement();
+  if (!item) return;
+  const before = serializeScene();
+  const copy = normalizeUiElement({ ...deepClone(item), id: uid("ui"), name: `${item.name} — cópia`, x: item.x + 12, y: item.y + 12 });
+  state.document.ui.push(copy);
+  pushHistorySnapshot(before);
+  selectUiElement(copy.id);
+}
+
+function deleteUiElement() {
+  const item = currentUiElement();
+  if (!item) return;
+  const before = serializeScene();
+  state.document.ui = state.document.ui.filter((candidate) => candidate.id !== item.id);
+  state.selectedUiId = null;
+  pushHistorySnapshot(before);
+  renderUiElements();
+  renderUiPreview();
+  renderInspector();
 }
 
 function formatBytes(bytes) {
@@ -1420,9 +1635,38 @@ function addTriggerAction() {
   setStatus(`Ação adicionada: ${eventPhaseLabel(phase)}`);
 }
 
+function renderUiInspector(item = currentUiElement()) {
+  if (!item) return;
+  $("ui-type-icon").textContent = item.type === "panel" ? "▰" : "T";
+  $("ui-name").value = item.name;
+  $("ui-x").value = cleanNumber(item.x);
+  $("ui-y").value = cleanNumber(item.y);
+  $("ui-width").value = cleanNumber(item.width);
+  $("ui-height").value = cleanNumber(item.height);
+  $("ui-text-section").hidden = item.type !== "text";
+  $("ui-panel-section").hidden = item.type !== "panel";
+  $("ui-text").value = item.text;
+  $("ui-font-scale").value = item.fontScale;
+  $("ui-align").value = item.align;
+  $("ui-color").value = item.color;
+  $("ui-background").value = item.background;
+  $("ui-opacity").value = item.opacity;
+  $("ui-visible").checked = item.visible;
+  $("ui-runtime").checked = item.runtime;
+}
+
 function renderInspector() {
   const record = currentRecord();
   const object = currentObject();
+  const uiItem = currentUiElement();
+  $("ui-inspector").hidden = !uiItem;
+  if (uiItem) {
+    $("inspector-multi").hidden = true;
+    inspector.hidden = true;
+    inspectorEmpty.hidden = true;
+    renderUiInspector(uiItem);
+    return;
+  }
   const multi = state.selectedIds.size > 1;
   $("create-prefab-button").disabled = state.selectedIds.size === 0;
   $("inspector-multi").hidden = !multi;
@@ -1538,7 +1782,8 @@ function updateViewportStats() {
   let triangles = 0;
   for (const object of state.objects.values()) triangles += object.userData.stats?.triangles || 0;
   const count = state.document?.objects.length || 0;
-  $("viewport-stats").textContent = `${count} objeto${count === 1 ? "" : "s"} · ${Math.round(triangles).toLocaleString("pt-BR")} triângulos`;
+  const uiCount = state.document?.ui?.length || 0;
+  $("viewport-stats").textContent = `${count} objeto${count === 1 ? "" : "s"} · ${uiCount} UI · ${Math.round(triangles).toLocaleString("pt-BR")} triângulos`;
 }
 
 async function refreshAssetCatalog() {
@@ -1727,6 +1972,7 @@ async function loadDocument(documentData, { preserveHistory = false, dirty = fal
   selectionBox.visible = false;
   state.selectedIds.clear();
   state.primaryId = null;
+  state.selectedUiId = null;
   state.pivotSelectionKey = "";
   state.pivotCustom = false;
   state.pivotEditing = false;
@@ -1758,6 +2004,7 @@ async function loadDocument(documentData, { preserveHistory = false, dirty = fal
       },
     },
     objects: normalizedObjects,
+    ui: (Array.isArray(documentData?.ui) ? documentData.ui : []).map(normalizeUiElement),
   };
 
   if (!preserveHistory) {
@@ -1786,6 +2033,8 @@ async function loadDocument(documentData, { preserveHistory = false, dirty = fal
   refreshEditorVisibility();
   updateEditorLightingRig();
   renderHierarchy();
+  renderUiElements();
+  renderUiPreview();
   renderInspector();
   updateClipboardButtons();
   updateViewportStats();
@@ -2618,9 +2867,90 @@ function renderCameraPreview() {
   for (const object of hidden) object.visible = true;
 }
 
+function renderSceneProject(project = null) {
+  if (project) {
+    state.scenes = Array.isArray(project.scenes) ? project.scenes : [];
+    state.activeSceneId = project.activeSceneId || state.scenes[0]?.id || null;
+  }
+  const picker = $("scene-picker");
+  picker.replaceChildren();
+  for (const entry of state.scenes) picker.append(new Option(entry.name, entry.id));
+  picker.value = state.activeSceneId || "";
+  $("delete-scene-button").disabled = state.scenes.length <= 1;
+  $("duplicate-scene-button").disabled = !state.activeSceneId;
+}
+
+async function switchProjectScene(sceneId) {
+  if (!sceneId || sceneId === state.activeSceneId) return true;
+  if (state.dirty && !window.confirm("Descartar as alterações não salvas e trocar de cena?")) {
+    renderSceneProject();
+    return false;
+  }
+  setLoading(1, "Trocando de cena…");
+  try {
+    const response = await fetch(`/api/scenes/${encodeURIComponent(sceneId)}/activate`, { method: "POST" });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Falha ao trocar de cena");
+    renderSceneProject(result.project);
+    await loadDocument(result.scene);
+    toast(`${result.scene.name} agora será executada no PS2.`, "success");
+    return true;
+  } catch (error) {
+    toast(error.message, "error");
+    renderSceneProject();
+    return false;
+  } finally {
+    setLoading(-1);
+  }
+}
+
+async function createProjectScene({ duplicate = false } = {}) {
+  if (state.dirty && !window.confirm("Descartar as alterações não salvas e criar outra cena?")) return;
+  const currentName = state.document?.name || "Cena";
+  const suggested = duplicate ? `${currentName} — cópia` : "Nova cena";
+  const name = window.prompt("Nome da cena:", suggested)?.trim();
+  if (!name) return;
+  setLoading(1, duplicate ? "Duplicando cena…" : "Criando cena…");
+  try {
+    const response = await fetch("/api/scenes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, ...(duplicate ? { duplicateFrom: state.activeSceneId } : {}) }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Falha ao criar a cena");
+    renderSceneProject(result.project);
+    await loadDocument(result.scene);
+    toast(duplicate ? "Cena duplicada e ativada." : "Cena criada e ativada.", "success");
+  } catch (error) {
+    toast(error.message, "error");
+  } finally {
+    setLoading(-1);
+  }
+}
+
+async function deleteProjectScene() {
+  const entry = state.scenes.find((item) => item.id === state.activeSceneId);
+  if (!entry || state.scenes.length <= 1) return;
+  if (!window.confirm(`Excluir permanentemente a cena “${entry.name}”?`)) return;
+  setLoading(1, "Excluindo cena…");
+  try {
+    const response = await fetch(`/api/scenes/${encodeURIComponent(entry.id)}`, { method: "DELETE" });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Falha ao excluir a cena");
+    renderSceneProject(result.project);
+    await loadDocument(result.scene);
+    toast("Cena excluída.", "success");
+  } catch (error) {
+    toast(error.message, "error");
+  } finally {
+    setLoading(-1);
+  }
+}
+
 async function saveScene({ quiet = false } = {}) {
   if (state.serverOutdated) {
-    const message = "Servidor do editor desatualizado. Reinicie scripts/editor.ps1 antes de salvar componentes e eventos.";
+    const message = "Servidor do editor desatualizado. Reinicie scripts/editor.ps1 antes de salvar as novas ferramentas.";
     toast(message, "error", 10000);
     setStatus("Reinicie o servidor do editor");
     return false;
@@ -2629,7 +2959,7 @@ async function saveScene({ quiet = false } = {}) {
     syncAllRecords();
     saveCameraToDocument();
     state.document.name = $("scene-name").value.trim() || "Cena Athena";
-    const response = await fetch("/api/scene", {
+    const response = await fetch(`/api/scene?sceneId=${encodeURIComponent(state.activeSceneId || "")}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(state.document),
@@ -2637,6 +2967,7 @@ async function saveScene({ quiet = false } = {}) {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Falha ao salvar a cena");
     state.document = result.scene;
+    renderSceneProject(result.project);
     markDirty(false);
     setStatus("Cena salva e exportada para Athena");
     if (!quiet) toast("Cena salva. O runtime do PS2 foi atualizado.", "success");
@@ -2847,6 +3178,7 @@ function cancelBoxSelection() {
 
 let pointerStart = null;
 renderer.domElement.addEventListener("pointerdown", (event) => {
+  if (state.uiMode) return;
   pointerStart = { x: event.clientX, y: event.clientY };
   if (event.button === 2) beginRightHand();
   if (event.button === 0 && state.boxSelectTool) {
@@ -2861,6 +3193,7 @@ renderer.domElement.addEventListener("pointerdown", (event) => {
 });
 
 renderer.domElement.addEventListener("pointerup", (event) => {
+  if (state.uiMode) return;
   if (event.button === 2) {
     endRightHand();
     return;
@@ -2906,6 +3239,7 @@ renderer.domElement.addEventListener("pointercancel", () => {
 renderer.domElement.addEventListener("contextmenu", (event) => event.preventDefault());
 
 renderer.domElement.addEventListener("pointermove", (event) => {
+  if (state.uiMode) return;
   if (state.boxSelecting) {
     updateMarquee(marqueePoint(event));
     return;
@@ -2920,7 +3254,7 @@ renderer.domElement.addEventListener("pointermove", (event) => {
 });
 
 transform.addEventListener("dragging-changed", (event) => {
-  orbit.enabled = !event.value;
+  orbit.enabled = !event.value && !state.uiMode;
 });
 
 transform.addEventListener("mouseDown", () => {
@@ -2993,6 +3327,28 @@ transform.addEventListener("mouseUp", () => {
     setSelection(state.primaryId, { additive: true });
   }
 });
+
+function updateUiFromInspector() {
+  const item = currentUiElement();
+  if (!item) return;
+  item.name = $("ui-name").value.trim() || (item.type === "panel" ? "Painel" : "Texto");
+  item.x = cleanNumber(THREE.MathUtils.clamp(clampNumber($("ui-x").value), 0, 640));
+  item.y = cleanNumber(THREE.MathUtils.clamp(clampNumber($("ui-y").value), 0, 448));
+  item.width = cleanNumber(THREE.MathUtils.clamp(clampNumber($("ui-width").value, 1), 1, 640 - item.x));
+  item.height = cleanNumber(THREE.MathUtils.clamp(clampNumber($("ui-height").value, 1), 1, 448 - item.y));
+  item.text = $("ui-text").value.slice(0, 240);
+  item.fontScale = THREE.MathUtils.clamp(clampNumber($("ui-font-scale").value, 0.55), 0.15, 3);
+  item.align = ["left", "center", "right"].includes($("ui-align").value) ? $("ui-align").value : "left";
+  item.color = $("ui-color").value;
+  item.background = $("ui-background").value;
+  item.opacity = THREE.MathUtils.clamp(clampNumber($("ui-opacity").value, 0.82), 0, 1);
+  item.visible = $("ui-visible").checked;
+  item.runtime = $("ui-runtime").checked;
+  renderUiElements();
+  renderUiPreview();
+  updateViewportStats();
+  markDirty();
+}
 
 function bindInspector() {
   const transformInputIds = [
@@ -3129,6 +3485,25 @@ function bindInspector() {
   $("camera-active").addEventListener("change", (event) => setActiveCamera(state.primaryId, event.target.checked));
   $("camera-preview-button").addEventListener("click", () => openCameraPreview());
   $("camera-use-view-button").addEventListener("click", () => enterCameraView());
+
+  const uiFieldIds = [
+    "ui-name", "ui-x", "ui-y", "ui-width", "ui-height", "ui-text",
+    "ui-font-scale", "ui-align", "ui-color", "ui-background", "ui-opacity",
+  ];
+  for (const id of uiFieldIds) {
+    $(id).addEventListener("beforeinput", stageFieldHistory);
+    $(id).addEventListener("input", updateUiFromInspector);
+    $(id).addEventListener("change", finishFieldHistory);
+    $(id).addEventListener("blur", finishFieldHistory);
+  }
+  for (const id of ["ui-visible", "ui-runtime"]) {
+    $(id).addEventListener("change", () => {
+      stageFieldHistory();
+      updateUiFromInspector();
+      finishFieldHistory();
+      renderUiInspector();
+    });
+  }
 }
 
 function bindUi() {
@@ -3136,6 +3511,7 @@ function bindUi() {
   document.querySelectorAll("[data-primitive]").forEach((button) => button.addEventListener("click", () => addPrimitive(button.dataset.primitive)));
   document.querySelectorAll("[data-collider]").forEach((button) => button.addEventListener("click", () => addCollider(button.dataset.collider)));
   document.querySelectorAll("[data-light]").forEach((button) => button.addEventListener("click", () => addLight(button.dataset.light)));
+  document.querySelectorAll("[data-ui-type]").forEach((button) => button.addEventListener("click", () => addUiElement(button.dataset.uiType)));
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
   document.querySelectorAll("[data-axis-view]").forEach((button) => button.addEventListener("click", () => setAxisView(button.dataset.axisView)));
 
@@ -3166,6 +3542,8 @@ function bindUi() {
     refreshEditorVisibility();
     $("collider-visibility-button").classList.toggle("active", state.collidersVisible);
   });
+  $("ui-mode-button").addEventListener("click", () => setUiMode(!state.uiMode));
+  $("open-ui-editor-button").addEventListener("click", () => setUiMode(!state.uiMode));
   $("focus-button").addEventListener("click", focusSelection);
   $("save-button").addEventListener("click", () => saveScene());
   $("export-button").addEventListener("click", exportSceneFile);
@@ -3178,6 +3556,8 @@ function bindUi() {
   $("multi-duplicate-button").addEventListener("click", duplicateSelection);
   $("delete-button").addEventListener("click", deleteSelection);
   $("multi-delete-button").addEventListener("click", deleteSelection);
+  $("ui-duplicate-button").addEventListener("click", duplicateUiElement);
+  $("ui-delete-button").addEventListener("click", deleteUiElement);
   $("prefab-button").addEventListener("click", saveSelectionAsPrefab);
   $("multi-prefab-button").addEventListener("click", saveSelectionAsPrefab);
   $("create-prefab-button").addEventListener("click", saveSelectionAsPrefab);
@@ -3199,6 +3579,9 @@ function bindUi() {
   $("empty-import-button").addEventListener("click", () => $("import-input").click());
   $("import-input").addEventListener("change", (event) => importFiles(event.target.files));
   $("open-scene-button").addEventListener("click", () => $("open-scene-input").click());
+  $("scene-picker").addEventListener("change", (event) => switchProjectScene(event.target.value));
+  $("duplicate-scene-button").addEventListener("click", () => createProjectScene({ duplicate: true }));
+  $("delete-scene-button").addEventListener("click", deleteProjectScene);
   $("scene-root-row").addEventListener("dragover", (event) => {
     if (!event.dataTransfer.types.includes("text/athena-object")) return;
     event.preventDefault();
@@ -3228,14 +3611,7 @@ function bindUi() {
     }
     event.target.value = "";
   });
-  $("new-scene-button").addEventListener("click", async () => {
-    if (state.dirty && !window.confirm("Descartar as alterações não salvas e criar uma cena vazia?")) return;
-    await loadDocument({
-      name: "Nova cena",
-      settings: { background: "#07101d", gridSize: 120, snap: 0.25 },
-      objects: [],
-    }, { dirty: true });
-  });
+  $("new-scene-button").addEventListener("click", () => createProjectScene());
   $("scene-name").addEventListener("beforeinput", stageFieldHistory);
   $("scene-name").addEventListener("input", (event) => {
     stageFieldHistory();
@@ -3292,10 +3668,14 @@ function bindUi() {
     } else if (event.ctrlKey && event.key.toLowerCase() === "d") {
       event.preventDefault();
       duplicateSelection();
+    } else if ((event.key === "Delete" || event.key === "Backspace") && state.uiMode) {
+      event.preventDefault();
+      deleteUiElement();
     } else if (event.key === "Delete" || event.key === "Backspace") {
       event.preventDefault();
       deleteSelection();
-    } else if (event.key.toLowerCase() === "w") setTransformMode("translate");
+    } else if (state.uiMode && event.key === "Escape") setUiMode(false);
+    else if (event.key.toLowerCase() === "w") setTransformMode("translate");
     else if (event.key.toLowerCase() === "e") setTransformMode("rotate");
     else if (event.key.toLowerCase() === "r") setTransformMode("scale");
     else if (event.key.toLowerCase() === "b") setBoxSelectTool(!state.boxSelectTool);
@@ -3379,8 +3759,12 @@ async function boot() {
   animate();
   setLoading(1, "Abrindo cena…");
   try {
+    const projectResponse = await fetch("/api/scenes", { cache: "no-store" });
+    const project = await projectResponse.json();
+    if (!projectResponse.ok) throw new Error(project.error || "Falha ao abrir o projeto de cenas");
+    renderSceneProject(project);
     const [sceneResponse, capabilitiesResponse] = await Promise.all([
-      fetch("/api/scene", { cache: "no-store" }),
+      fetch(`/api/scene?sceneId=${encodeURIComponent(state.activeSceneId || "")}`, { cache: "no-store" }),
       fetch("/api/capabilities", { cache: "no-store" }),
       refreshAssetCatalog(),
       refreshPrefabs(),
@@ -3389,12 +3773,12 @@ async function boot() {
       const capabilities = await capabilitiesResponse.json();
       state.serverSchemaVersion = Number(capabilities.editorSchemaVersion) || 0;
     }
-    state.serverOutdated = state.serverSchemaVersion < 4;
+    state.serverOutdated = state.serverSchemaVersion < 5;
     const data = await sceneResponse.json();
     if (!sceneResponse.ok) throw new Error(data.error || "Falha ao abrir a cena");
     await loadDocument(data);
     if (state.serverOutdated) {
-      toast("Servidor desatualizado detectado. Reinicie scripts/editor.ps1 para salvar componentes e eventos.", "error", 12000);
+      toast("Servidor desatualizado detectado. Reinicie scripts/editor.ps1 para salvar cenas e interface.", "error", 12000);
       setStatus("Servidor desatualizado — reinicie o editor");
     } else {
       toast("Editor pronto. Selecione um objeto para começar.", "success", 2800);

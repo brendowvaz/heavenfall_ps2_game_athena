@@ -500,3 +500,4 @@ globalThis.EDITOR_LIGHTS = [
 ];
 globalThis.EDITOR_POINT_LIGHTS = [];
 globalThis.EDITOR_CAMERA = null;
+globalThis.EDITOR_UI = [];

@@ -51,6 +51,8 @@ Abra `http://127.0.0.1:4173/editor/` no navegador. O editor oferece:
 - câmeras de cena com modos seguir, fixa e fixa olhando o jogador, além de preview em 640 × 448;
 - colisores visuais de caixa, esfera e cápsula, com trigger e bloqueio de câmera;
 - componentes de trigger com eventos de entrada, saída e interação executados no PS2;
+- editor de interface 2D em 640 × 448 com painéis, textos, arraste e redimensionamento;
+- múltiplas cenas persistentes, com seleção, duplicação, exclusão e teste da cena ativa;
 - prefabs criados a partir de qualquer seleção, incluindo grupos e colisores;
 - importação múltipla de OBJ/MTL, GLTF/GLB, BIN e texturas;
 - biblioteca dos modelos disponíveis no projeto;
@@ -60,7 +62,9 @@ Abra `http://127.0.0.1:4173/editor/` no navegador. O editor oferece:
 
 Ao importar OBJ ou GLTF com arquivos externos, selecione também o MTL, BIN e as texturas relacionados. Eles serão copiados juntos para `assets/imported`.
 
-O botão **Salvar cena** mantém o documento editável em `editor/scene.json` e gera `assets/scene.generated.js`. O `main.js` lê esse arquivo no AthenaEnv, aplica a transformação mundial a cada `RenderObject` e usa os colisores exportados no movimento do jogador e da câmera.
+Cada cena fica em `editor/scenes`, enquanto `editor/scene.json` continua como espelho compatível da cena ativa. A cena escolhida no seletor superior é exportada para `assets/scene.generated.js` e também mantém sua própria cópia em `assets/scenes`. Ao salvar ou testar, essa é a cena realmente executada pelo PS2.
+
+O modo **Interface** trabalha nas coordenadas nativas de 640 × 448. Painéis usam `Draw.rect` e textos usam `Font` no `main.js`; posição, tamanho, cor, opacidade, conteúdo, alinhamento e escala configurados no editor entram no runtime. Arraste um elemento para posicioná-lo e use a alça inferior para redimensionar.
 
 As dimensões dos colisores seguem a visualização do editor: na caixa, `scale` representa as meias-extensões; na esfera e na cápsula, representa os raios locais. Posição, rotação XYZ, escala hierárquica e altura são exportadas em coordenadas mundiais. Triggers são detectados sem bloquear, e **Bloquear câmera** afeta somente a câmera.
 

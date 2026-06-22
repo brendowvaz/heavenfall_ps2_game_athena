@@ -26,7 +26,10 @@
 
     <div class="scene-title-wrap">
       <span class="save-dot" id="save-dot" title="Estado do arquivo"></span>
+      <select id="scene-picker" class="scene-picker" aria-label="Cena atual"></select>
       <input id="scene-name" class="scene-title" value="Cena Athena" aria-label="Nome da cena">
+      <button id="duplicate-scene-button" class="scene-project-button" title="Duplicar cena">⧉</button>
+      <button id="delete-scene-button" class="scene-project-button danger" title="Excluir cena">×</button>
     </div>
 
     <div class="toolbar toolbar-history" aria-label="Histórico">
@@ -140,6 +143,21 @@
         </div>
       </section>
 
+      <section class="panel-section interface-section">
+        <div class="section-heading compact">
+          <div>
+            <span class="eyebrow">TELA 2D</span>
+            <h2>Interface</h2>
+          </div>
+          <button id="open-ui-editor-button" class="import-button">Editar</button>
+        </div>
+        <div class="interface-tool-grid">
+          <button data-ui-type="panel"><span>▰</span>Painel</button>
+          <button data-ui-type="text"><span>T</span>Texto</button>
+        </div>
+        <div id="ui-element-list" class="ui-element-list"></div>
+      </section>
+
       <section class="panel-section prefab-section">
         <div class="section-heading compact">
           <div>
@@ -182,6 +200,7 @@
         <button id="focus-button" title="Focar seleção (F)">◎</button>
         <button id="collider-visibility-button" class="active" title="Mostrar colisores">COL</button>
         <button id="grid-button" class="active" title="Mostrar grade">#</button>
+        <button id="ui-mode-button" title="Editar interface 2D">UI</button>
       </div>
 
       <div id="axis-gizmo" class="axis-gizmo" aria-label="Orientação da câmera">
@@ -200,6 +219,14 @@
       </div>
 
       <div id="selection-marquee" class="selection-marquee" hidden></div>
+
+      <div id="ui-editor" class="ui-editor" hidden>
+        <div class="ui-editor-header">
+          <span>INTERFACE DO JOGO</span>
+          <small>640 × 448 · arraste e redimensione</small>
+        </div>
+        <div id="ui-canvas" class="ui-canvas" aria-label="Prévia da interface 2D"></div>
+      </div>
 
       <div id="camera-preview" class="camera-preview" hidden>
         <div class="camera-preview-header">
@@ -258,6 +285,56 @@
             <div><dt>Triângulos</dt><dd id="multi-triangles">—</dd></div>
             <div><dt>Dica</dt><dd>Ctrl+clique adiciona ou remove objetos.</dd></div>
           </dl>
+        </section>
+      </div>
+
+      <div id="ui-inspector" hidden>
+        <section class="inspector-header">
+          <span class="eyebrow">INTERFACE 2D</span>
+          <div class="object-title-row">
+            <span id="ui-type-icon" class="object-type-icon">T</span>
+            <input id="ui-name" aria-label="Nome do elemento de interface">
+          </div>
+          <div class="object-actions">
+            <button id="ui-duplicate-button">Duplicar</button>
+            <button id="ui-delete-button" class="danger-text">Excluir</button>
+          </div>
+        </section>
+        <section class="inspector-section ui-inspector-section">
+          <h3>Retângulo da tela</h3>
+          <div class="ui-grid-inputs">
+            <label><span>X</span><input id="ui-x" type="number" min="0" max="640" step="1"></label>
+            <label><span>Y</span><input id="ui-y" type="number" min="0" max="448" step="1"></label>
+            <label><span>Largura</span><input id="ui-width" type="number" min="1" max="640" step="1"></label>
+            <label><span>Altura</span><input id="ui-height" type="number" min="1" max="448" step="1"></label>
+          </div>
+        </section>
+        <section id="ui-text-section" class="inspector-section ui-inspector-section">
+          <h3>Texto</h3>
+          <label class="ui-text-property">Conteúdo<textarea id="ui-text" maxlength="240" rows="3"></textarea></label>
+          <label class="property-row number-property">
+            <span><strong>Escala</strong><small>Tamanho no Font do Athena</small></span>
+            <input id="ui-font-scale" type="number" min="0.15" max="3" step="0.05">
+          </label>
+          <label class="property-row select-property">
+            <span><strong>Alinhamento</strong><small>Dentro do retângulo</small></span>
+            <select id="ui-align"><option value="left">Esquerda</option><option value="center">Centro</option><option value="right">Direita</option></select>
+          </label>
+          <label class="property-row color-property"><span><strong>Cor do texto</strong></span><input id="ui-color" type="color"></label>
+        </section>
+        <section id="ui-panel-section" class="inspector-section ui-inspector-section">
+          <h3>Painel</h3>
+          <label class="property-row color-property"><span><strong>Cor de fundo</strong></span><input id="ui-background" type="color"></label>
+          <label class="property-row number-property">
+            <span><strong>Opacidade</strong><small>0 transparente · 1 sólido</small></span>
+            <input id="ui-opacity" type="number" min="0" max="1" step="0.05">
+          </label>
+        </section>
+        <section class="inspector-section appearance-section">
+          <h3>Saída</h3>
+          <label class="property-row switch-property"><span><strong>Visível</strong><small>Mostrar no editor</small></span><input id="ui-visible" type="checkbox"></label>
+          <label class="property-row switch-property"><span><strong>Exportar para Athena</strong><small>Desenhar também no PS2</small></span><input id="ui-runtime" type="checkbox"></label>
+          <p class="compatibility-note">PS2 · desenhado por Draw e Font nas coordenadas reais de 640 × 448.</p>
         </section>
       </div>
 

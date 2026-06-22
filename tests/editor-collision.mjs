@@ -74,6 +74,11 @@ const scene = normalizeScene({
       camera: { fov: 55, near: 0.2, far: 250, active: true, mode: "fixed" },
     },
   ],
+  ui: [
+    { id: "hud-panel", name: "HUD panel", type: "panel", x: 20, y: 360, width: 300, height: 56, background: "#102030", opacity: 0.75 },
+    { id: "hud-text", name: "HUD text", type: "text", x: 32, y: 374, width: 270, height: 24, text: "Objetivo atualizado", fontScale: 0.5, color: "#f0d080", align: "center" },
+    { id: "editor-only", name: "Editor only", type: "text", runtime: false, text: "Não exportar" },
+  ],
 });
 
 const transforms = worldTransforms(scene);
@@ -112,5 +117,9 @@ assert(sandbox.EDITOR_POINT_LIGHTS[0].runtimeMode === "simulated-per-object" && 
 assert(sandbox.EDITOR_LIGHTS.length === 0, "Point light must not leak into the global-light contract");
 assert(sandbox.EDITOR_CAMERA.mode === "fixed" && sandbox.EDITOR_CAMERA.target,
   "Active camera mode and facing target must survive export");
+assert(sandbox.EDITOR_UI.length === 2, "Only visible runtime UI elements must enter the runtime contract");
+assert(sandbox.EDITOR_UI[0].background.a === 96, "Panel opacity must become Athena's 0-128 alpha range");
+assert(sandbox.EDITOR_UI[1].text === "Objetivo atualizado" && sandbox.EDITOR_UI[1].align === "center",
+  "Text content and alignment must survive UI export");
 
 console.log("Editor collision export test passed.");
