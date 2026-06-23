@@ -34,9 +34,12 @@ const scene = normalizeScene({
           { id: "welcome", type: "message", text: "Bem-vindo às ruínas", duration: 150 },
           { id: "hide-cube", type: "visibility", targetId: "lit-cube", mode: "hide" },
         ],
-        onExit: [],
+        onExit: [
+          { id: "stop-fire", type: "audio", targetId: "fire-audio", mode: "stop" },
+        ],
         onInteract: [
           { id: "teleport", type: "teleport", position: { x: 3, y: 0.08, z: 9 } },
+          { id: "burst", type: "particle", targetId: "fire-particles", mode: "burst" },
         ],
       },
     },
@@ -73,6 +76,38 @@ const scene = normalizeScene({
       rotation: { x: -20, y: 45, z: 0 },
       camera: { fov: 55, near: 0.2, far: 250, active: true, mode: "fixed" },
     },
+    {
+      id: "fire-audio",
+      name: "Fire audio",
+      source: { kind: "audio", asset: "sounds/fire.adp" },
+      position: { x: 2, y: 1, z: 4 },
+      audio: { mode: "sfx", autoplay: true, loop: true, volume: 72, spatial: true, distance: 9, pan: 0, pitch: -4 },
+    },
+    {
+      id: "music",
+      name: "Music",
+      source: { kind: "audio", asset: "sounds/ruins.ogg" },
+      audio: { mode: "stream", autoplay: true, loop: true, volume: 65 },
+    },
+    {
+      id: "second-music",
+      name: "Second music",
+      source: { kind: "audio", asset: "sounds/unused.wav" },
+      audio: { mode: "stream", autoplay: true },
+    },
+    {
+      id: "fire-particles",
+      name: "Fire particles",
+      source: { kind: "particle" },
+      position: { x: 2, y: 1, z: 4 },
+      particle: { preset: "fire", color: "#33cc88", autoplay: true, maxParticles: 8, rate: 8, lifetime: 70, speed: 0.035, spread: 0.4, size: 0.16, gravity: -0.0004 },
+    },
+    {
+      id: "smoke-particles",
+      name: "Smoke particles",
+      source: { kind: "particle" },
+      particle: { preset: "smoke", autoplay: true, maxParticles: 8 },
+    },
   ],
   ui: [
     { id: "hud-panel", name: "HUD panel", type: "panel", x: 20, y: 360, width: 300, height: 56, background: "#102030", opacity: 0.75 },
@@ -107,6 +142,10 @@ assert(sandbox.EDITOR_EVENTS[0].onEnter[1].targetIds[0] === "lit-cube",
   "Visibility targets must resolve to runtime object ids");
 assert(sandbox.EDITOR_EVENTS[0].onInteract[0].position.z === 9,
   "Teleport actions must survive export");
+assert(sandbox.EDITOR_EVENTS[0].onExit[0].type === "audio" && sandbox.EDITOR_EVENTS[0].onExit[0].targetId === "fire-audio",
+  "Audio control actions must survive export");
+assert(sandbox.EDITOR_EVENTS[0].onInteract[1].type === "particle" && sandbox.EDITOR_EVENTS[0].onInteract[1].mode === "burst",
+  "Particle control actions must survive export");
 
 assert(sandbox.EDITOR_SCENE.length === 1, "Runtime models must be exported independently from colliders");
 assert(sandbox.EDITOR_SCENE[0].boundsRadius > 0, "OBJ spatial bounds must be exported for local lighting");
@@ -117,6 +156,18 @@ assert(sandbox.EDITOR_POINT_LIGHTS[0].runtimeMode === "simulated-per-object" && 
 assert(sandbox.EDITOR_LIGHTS.length === 0, "Point light must not leak into the global-light contract");
 assert(sandbox.EDITOR_CAMERA.mode === "fixed" && sandbox.EDITOR_CAMERA.target,
   "Active camera mode and facing target must survive export");
+assert(sandbox.EDITOR_AUDIO.length === 2, "Runtime export must keep SFX and only the first global stream");
+assert(sandbox.EDITOR_AUDIO[0].spatial === true && sandbox.EDITOR_AUDIO[0].distance === 9,
+  "Spatial audio settings must survive export");
+assert(sandbox.EDITOR_PARTICLES.length === 2, "Particle emitters must enter the runtime contract");
+assert(sandbox.EDITOR_PARTICLES[0].asset === "editor_particles/fire.obj",
+  "Particle presets must resolve to a real runtime mesh");
+assert(approximately(sandbox.EDITOR_PARTICLES[0].color.r, 0.2)
+  && approximately(sandbox.EDITOR_PARTICLES[0].color.g, 0.8)
+  && approximately(sandbox.EDITOR_PARTICLES[0].color.b, 136 / 255),
+  "Particle colors must survive export as Athena material values");
+assert(sandbox.EDITOR_PARTICLES.reduce((total, item) => total + item.maxParticles, 0) === 12,
+  "Particle export must enforce the global PS2 budget");
 assert(sandbox.EDITOR_UI.length === 2, "Only visible runtime UI elements must enter the runtime contract");
 assert(sandbox.EDITOR_UI[0].background.a === 96, "Panel opacity must become Athena's 0-128 alpha range");
 assert(sandbox.EDITOR_UI[1].text === "Objetivo atualizado" && sandbox.EDITOR_UI[1].align === "center",

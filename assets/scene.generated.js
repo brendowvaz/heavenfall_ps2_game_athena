@@ -500,4 +500,98 @@ globalThis.EDITOR_LIGHTS = [
 ];
 globalThis.EDITOR_POINT_LIGHTS = [];
 globalThis.EDITOR_CAMERA = null;
+globalThis.EDITOR_AUDIO = [
+  {
+    "id": "audio-mqpy4id5-xjoeiz",
+    "name": "Nova fonte de áudio",
+    "asset": "sounds/awesomeness.wav",
+    "position": {
+      "x": 2.7582,
+      "y": 1.2,
+      "z": -1.0882
+    },
+    "mode": "stream",
+    "autoplay": true,
+    "loop": true,
+    "volume": 100,
+    "spatial": false,
+    "distance": 14,
+    "pan": 0,
+    "pitch": 0
+  }
+];
+globalThis.EDITOR_PARTICLES = [
+  {
+    "id": "particle-mqptxbkr-w6q89x",
+    "name": "Emissor de fumaça",
+    "position": {
+      "x": 1.3112,
+      "y": 0.3,
+      "z": -0.807
+    },
+    "asset": "editor_particles/sparks.obj",
+    "preset": "sparks",
+    "color": {
+      "r": 1,
+      "g": 0.7215686274509804,
+      "b": 0.0784313725490196
+    },
+    "autoplay": true,
+    "maxParticles": 5,
+    "rate": 3.5,
+    "lifetime": 150,
+    "speed": 0.018,
+    "spread": 0.55,
+    "size": 0.24,
+    "gravity": -0.00015
+  },
+  {
+    "id": "particle-mqpuaydw-u365mu",
+    "name": "Emissor de fumaça",
+    "position": {
+      "x": 1.4168,
+      "y": 0.3,
+      "z": -0.9321
+    },
+    "asset": "editor_particles/smoke.obj",
+    "preset": "smoke",
+    "color": {
+      "r": 0.3803921568627451,
+      "g": 0.4196078431372549,
+      "b": 0.47843137254901963
+    },
+    "autoplay": true,
+    "maxParticles": 5,
+    "rate": 3.5,
+    "lifetime": 150,
+    "speed": 0.018,
+    "spread": 0.55,
+    "size": 0.24,
+    "gravity": -0.00015
+  },
+  {
+    "id": "particle-mqpub283-q9r013",
+    "name": "Emissor de fogo",
+    "position": {
+      "x": 1.3191,
+      "y": 0.3,
+      "z": -0.9321
+    },
+    "asset": "editor_particles/fire.obj",
+    "preset": "fire",
+    "color": {
+      "r": 1,
+      "g": 0.2196078431372549,
+      "b": 0.0392156862745098
+    },
+    "autoplay": true,
+    "maxParticles": 2,
+    "rate": 8,
+    "lifetime": 70,
+    "speed": 0.035,
+    "spread": 0.4,
+    "size": 0.16,
+    "gravity": -0.0004
+  }
+];
 globalThis.EDITOR_UI = [];

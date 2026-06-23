@@ -374,6 +374,15 @@ h2, h3, p { margin: 0; }
 .scene-tool-grid button span { color: #ffc15c; font-size: 13px; }
 .scene-tool-grid button:hover { border-color: rgba(255,193,92,.48); color: #ffe0aa; }
 
+.particle-tool-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 5px; }
+.particle-tool-grid button { height: 34px; display: flex; align-items: center; justify-content: center; gap: 4px; border: 1px solid rgba(229,160,107,.2); border-radius: 4px; background: rgba(185,105,55,.04); color: #a8846d; font-size: 9px; cursor: pointer; }
+.particle-tool-grid button span { color: #e5a06b; font-size: 13px; }
+.particle-tool-grid button:hover { border-color: rgba(229,160,107,.52); color: #f3c5a2; }
+.media-tool-grid { display: grid; }
+.media-tool-grid button { height: 34px; display: flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid rgba(112,205,178,.18); border-radius: 4px; background: rgba(112,205,178,.035); color: #789c92; font-size: 9px; cursor: pointer; }
+.media-tool-grid button span { color: #77dfc0; font-size: 13px; }
+.media-tool-grid button:hover { border-color: rgba(119,223,192,.5); color: #bceede; }
+
 .interface-tool-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 5px; }
 .interface-tool-grid button { height: 33px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid rgba(193,124,255,.2); border-radius: 4px; background: rgba(193,124,255,.035); color: #9d86ad; font-size: 9px; cursor: pointer; }
 .interface-tool-grid button span { color: #d3a4ff; font-size: 12px; }
@@ -605,6 +614,10 @@ h2, h3, p { margin: 0; }
 .light-inspector h3 { color: #d5a653; }
 .camera-inspector { background: rgba(65,125,160,.045); }
 .camera-inspector h3 { color: #66bddf; }
+.audio-inspector { background: rgba(70,145,120,.045); }
+.audio-inspector h3 { color: #78d8ba; }
+.particle-inspector { background: rgba(185,105,55,.045); }
+.particle-inspector h3 { color: #e5a06b; }
 .ui-inspector-section { background: rgba(137,74,181,.04); }
 .ui-inspector-section h3 { color: #b487d2; }
 .ui-grid-inputs { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 6px; }

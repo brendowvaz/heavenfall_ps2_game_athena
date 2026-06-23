@@ -7,21 +7,34 @@ const sourcePath = path.join(__dirname, "..", "main.js");
 let source = fs.readFileSync(sourcePath, "utf8");
 const editorSource = fs.readFileSync(path.join(__dirname, "..", "editor", "app.js"), "utf8");
 const editorHtml = fs.readFileSync(path.join(__dirname, "..", "editor", "index.html"), "utf8");
-for (const marker of ["applyPointerSnap", "togglePivotEditing", "finishBoxSelection", "toggleIsolation", "setupPanelAccordions", "collapsedHierarchy", "applyRecordMaterial", "createLightObject", "applyCampfirePreset", "openCameraPreview", "renderTriggerEvents", "addTriggerAction", "renderUiPreview", "addUiElement", "switchProjectScene", "createProjectScene"]) {
+const particleAssetDir = path.join(__dirname, "..", "assets", "editor_particles");
+for (const preset of ["fire", "smoke", "sparks"]) {
+    const objectSource = fs.readFileSync(path.join(particleAssetDir, `${preset}.obj`), "utf8");
+    const materialLibrary = objectSource.match(/^mtllib\s+(.+)$/m)?.[1]?.trim();
+    if (!materialLibrary) throw new Error(`Particle ${preset} must reference a material library`);
+    const materialSource = fs.readFileSync(path.join(particleAssetDir, materialLibrary), "utf8");
+    const materialCount = (materialSource.match(/^newmtl\s+/gm) || []).length;
+    if (materialCount !== 1) {
+        throw new Error(`Particle ${preset} material library must contain exactly one material; AthenaEnv renders unused material ranges as invalid DMA`);
+    }
+}
+for (const marker of ["applyPointerSnap", "togglePivotEditing", "finishBoxSelection", "toggleIsolation", "setupPanelAccordions", "collapsedHierarchy", "applyRecordMaterial", "createLightObject", "applyCampfirePreset", "openCameraPreview", "renderTriggerEvents", "addTriggerAction", "renderUiPreview", "addUiElement", "switchProjectScene", "createProjectScene", "createAudioObject", "createParticleObject", "updateLegacyParticlePreview", "stepLegacyParticlePreview", "OctahedronGeometry", "addAudio", "addParticle"]) {
     if (!editorSource.includes(marker)) throw new Error(`Editor tool missing: ${marker}`);
 }
-for (const id of ["snap-mode", "pivot-button", "box-select-button", "selection-marquee", "isolate-selection-button", "material-section", "light-section", "light-flicker", "light-campfire-preset", "camera-section", "camera-mode", "camera-preview", "trigger-events-editor", "event-action-type", "event-add-button", "scene-picker", "duplicate-scene-button", "ui-mode-button", "ui-editor", "ui-canvas", "ui-inspector"]) {
+for (const id of ["snap-mode", "pivot-button", "box-select-button", "selection-marquee", "isolate-selection-button", "material-section", "light-section", "light-flicker", "light-campfire-preset", "camera-section", "camera-mode", "camera-preview", "trigger-events-editor", "event-action-type", "event-add-button", "scene-picker", "duplicate-scene-button", "ui-mode-button", "ui-editor", "ui-canvas", "ui-inspector", "audio-tools-section", "add-audio-button", "audio-section", "audio-asset", "particle-tools-section", "particle-section", "particle-preset", "particle-color"]) {
     if (!editorHtml.includes(`id="${id}"`)) throw new Error(`Editor control missing: ${id}`);
 }
 source = source.replace(
     "while (true) {",
-    "globalThis.__levelTest = { baseWalkable, isPlayerValid, applyMovement, colliderHits, updateVerticalMovement, executeAction: executeRuntimeAction, getRuntimeMessage: () => runtimeMessageText, getVisibility: (id) => runtimeObjectVisibility[id], getColliders: () => collisionShapes, setPlayer: (state) => { playerX = state.x; playerY = state.y; playerZ = state.z; playerVelocityY = state.velocityY; playerGrounded = state.grounded; }, getPlayer: () => ({ x: playerX, y: playerY, z: playerZ, velocityY: playerVelocityY, grounded: playerGrounded }) }; for (let __smokeFrame = 0; __smokeFrame < 2; __smokeFrame++) {"
+    "globalThis.__levelTest = { baseWalkable, isPlayerValid, applyMovement, colliderHits, updateVerticalMovement, executeAction: executeRuntimeAction, getRuntimeMessage: () => runtimeMessageText, getVisibility: (id) => runtimeObjectVisibility[id], getColliders: () => collisionShapes, getAudio: (id) => runtimeAudioById(id), getParticleEmitter: (id) => particleEmitterById(id), setPlayer: (state) => { playerX = state.x; playerY = state.y; playerZ = state.z; playerVelocityY = state.velocityY; playerGrounded = state.grounded; }, getPlayer: () => ({ x: playerX, y: playerY, z: playerZ, velocityY: playerVelocityY, grounded: playerGrounded }) }; for (let __smokeFrame = 0; __smokeFrame < 2; __smokeFrame++) {"
 );
 
 let vertexCount = 0;
 let drawCalls = 0;
+const particleMaterialUpdates = [];
 const fontPrints = [];
 const rectCalls = [];
+const soundEvents = [];
 let nextLightId = 0;
 const lightSetCalls = [];
 const assetLoads = [];
@@ -37,6 +50,7 @@ class MockRenderData {
         this.vertices = vertices;
         if (typeof vertices === "string") assetLoads.push(vertices);
     }
+    updateMaterial(index, material) { particleMaterialUpdates.push({ index, material }); }
 }
 
 class MockRenderObject {
@@ -126,6 +140,16 @@ const context = {
                     flickerAmount: 0.25,
                     flickerSpeed: 7.5
                 });
+                sandbox.EDITOR_AUDIO.push(
+                    { id: "smoke-stream", name: "Smoke stream", mode: "stream", asset: "sounds/music.ogg", autoplay: true, loop: true, volume: 60, position: { x: 0, y: 0, z: 0 } },
+                    { id: "smoke-sfx", name: "Smoke SFX", mode: "sfx", asset: "sounds/fire.adp", autoplay: true, loop: true, volume: 80, spatial: true, distance: 20, pan: 0, pitch: 3, position: { x: 2, y: 1, z: 18 } }
+                );
+                sandbox.EDITOR_PARTICLES.push({
+                    id: "smoke-particles", name: "Smoke particles", preset: "fire", asset: "editor_particles/fire.obj",
+                    color: { r: 0.2, g: 0.8, b: 0.4 },
+                    position: { x: 0, y: 1, z: 18 }, autoplay: true, maxParticles: 2, rate: 60,
+                    lifetime: 40, speed: 0.03, spread: 0.2, size: 0.1, gravity: -0.0004
+                });
                 sandbox.EDITOR_UI.push(
                     { id: "smoke-panel", type: "panel", x: 12, y: 24, width: 180, height: 40, background: { r: 10, g: 20, b: 30, a: 96 } },
                     { id: "smoke-text", type: "text", x: 20, y: 30, width: 160, height: 20, text: "UI runtime", fontScale: 0.5, color: { r: 240, g: 230, b: 210, a: 128 }, align: "left" }
@@ -138,6 +162,25 @@ const context = {
         new: () => ({ id: ++nextLightId }),
         set(light, property, x, y, z) { lightSetCalls.push({ id: light.id, property, x, y, z }); }
     },
+    Sound: {
+        setVolume(volume) { soundEvents.push({ type: "master-volume", volume }); },
+        Stream(asset) {
+            return {
+                asset, loop: false, position: 0, length: 1000, active: false, playAttempts: 0,
+                play() { this.playAttempts++; this.active = this.playAttempts > 1; soundEvents.push({ type: "stream-play", asset }); },
+                pause() { this.active = false; soundEvents.push({ type: "stream-pause", asset }); },
+                rewind() { this.position = 0; soundEvents.push({ type: "stream-rewind", asset }); },
+                playing() { return this.active; }, free() {}
+            };
+        },
+        Sfx(asset) {
+            return {
+                asset, volume: 100, pan: 0, pitch: 0, active: false,
+                play() { this.active = true; soundEvents.push({ type: "sfx-play", asset, volume: this.volume, pan: this.pan }); return 1; },
+                playing() { const result = this.active; this.active = false; return result; }, free() {}
+            };
+        }
+    },
     Pads: {
         SELECT: 1, START: 2, L1: 3, R3: 4, CROSS: 5,
         LEFT: 6, RIGHT: 7, UP: 8, DOWN: 9, SQUARE: 10, TRIANGLE: 11,
@@ -149,8 +192,8 @@ const context = {
 sandbox = vm.createContext(context);
 vm.runInContext(source, sandbox, { filename: sourcePath, timeout: 5000 });
 
-if (!Array.isArray(context.EDITOR_LIGHTS) || !Array.isArray(context.EDITOR_POINT_LIGHTS) || !Array.isArray(context.EDITOR_EVENTS) || !Array.isArray(context.EDITOR_UI) || !("EDITOR_CAMERA" in context)) {
-    throw new Error("Generated scene must expose lights, events, interface and active camera contracts");
+if (!Array.isArray(context.EDITOR_LIGHTS) || !Array.isArray(context.EDITOR_POINT_LIGHTS) || !Array.isArray(context.EDITOR_EVENTS) || !Array.isArray(context.EDITOR_UI) || !Array.isArray(context.EDITOR_AUDIO) || !Array.isArray(context.EDITOR_PARTICLES) || !("EDITOR_CAMERA" in context)) {
+    throw new Error("Generated scene must expose lights, events, interface, audio, particles and active camera contracts");
 }
 if (!fontPrints.some((entry) => entry.text === "UI runtime")) throw new Error("Exported UI text must be drawn by Font in the runtime loop");
 if (!rectCalls.some((entry) => entry.x === 12 && entry.y === 24 && entry.width === 180 && entry.height === 40)) {
@@ -161,11 +204,45 @@ if (manifest.sceneVertices < 1000 || manifest.sceneVertices > 30000) {
     throw new Error(`Unexpected geometry budget: ${manifest.sceneVertices} vertices`);
 }
 const expectedRuntimeObjects = context.EDITOR_SCENE.length + 1;
-if (assetLoads.length !== expectedRuntimeObjects) {
-    throw new Error(`Expected ${expectedRuntimeObjects} OBJ loads, received ${assetLoads.length}`);
+const expectedAssetLoads = expectedRuntimeObjects + context.EDITOR_PARTICLES.length;
+if (assetLoads.length !== expectedAssetLoads) {
+    throw new Error(`Expected ${expectedAssetLoads} OBJ loads, received ${assetLoads.length}`);
 }
-if (drawCalls !== expectedRuntimeObjects * 2) {
-    throw new Error(`Unexpected draw-call count over two frames: ${drawCalls}`);
+if (drawCalls <= expectedRuntimeObjects * 2) {
+    throw new Error(`Runtime particles must add visible draw calls, received ${drawCalls}`);
+}
+if (!particleMaterialUpdates.some((entry) => entry.material.diffuse.g === 0.8)) {
+    throw new Error("Runtime particle color must update the Athena material");
+}
+const previewSourceStart = editorSource.indexOf("function updateLegacyParticlePreview");
+const previewSourceEnd = editorSource.indexOf("function updateParticlePreviewObject", previewSourceStart);
+if (previewSourceStart < 0 || previewSourceEnd < 0) throw new Error("Editor particle simulation helpers are missing");
+const previewSandbox = vm.createContext({ Math });
+vm.runInContext(
+    `${editorSource.slice(previewSourceStart, previewSourceEnd)}; globalThis.__particlePreviewTest = { stepLegacyParticlePreview };`,
+    previewSandbox,
+);
+const previewSimulation = {
+    particles: Array.from({ length: 2 }, () => ({ alive: false, age: 0, life: 40, progress: 0, x: 0, y: 0, z: 0 })),
+    elapsedSeconds: 0,
+};
+const previewSettings = { preset: "fire", autoplay: true, maxParticles: 2, rate: 60, lifetime: 40, speed: 0.03, spread: 0.2, size: 0.1, gravity: -0.0004 };
+previewSandbox.__particlePreviewTest.stepLegacyParticlePreview(previewSimulation, previewSettings);
+previewSandbox.__particlePreviewTest.stepLegacyParticlePreview(previewSimulation, previewSettings);
+const runtimeParticleEmitter = context.__levelTest.getParticleEmitter("smoke-particles");
+const runtimeParticlePool = runtimeParticleEmitter.pool;
+for (let index = 0; index < runtimeParticlePool.length; index++) {
+    const runtimeParticle = runtimeParticlePool[index];
+    const previewParticle = previewSimulation.particles[index];
+    for (const property of ["alive", "age", "life", "progress"]) {
+        if (Math.abs(Number(previewParticle[property]) - Number(runtimeParticle[property])) > 1e-9) throw new Error(`Editor particle ${property} differs from runtime at pool index ${index}`);
+    }
+    for (const property of ["x", "y", "z"]) {
+        const origin = ["x", "y", "z"].includes(property) ? runtimeParticleEmitter.definition.position[property] : 0;
+        if (Math.abs(previewParticle[property] + origin - runtimeParticle[property]) > 1e-9) {
+            throw new Error(`Editor particle ${property} differs from runtime at pool index ${index}`);
+        }
+    }
 }
 if (nextLightId !== 4) {
     throw new Error(`Athena light budget must remain at four slots, received ${nextLightId}`);
@@ -179,6 +256,24 @@ if (Math.max(...diffuseUpdates.values()) <= expectedRuntimeObjects) {
 }
 if (context.__levelTest.getRuntimeMessage() !== "Evento executado no runtime") {
     throw new Error("Trigger onEnter message must execute in the runtime loop");
+}
+if (!soundEvents.some((entry) => entry.type === "stream-play") || !soundEvents.some((entry) => entry.type === "sfx-play")) {
+    throw new Error("Autoplay streams and SFX must reach Athena's Sound runtime");
+}
+if (soundEvents.filter((entry) => entry.type === "stream-play").length < 2) {
+    throw new Error("Streams must retry when Athena does not start playback on the first attempt");
+}
+const spatialSfx = context.__levelTest.getAudio("smoke-sfx");
+if (!spatialSfx || spatialSfx.sound.volume >= 80 || spatialSfx.sound.pan === 0) {
+    throw new Error("Spatial SFX must update volume and pan from player distance");
+}
+context.__levelTest.executeAction({ type: "audio", targetId: "smoke-stream", mode: "stop" });
+if (!soundEvents.some((entry) => entry.type === "stream-pause")) throw new Error("Audio stop events must pause streams");
+context.__levelTest.executeAction({ type: "particle", targetId: "smoke-particles", mode: "stop" });
+if (context.__levelTest.getParticleEmitter("smoke-particles").enabled !== false) throw new Error("Particle stop events must disable emission");
+context.__levelTest.executeAction({ type: "particle", targetId: "smoke-particles", mode: "burst" });
+if (!context.__levelTest.getParticleEmitter("smoke-particles").pool.some((particle) => particle.alive)) {
+    throw new Error("Particle burst events must spawn the runtime pool");
 }
 const postLoopPlayer = context.__levelTest.getPlayer();
 const visibilityTarget = context.EDITOR_SCENE[0].id;

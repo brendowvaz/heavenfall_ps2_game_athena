@@ -22,6 +22,7 @@ const state = {
   assets: [],
   assetFiles: [],
   textures: [],
+  audioFiles: [],
   prefabs: [],
   selectedIds: new Set(),
   primaryId: null,
@@ -182,7 +183,7 @@ function fileName(asset) {
 }
 
 const eventPhases = ["onEnter", "onExit", "onInteract"];
-const eventActionTypes = ["message", "visibility", "teleport"];
+const eventActionTypes = ["message", "visibility", "teleport", "audio", "particle"];
 
 function normalizeEventAction(action = {}) {
   const type = eventActionTypes.includes(action.type) ? action.type : "message";
@@ -203,6 +204,14 @@ function normalizeEventAction(action = {}) {
         y: clampNumber(action.position?.y, 0.08),
         z: clampNumber(action.position?.z, 18),
       },
+    } : {}),
+    ...(type === "audio" ? {
+      targetId: typeof action.targetId === "string" ? action.targetId : "",
+      mode: ["play", "stop"].includes(action.mode) ? action.mode : "play",
+    } : {}),
+    ...(type === "particle" ? {
+      targetId: typeof action.targetId === "string" ? action.targetId : "",
+      mode: ["start", "stop", "burst"].includes(action.mode) ? action.mode : "burst",
     } : {}),
   };
 }
@@ -236,7 +245,7 @@ function normalizeUiElement(item = {}, index = 0) {
 }
 
 function normalizeRecord(record = {}) {
-  let kind = ["model", "primitive", "group", "collider", "light", "camera"].includes(record.source?.kind)
+  let kind = ["model", "primitive", "group", "collider", "light", "camera", "audio", "particle"].includes(record.source?.kind)
     ? record.source.kind
     : "model";
   const legacyName = String(record.name || "").toLocaleLowerCase("pt-BR");
@@ -255,7 +264,7 @@ function normalizeRecord(record = {}) {
   const cameraFar = Math.max(cameraNear + 0.1, clampNumber(record.camera?.far, 500));
   return {
     id: record.id || uid(kind),
-    name: record.name || ({ primitive: "Primitiva", group: "Grupo", collider: "Colisor", light: "Luz", camera: "Câmera" }[kind] || fileName(record.source?.asset)),
+    name: record.name || ({ primitive: "Primitiva", group: "Grupo", collider: "Colisor", light: "Luz", camera: "Câmera", audio: "Áudio", particle: "Partículas" }[kind] || fileName(record.source?.asset)),
     source: {
       kind,
       asset: record.source?.asset || "",
@@ -316,6 +325,36 @@ function normalizeRecord(record = {}) {
         far: cameraFar,
         active: record.camera?.active === true,
         mode: ["follow", "fixed", "lookAtPlayer"].includes(record.camera?.mode) ? record.camera.mode : "follow",
+      },
+    } : {}),
+    ...(kind === "audio" ? {
+      audio: {
+        mode: record.source?.asset
+          ? (String(record.source.asset).toLowerCase().endsWith(".adp") ? "sfx" : "stream")
+          : (["stream", "sfx"].includes(record.audio?.mode) ? record.audio.mode : "stream"),
+        autoplay: record.audio?.autoplay !== false,
+        loop: record.audio?.loop === true,
+        volume: Math.round(THREE.MathUtils.clamp(clampNumber(record.audio?.volume, 80), 0, 100)),
+        spatial: record.audio?.spatial === true,
+        distance: THREE.MathUtils.clamp(clampNumber(record.audio?.distance, 14), 0.1, 500),
+        pan: Math.round(THREE.MathUtils.clamp(clampNumber(record.audio?.pan), -100, 100)),
+        pitch: Math.round(THREE.MathUtils.clamp(clampNumber(record.audio?.pitch), -100, 100)),
+      },
+    } : {}),
+    ...(kind === "particle" ? {
+      particle: {
+        preset: ["fire", "smoke", "sparks"].includes(record.particle?.preset) ? record.particle.preset : "fire",
+        color: /^#[0-9a-f]{6}$/i.test(record.particle?.color || "")
+          ? record.particle.color
+          : particlePresetHex(["fire", "smoke", "sparks"].includes(record.particle?.preset) ? record.particle.preset : "fire"),
+        autoplay: record.particle?.autoplay !== false,
+        maxParticles: Math.round(THREE.MathUtils.clamp(clampNumber(record.particle?.maxParticles, 6), 1, 8)),
+        rate: THREE.MathUtils.clamp(clampNumber(record.particle?.rate, 8), 0.1, 30),
+        lifetime: Math.round(THREE.MathUtils.clamp(clampNumber(record.particle?.lifetime, 70), 8, 360)),
+        speed: THREE.MathUtils.clamp(clampNumber(record.particle?.speed, 0.035), 0, 0.25),
+        spread: THREE.MathUtils.clamp(clampNumber(record.particle?.spread, 0.65), 0, 5),
+        size: THREE.MathUtils.clamp(clampNumber(record.particle?.size, 0.16), 0.01, 2),
+        gravity: THREE.MathUtils.clamp(clampNumber(record.particle?.gravity, -0.0004), -0.05, 0.05),
       },
     } : {}),
     ...(record.prefabId ? { prefabId: record.prefabId } : {}),
@@ -707,6 +746,128 @@ function createCameraObject(record) {
   return root;
 }
 
+function createAudioObject(record) {
+  const root = new THREE.Group();
+  const color = record.audio.mode === "sfx" ? 0x78d8ba : 0x57cef5;
+  const visual = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(0.42, 0.52, 0.34),
+    new THREE.MeshBasicMaterial({ color, wireframe: true, toneMapped: false }),
+  );
+  const cone = new THREE.Mesh(
+    new THREE.ConeGeometry(0.34, 0.46, 12, 1, true),
+    new THREE.MeshBasicMaterial({ color, wireframe: true, transparent: true, opacity: 0.8, toneMapped: false }),
+  );
+  cone.rotation.z = -Math.PI / 2;
+  cone.position.x = 0.4;
+  visual.add(body, cone);
+  if (record.audio.mode === "sfx" && record.audio.spatial) {
+    const range = new THREE.Mesh(
+      new THREE.SphereGeometry(record.audio.distance, 18, 10),
+      new THREE.MeshBasicMaterial({ color, wireframe: true, transparent: true, opacity: 0.1, depthWrite: false, toneMapped: false }),
+    );
+    range.raycast = () => {};
+    visual.add(range);
+  }
+  markEditorVisual(visual);
+  root.add(visual);
+  return root;
+}
+
+function particlePresetColor(preset) {
+  return { fire: 0xff380a, smoke: 0x616b7a, sparks: 0xffb814 }[preset] || 0xff380a;
+}
+
+function particlePresetHex(preset) {
+  return `#${particlePresetColor(preset).toString(16).padStart(6, "0")}`;
+}
+
+function updateLegacyParticlePreview(particle, settings, index, particleCount, elapsedSeconds) {
+  const seed = (index * 73 + 19) % 101;
+  const progress = (elapsedSeconds * settings.rate / Math.max(1, particleCount) + index / Math.max(1, particleCount)) % 1;
+  const angle = seed * 2.399;
+  const radial = ((seed * 37) % 100) / 100 * settings.spread;
+  const ageFrames = progress * settings.lifetime;
+  let x = Math.cos(angle) * radial;
+  let z = Math.sin(angle) * radial;
+  let y = settings.speed * ageFrames - settings.gravity * ageFrames * ageFrames * 0.5;
+  if (settings.preset === "smoke") {
+    x += Math.sin(progress * 5 + seed) * settings.spread * 0.35;
+    z += Math.cos(progress * 4 + seed) * settings.spread * 0.35;
+  } else if (settings.preset === "sparks") {
+    x += Math.cos(angle) * settings.speed * ageFrames;
+    z += Math.sin(angle) * settings.speed * ageFrames;
+    y = settings.speed * ageFrames * 0.75 - Math.abs(settings.gravity || 0.002) * ageFrames * ageFrames * 0.5;
+  }
+  particle.alive = settings.autoplay;
+  particle.age = ageFrames;
+  particle.life = settings.lifetime;
+  particle.progress = progress;
+  particle.x = x;
+  particle.y = y * Math.max(0.2, settings.lifetime / 60);
+  particle.z = z;
+}
+
+function stepLegacyParticlePreview(simulation, settings) {
+  simulation.elapsedSeconds += 1 / 60;
+  for (let index = 0; index < simulation.particles.length; index++) {
+    const particle = simulation.particles[index];
+    updateLegacyParticlePreview(particle, settings, index, simulation.particles.length, simulation.elapsedSeconds);
+  }
+}
+
+function updateParticlePreviewObject(record, root, deltaSeconds) {
+  const simulation = root?.userData.editorParticleSimulation;
+  if (!simulation) return;
+  const settings = record.particle;
+  simulation.frameAccumulator += Math.min(Math.max(deltaSeconds || 0, 0), 0.25) * 60;
+  while (simulation.frameAccumulator >= 1) {
+    stepLegacyParticlePreview(simulation, settings);
+    simulation.frameAccumulator -= 1;
+  }
+  for (let index = 0; index < simulation.particles.length; index++) {
+    const particle = simulation.particles[index];
+    const mesh = simulation.meshes[index];
+    mesh.visible = particle.alive;
+    if (!particle.alive) continue;
+    const progress = particle.progress;
+    const scale = settings.size;
+    mesh.position.set(particle.x, particle.y, particle.z);
+    mesh.rotation.set(progress * 2, progress * 3 + index, progress);
+    mesh.scale.setScalar(scale);
+  }
+}
+
+function createParticleObject(record) {
+  const root = new THREE.Group();
+  const particleGeometry = new THREE.OctahedronGeometry(1, 0);
+  const particleMaterial = new THREE.MeshBasicMaterial({ color: record.particle.color, toneMapped: false });
+  const meshes = [];
+  const particles = [];
+  for (let index = 0; index < record.particle.maxParticles; index++) {
+    const mesh = new THREE.Mesh(particleGeometry, particleMaterial);
+    mesh.visible = false;
+    meshes.push(mesh);
+    particles.push({ alive: false, age: 0, life: record.particle.lifetime, progress: 0, x: 0, y: 0, z: 0 });
+    root.add(mesh);
+  }
+  const marker = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.28, 0.38, 0.18, 12),
+    new THREE.MeshBasicMaterial({ color: record.particle.color, wireframe: true, toneMapped: false }),
+  );
+  for (const mesh of meshes) markEditorVisual(mesh);
+  markEditorVisual(marker);
+  root.add(marker);
+  root.userData.editorParticleSimulation = {
+    particles,
+    meshes,
+    elapsedSeconds: 0,
+    frameAccumulator: 0,
+  };
+  updateParticlePreviewObject(record, root, 0);
+  return root;
+}
+
 async function loadObj(asset) {
   const url = `/assets/${asset.split("/").map(encodeURIComponent).join("/")}`;
   const response = await fetch(url);
@@ -886,13 +1047,20 @@ async function createEditorObject(record, generation = state.loadGeneration) {
     return group;
   }
 
-  if (record.source.kind === "light" || record.source.kind === "camera") {
-    const content = record.source.kind === "light" ? createLightObject(record) : createCameraObject(record);
+  if (["light", "camera", "audio", "particle"].includes(record.source.kind)) {
+    const content = record.source.kind === "light"
+      ? createLightObject(record)
+      : record.source.kind === "camera"
+        ? createCameraObject(record)
+        : record.source.kind === "audio"
+          ? createAudioObject(record)
+          : createParticleObject(record);
     content.userData.editorContent = true;
     group.add(content);
     group.userData.stats = { vertices: 0, triangles: 0 };
     if (record.source.kind === "light") group.userData.editorLight = content.userData.editorLight;
     if (record.source.kind === "camera") group.userData.previewCamera = content.userData.previewCamera;
+    if (record.source.kind === "particle") group.userData.editorParticleRoot = content;
     updateEditorLightingRig();
     updateViewportStats();
     return group;
@@ -1187,7 +1355,7 @@ function renderHierarchy() {
     visit(null, 0);
   }
 
-  const icons = { group: "▱", collider: "▣", primitive: "◆", model: "◇", light: "✦", camera: "▣" };
+  const icons = { group: "▱", collider: "▣", primitive: "◆", model: "◇", light: "✦", camera: "▣", audio: "♪", particle: "⁙" };
   for (const { record, depth } of ordered) {
     if (query && !record.name.toLocaleLowerCase("pt-BR").includes(query)) continue;
     const hasChildren = (children.get(record.id) || []).length > 0;
@@ -1521,6 +1689,16 @@ function renderMaterialTextureOptions(record) {
   select.value = record.material?.texture || "";
 }
 
+function renderAudioAssetOptions(record) {
+  const select = $("audio-asset");
+  select.replaceChildren(new Option("Selecione um áudio", ""));
+  for (const asset of state.audioFiles) select.append(new Option(asset.path, asset.path));
+  if (record.source.asset && !state.audioFiles.some((asset) => asset.path === record.source.asset)) {
+    select.append(new Option(record.source.asset, record.source.asset));
+  }
+  select.value = record.source.asset || "";
+}
+
 function eventPhaseLabel(phase) {
   return { onEnter: "Entrar", onExit: "Sair", onInteract: "Interagir" }[phase] || phase;
 }
@@ -1529,6 +1707,8 @@ function eventActionSummary(action) {
   if (action.type === "message") return action.text;
   if (action.type === "teleport") return `Jogador → ${action.position.x}, ${action.position.y}, ${action.position.z}`;
   const target = recordById(action.targetId)?.name || action.targetId || "Sem alvo";
+  if (action.type === "audio") return `${action.mode === "stop" ? "Parar" : "Tocar"}: ${target}`;
+  if (action.type === "particle") return `${{ start: "Iniciar", stop: "Parar", burst: "Explodir" }[action.mode] || action.mode}: ${target}`;
   const mode = { toggle: "Alternar", show: "Mostrar", hide: "Ocultar" }[action.mode] || action.mode;
   return `${mode}: ${target}`;
 }
@@ -1537,9 +1717,30 @@ function updateEventDraftUi() {
   const type = $("event-action-type").value;
   $("event-message-row").hidden = type !== "message";
   $("event-duration-row").hidden = type !== "message";
-  $("event-target-row").hidden = type !== "visibility";
+  const targetKind = type === "audio" ? "audio" : type === "particle" ? "particle" : null;
+  $("event-target-row").hidden = type !== "visibility" && !targetKind;
   $("event-visibility-row").hidden = type !== "visibility";
+  $("event-effect-mode-row").hidden = !targetKind;
   $("event-teleport-row").hidden = type !== "teleport";
+  const targetSelect = $("event-target");
+  const previousTarget = targetSelect.value;
+  targetSelect.replaceChildren(new Option(targetKind ? "Selecione um componente" : "Selecione um objeto", ""));
+  for (const candidate of state.document.objects) {
+    const accepted = targetKind
+      ? candidate.source.kind === targetKind
+      : ["model", "primitive", "group"].includes(candidate.source.kind);
+    if (accepted) targetSelect.append(new Option(candidate.name, candidate.id));
+  }
+  if ([...targetSelect.options].some((option) => option.value === previousTarget)) targetSelect.value = previousTarget;
+  $("event-target-label").textContent = targetKind === "audio" ? "Fonte de áudio" : targetKind === "particle" ? "Emissor" : "Objeto";
+  $("event-target-help").textContent = targetKind ? "Componente executado no jogo" : "Alvo da ação";
+  const modeSelect = $("event-effect-mode");
+  modeSelect.replaceChildren();
+  if (type === "audio") {
+    modeSelect.append(new Option("Tocar", "play"), new Option("Parar", "stop"));
+  } else if (type === "particle") {
+    modeSelect.append(new Option("Explosão única", "burst"), new Option("Iniciar emissão", "start"), new Option("Parar emissão", "stop"));
+  }
 }
 
 function removeTriggerAction(recordId, phase, actionId) {
@@ -1557,15 +1758,6 @@ function renderTriggerEvents(record) {
   container.hidden = record.collider?.trigger !== true;
   if (container.hidden) return;
   record.events ||= normalizeRecordEvents();
-
-  const targetSelect = $("event-target");
-  const previousTarget = targetSelect.value;
-  targetSelect.replaceChildren(new Option("Selecione um objeto", ""));
-  for (const candidate of state.document.objects) {
-    if (!["model", "primitive", "group"].includes(candidate.source.kind)) continue;
-    targetSelect.append(new Option(candidate.name, candidate.id));
-  }
-  if ([...targetSelect.options].some((option) => option.value === previousTarget)) targetSelect.value = previousTarget;
 
   const list = $("event-action-list");
   list.replaceChildren();
@@ -1604,13 +1796,17 @@ function addTriggerAction() {
   const phase = $("event-when").value;
   const type = $("event-action-type").value;
   let action;
-  if (type === "visibility") {
+  if (["visibility", "audio", "particle"].includes(type)) {
     const targetId = $("event-target").value;
     if (!targetId) {
-      toast("Selecione o objeto que receberá a ação.", "error");
+      toast("Selecione o alvo que receberá a ação.", "error");
       return;
     }
-    action = { type, targetId, mode: $("event-visibility-mode").value };
+    action = {
+      type,
+      targetId,
+      mode: type === "visibility" ? $("event-visibility-mode").value : $("event-effect-mode").value,
+    };
   } else if (type === "teleport") {
     action = {
       type,
@@ -1687,7 +1883,7 @@ function renderInspector() {
   if (!record) return;
 
   $("object-name").value = record.name;
-  $("object-type-icon").textContent = ({ group: "▱", collider: "▣", primitive: "◆", model: "◇", light: "✦", camera: "▣" })[record.source.kind] || "◇";
+  $("object-type-icon").textContent = ({ group: "▱", collider: "▣", primitive: "◆", model: "◇", light: "✦", camera: "▣", audio: "♪", particle: "⁙" })[record.source.kind] || "◇";
   setVectorInputs("position", record.position);
   setVectorInputs("rotation", record.rotation);
   setVectorInputs("scale", record.scale);
@@ -1701,7 +1897,13 @@ function renderInspector() {
       ? `Colisor · ${record.source.collider}`
       : record.source.kind === "light"
         ? `Luz · ${{ ambient: "ambiente", directional: "direcional", point: "pontual" }[record.light.type]}`
-        : record.source.kind === "camera" ? "Câmera" : record.source.kind === "group" ? "Grupo" : "Modelo 3D";
+        : record.source.kind === "camera"
+          ? "Câmera"
+          : record.source.kind === "audio"
+            ? `Áudio · ${record.audio.mode === "sfx" ? "efeito ADPCM" : "stream"}`
+            : record.source.kind === "particle"
+              ? `Partículas · ${{ fire: "fogo", smoke: "fumaça", sparks: "faíscas" }[record.particle.preset]}`
+              : record.source.kind === "group" ? "Grupo" : "Modelo 3D";
   $("source-asset").textContent = record.source.asset || "—";
   $("source-id").textContent = record.id;
   const stats = object?.userData.stats;
@@ -1719,10 +1921,14 @@ function renderInspector() {
   const materialMode = ["model", "primitive"].includes(record.source.kind);
   const lightMode = record.source.kind === "light";
   const cameraMode = record.source.kind === "camera";
+  const audioMode = record.source.kind === "audio";
+  const particleMode = record.source.kind === "particle";
   $("collider-section").hidden = !colliderMode;
   $("material-section").hidden = !materialMode;
   $("light-section").hidden = !lightMode;
   $("camera-section").hidden = !cameraMode;
+  $("audio-section").hidden = !audioMode;
+  $("particle-section").hidden = !particleMode;
   $("object-color-row").hidden = !colliderMode;
   if (colliderMode) {
     $("collider-shape").value = record.source.collider;
@@ -1773,6 +1979,38 @@ function renderInspector() {
         ? "PS2 · câmera fixa: usa exatamente a posição e a rotação deste objeto."
         : "PS2 · câmera fixa que acompanha o jogador com o olhar.";
   }
+  if (audioMode) {
+    renderAudioAssetOptions(record);
+    $("audio-mode").value = record.audio.mode;
+    $("audio-mode").disabled = Boolean(record.source.asset);
+    $("audio-autoplay").checked = record.audio.autoplay;
+    $("audio-loop").checked = record.audio.loop;
+    $("audio-volume").value = record.audio.volume;
+    $("audio-spatial").checked = record.audio.spatial;
+    $("audio-distance").value = record.audio.distance;
+    $("audio-pan").value = record.audio.pan;
+    $("audio-pitch").value = record.audio.pitch;
+    const sfxMode = record.audio.mode === "sfx";
+    $("audio-spatial-row").hidden = !sfxMode;
+    $("audio-distance-row").hidden = !sfxMode || !record.audio.spatial;
+    $("audio-pan-row").hidden = !sfxMode;
+    $("audio-pitch-row").hidden = !sfxMode;
+    $("audio-runtime-note").textContent = sfxMode
+      ? "PS2 · Sound.Sfx usa ADPCM, volume, pan e pitch. O modo espacial recalcula volume e pan pela distância do jogador; parar aguarda o efeito atual terminar."
+      : "PS2 · Sound.Stream toca WAV/OGG globalmente. Apenas o primeiro stream exportado é carregado; volume usa o controle mestre do Athena.";
+  }
+  if (particleMode) {
+    $("particle-preset").value = record.particle.preset;
+    $("particle-color").value = record.particle.color;
+    $("particle-autoplay").checked = record.particle.autoplay;
+    $("particle-max").value = record.particle.maxParticles;
+    $("particle-rate").value = record.particle.rate;
+    $("particle-lifetime").value = record.particle.lifetime;
+    $("particle-speed").value = record.particle.speed;
+    $("particle-spread").value = record.particle.spread;
+    $("particle-size").value = record.particle.size;
+    $("particle-gravity").value = record.particle.gravity;
+  }
 
   const transformInputs = inspector.querySelectorAll('.vector-inputs input, #reset-transform-button');
   for (const input of transformInputs) input.disabled = isRecordEffectivelyLocked(record);
@@ -1794,8 +2032,9 @@ async function refreshAssetCatalog() {
     state.assets = data.models || [];
     state.assetFiles = data.files || [];
     state.textures = state.assetFiles.filter((asset) => [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tga"].includes(asset.extension));
+    state.audioFiles = state.assetFiles.filter((asset) => [".wav", ".ogg", ".adp"].includes(asset.extension));
     renderAssets();
-    if (currentRecord()?.material) renderInspector();
+    if (currentRecord()?.material || currentRecord()?.audio) renderInspector();
   } catch (error) {
     toast(error.message, "error");
   }
@@ -2152,6 +2391,43 @@ async function addCamera() {
   setStatus("Câmera adicionada a partir da visão atual");
 }
 
+async function addAudio() {
+  const firstAudio = state.audioFiles[0]?.path || "";
+  const mode = firstAudio.toLowerCase().endsWith(".adp") ? "sfx" : "stream";
+  await addRecord({
+    id: uid("audio"),
+    name: "Nova fonte de áudio",
+    source: { kind: "audio", asset: firstAudio },
+    position: { x: orbit.target.x, y: 1.2, z: orbit.target.z },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 1, y: 1, z: 1 },
+    color: "#78d8ba",
+    audio: { mode, autoplay: true, loop: true, volume: 80, spatial: mode === "sfx", distance: 14, pan: 0, pitch: 0 },
+  });
+  setStatus(firstAudio ? "Fonte de áudio adicionada" : "Fonte adicionada · importe WAV, OGG ou ADP");
+}
+
+function particleDefaults(preset) {
+  if (preset === "smoke") return { preset, color: particlePresetHex(preset), autoplay: true, maxParticles: 5, rate: 3.5, lifetime: 150, speed: 0.018, spread: 0.55, size: 0.24, gravity: -0.00015 };
+  if (preset === "sparks") return { preset, color: particlePresetHex(preset), autoplay: true, maxParticles: 8, rate: 10, lifetime: 48, speed: 0.045, spread: 0.2, size: 0.08, gravity: 0.0018 };
+  return { preset: "fire", color: particlePresetHex("fire"), autoplay: true, maxParticles: 6, rate: 8, lifetime: 70, speed: 0.035, spread: 0.4, size: 0.16, gravity: -0.0004 };
+}
+
+async function addParticle(preset) {
+  const labels = { fire: "Emissor de fogo", smoke: "Emissor de fumaça", sparks: "Emissor de faíscas" };
+  await addRecord({
+    id: uid("particle"),
+    name: labels[preset] || "Emissor de partículas",
+    source: { kind: "particle", asset: "" },
+    position: { x: orbit.target.x, y: 0.3, z: orbit.target.z },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 1, y: 1, z: 1 },
+    color: "#ff9c58",
+    particle: particleDefaults(preset),
+  });
+  setStatus(`${labels[preset]} adicionado`);
+}
+
 function primitiveLabel(kind) {
   return { cube: "Cubo", sphere: "Esfera", cylinder: "Cilindro", cone: "Cone", plane: "Plano" }[kind] || "Primitiva";
 }
@@ -2427,6 +2703,49 @@ function updateCameraFromInspector() {
   markDirty();
 }
 
+function updateAudioFromInspector() {
+  const record = currentRecord();
+  if (!record?.audio) return;
+  stageFieldHistory();
+  record.source.asset = $("audio-asset").value;
+  record.audio.mode = record.source.asset
+    ? (record.source.asset.toLowerCase().endsWith(".adp") ? "sfx" : "stream")
+    : $("audio-mode").value;
+  record.audio.autoplay = $("audio-autoplay").checked;
+  record.audio.loop = $("audio-loop").checked;
+  record.audio.volume = Math.round(THREE.MathUtils.clamp(clampNumber($("audio-volume").value, 80), 0, 100));
+  record.audio.spatial = $("audio-spatial").checked;
+  record.audio.distance = THREE.MathUtils.clamp(clampNumber($("audio-distance").value, 14), 0.1, 500);
+  record.audio.pan = Math.round(THREE.MathUtils.clamp(clampNumber($("audio-pan").value), -100, 100));
+  record.audio.pitch = Math.round(THREE.MathUtils.clamp(clampNumber($("audio-pitch").value), -100, 100));
+  rebuildAudioVisual(record);
+  markDirty();
+}
+
+function updateParticleFromInspector() {
+  const record = currentRecord();
+  if (!record?.particle) return;
+  stageFieldHistory();
+  const previousPreset = record.particle.preset;
+  const nextPreset = $("particle-preset").value;
+  const usedPresetColor = record.particle.color.toLowerCase() === particlePresetHex(previousPreset);
+  record.particle.preset = nextPreset;
+  record.particle.color = usedPresetColor && nextPreset !== previousPreset
+    ? particlePresetHex(nextPreset)
+    : $("particle-color").value;
+  $("particle-color").value = record.particle.color;
+  record.particle.autoplay = $("particle-autoplay").checked;
+  record.particle.maxParticles = Math.round(THREE.MathUtils.clamp(clampNumber($("particle-max").value, 6), 1, 8));
+  record.particle.rate = THREE.MathUtils.clamp(clampNumber($("particle-rate").value, 8), 0.1, 30);
+  record.particle.lifetime = Math.round(THREE.MathUtils.clamp(clampNumber($("particle-lifetime").value, 70), 8, 360));
+  record.particle.speed = THREE.MathUtils.clamp(clampNumber($("particle-speed").value, 0.035), 0, 0.25);
+  record.particle.spread = THREE.MathUtils.clamp(clampNumber($("particle-spread").value, 0.65), 0, 5);
+  record.particle.size = THREE.MathUtils.clamp(clampNumber($("particle-size").value, 0.16), 0.01, 2);
+  record.particle.gravity = THREE.MathUtils.clamp(clampNumber($("particle-gravity").value, -0.0004), -0.05, 0.05);
+  rebuildParticleVisual(record);
+  markDirty();
+}
+
 function setActiveCamera(id, active) {
   const record = recordById(id);
   if (!record?.camera) return;
@@ -2502,6 +2821,7 @@ function replaceEditorContent(record, factory) {
   object.add(content);
   object.userData.previewCamera = content.userData.previewCamera || null;
   object.userData.editorLight = content.userData.editorLight || null;
+  object.userData.editorParticleRoot = record.source.kind === "particle" ? content : null;
   refreshSelectionVisuals();
   return object;
 }
@@ -2515,6 +2835,16 @@ function rebuildLightVisual(record) {
 function rebuildCameraVisual(record) {
   if (record.source.kind !== "camera") return;
   replaceEditorContent(record, createCameraObject);
+}
+
+function rebuildAudioVisual(record) {
+  if (record.source.kind !== "audio") return;
+  replaceEditorContent(record, createAudioObject);
+}
+
+function rebuildParticleVisual(record) {
+  if (record.source.kind !== "particle") return;
+  replaceEditorContent(record, createParticleObject);
 }
 
 function setBoxSelectTool(active) {
@@ -3000,9 +3330,9 @@ function fileToBase64(file) {
 }
 
 async function importFiles(files) {
-  const accepted = [...files].filter((file) => /\.(obj|mtl|gltf|glb|bin|png|jpe?g|webp|bmp|tga)$/i.test(file.name));
+  const accepted = [...files].filter((file) => /\.(obj|mtl|gltf|glb|bin|png|jpe?g|webp|bmp|tga|wav|ogg|adp)$/i.test(file.name));
   if (!accepted.length) {
-    toast("Nenhum arquivo 3D compatível foi selecionado.", "error");
+    toast("Nenhum arquivo 3D, textura ou áudio compatível foi selecionado.", "error");
     return;
   }
   setLoading(1, `Importando ${accepted.length} arquivo(s)…`);
@@ -3036,6 +3366,7 @@ async function importFiles(files) {
       }, { select: index === result.models.length - 1, checkpoint: true });
     }
     if (result.models.length) toast(`${result.models.length} modelo(s) importado(s).`, "success");
+    else if (accepted.some((file) => /\.(wav|ogg|adp)$/i.test(file.name))) toast("Áudio importado e disponível nas fontes de áudio.", "success");
     else toast("Arquivos auxiliares importados; nenhum OBJ/GLTF/GLB encontrado.");
     setStatus("Importação concluída");
   } catch (error) {
@@ -3486,6 +3817,41 @@ function bindInspector() {
   $("camera-preview-button").addEventListener("click", () => openCameraPreview());
   $("camera-use-view-button").addEventListener("click", () => enterCameraView());
 
+  for (const id of ["audio-volume", "audio-distance", "audio-pan", "audio-pitch"]) {
+    $(id).addEventListener("beforeinput", stageFieldHistory);
+    $(id).addEventListener("input", updateAudioFromInspector);
+    $(id).addEventListener("change", () => { finishFieldHistory(); renderInspector(); });
+    $(id).addEventListener("blur", finishFieldHistory);
+  }
+  $("audio-asset").addEventListener("change", () => {
+    const asset = $("audio-asset").value.toLowerCase();
+    $("audio-mode").value = asset.endsWith(".adp") ? "sfx" : "stream";
+    updateAudioFromInspector();
+    finishFieldHistory();
+    renderInspector();
+  });
+  for (const id of ["audio-mode", "audio-autoplay", "audio-loop", "audio-spatial"]) {
+    $(id).addEventListener("change", () => {
+      updateAudioFromInspector();
+      finishFieldHistory();
+      renderInspector();
+    });
+  }
+
+  for (const id of ["particle-color", "particle-max", "particle-rate", "particle-lifetime", "particle-speed", "particle-spread", "particle-size", "particle-gravity"]) {
+    $(id).addEventListener("beforeinput", stageFieldHistory);
+    $(id).addEventListener("input", updateParticleFromInspector);
+    $(id).addEventListener("change", finishFieldHistory);
+    $(id).addEventListener("blur", finishFieldHistory);
+  }
+  for (const id of ["particle-preset", "particle-autoplay"]) {
+    $(id).addEventListener("change", () => {
+      updateParticleFromInspector();
+      finishFieldHistory();
+      renderInspector();
+    });
+  }
+
   const uiFieldIds = [
     "ui-name", "ui-x", "ui-y", "ui-width", "ui-height", "ui-text",
     "ui-font-scale", "ui-align", "ui-color", "ui-background", "ui-opacity",
@@ -3511,6 +3877,7 @@ function bindUi() {
   document.querySelectorAll("[data-primitive]").forEach((button) => button.addEventListener("click", () => addPrimitive(button.dataset.primitive)));
   document.querySelectorAll("[data-collider]").forEach((button) => button.addEventListener("click", () => addCollider(button.dataset.collider)));
   document.querySelectorAll("[data-light]").forEach((button) => button.addEventListener("click", () => addLight(button.dataset.light)));
+  document.querySelectorAll("[data-particle]").forEach((button) => button.addEventListener("click", () => addParticle(button.dataset.particle)));
   document.querySelectorAll("[data-ui-type]").forEach((button) => button.addEventListener("click", () => addUiElement(button.dataset.uiType)));
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
   document.querySelectorAll("[data-axis-view]").forEach((button) => button.addEventListener("click", () => setAxisView(button.dataset.axisView)));
@@ -3563,6 +3930,7 @@ function bindUi() {
   $("create-prefab-button").addEventListener("click", saveSelectionAsPrefab);
   $("add-group-button").addEventListener("click", addGroup);
   $("add-camera-button").addEventListener("click", addCamera);
+  $("add-audio-button").addEventListener("click", addAudio);
   $("camera-preview-close-button").addEventListener("click", closeCameraPreview);
   $("camera-enter-view-button").addEventListener("click", () => enterCameraView());
   $("confirm-prefab-button").addEventListener("click", (event) => {
@@ -3743,6 +4111,10 @@ function animate() {
       + Math.sin(time * 5.17 + seed * 0.13) * 0.17;
     light.intensity = record.light.intensity * Math.max(0.1, 1 + wave * record.light.flickerAmount);
   }
+  for (const record of state.document?.objects || []) {
+    if (record.source.kind !== "particle") continue;
+    updateParticlePreviewObject(record, state.objects.get(record.id)?.userData.editorParticleRoot, delta);
+  }
   if (selectionBox.visible) updateSelectionBounds();
   updateAxisGizmo();
   renderer.render(scene, camera);
@@ -3773,12 +4145,12 @@ async function boot() {
       const capabilities = await capabilitiesResponse.json();
       state.serverSchemaVersion = Number(capabilities.editorSchemaVersion) || 0;
     }
-    state.serverOutdated = state.serverSchemaVersion < 5;
+    state.serverOutdated = state.serverSchemaVersion < 7;
     const data = await sceneResponse.json();
     if (!sceneResponse.ok) throw new Error(data.error || "Falha ao abrir a cena");
     await loadDocument(data);
     if (state.serverOutdated) {
-      toast("Servidor desatualizado detectado. Reinicie scripts/editor.ps1 para salvar cenas e interface.", "error", 12000);
+      toast("Servidor desatualizado detectado. Reinicie scripts/editor.ps1 para salvar áudio e partículas.", "error", 12000);
       setStatus("Servidor desatualizado — reinicie o editor");
     } else {
       toast("Editor pronto. Selecione um objeto para começar.", "success", 2800);

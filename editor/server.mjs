@@ -28,9 +28,11 @@ const host = "127.0.0.1";
 const port = Number(process.env.ATHENA_EDITOR_PORT || 4173);
 
 const modelExtensions = new Set([".obj", ".gltf", ".glb"]);
+const audioExtensions = new Set([".wav", ".ogg", ".adp"]);
 const importExtensions = new Set([
   ".obj", ".mtl", ".gltf", ".glb", ".bin",
   ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tga",
+  ".wav", ".ogg", ".adp",
 ]);
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -48,6 +50,9 @@ const mimeTypes = {
   ".jpeg": "image/jpeg",
   ".webp": "image/webp",
   ".bmp": "image/bmp",
+  ".wav": "audio/wav",
+  ".ogg": "audio/ogg",
+  ".adp": "application/octet-stream",
   ".svg": "image/svg+xml",
   ".woff2": "font/woff2",
 };
@@ -151,7 +156,8 @@ function safeAssetPath(value) {
 }
 
 const eventPhases = ["onEnter", "onExit", "onInteract"];
-const eventActionTypes = ["message", "visibility", "teleport"];
+const eventActionTypes = ["message", "visibility", "teleport", "audio", "particle"];
+const particlePresetColors = { fire: "#ff380a", smoke: "#616b7a", sparks: "#ffb814" };
 
 function normalizeEventAction(action, index) {
   const type = eventActionTypes.includes(action?.type) ? action.type : "message";
@@ -168,6 +174,14 @@ function normalizeEventAction(action, index) {
     } : {}),
     ...(type === "teleport" ? {
       position: vector(action?.position, { x: 0, y: 0.08, z: 18 }),
+    } : {}),
+    ...(type === "audio" ? {
+      targetId: typeof action?.targetId === "string" ? action.targetId.slice(0, 96) : "",
+      mode: ["play", "stop"].includes(action?.mode) ? action.mode : "play",
+    } : {}),
+    ...(type === "particle" ? {
+      targetId: typeof action?.targetId === "string" ? action.targetId.slice(0, 96) : "",
+      mode: ["start", "stop", "burst"].includes(action?.mode) ? action.mode : "burst",
     } : {}),
   };
 }
@@ -218,7 +232,7 @@ function normalizeScene(input) {
       },
     },
     objects: objects.slice(0, 2000).map((item, index) => {
-      const allowedKinds = new Set(["model", "primitive", "group", "collider", "light", "camera"]);
+      const allowedKinds = new Set(["model", "primitive", "group", "collider", "light", "camera", "audio", "particle"]);
       let kind = allowedKinds.has(item?.source?.kind) ? item.source.kind : "model";
       const asset = safeAssetPath(item?.source?.asset || item?.asset);
       const legacyName = String(item?.name || "").toLocaleLowerCase("pt-BR");
@@ -288,6 +302,30 @@ function normalizeScene(input) {
           far: Math.max(cameraNear + 0.1, finite(item?.camera?.far, 500)),
           active: item?.camera?.active === true,
           mode: ["follow", "fixed", "lookAtPlayer"].includes(item?.camera?.mode) ? item.camera.mode : "follow",
+        } : undefined,
+        audio: kind === "audio" ? {
+          mode: asset ? (path.extname(asset).toLowerCase() === ".adp" ? "sfx" : "stream") : (["stream", "sfx"].includes(item?.audio?.mode) ? item.audio.mode : "stream"),
+          autoplay: item?.audio?.autoplay !== false,
+          loop: item?.audio?.loop === true,
+          volume: Math.round(Math.max(0, Math.min(100, finite(item?.audio?.volume, 80)))),
+          spatial: item?.audio?.spatial === true,
+          distance: Math.max(0.1, Math.min(500, finite(item?.audio?.distance, 14))),
+          pan: Math.round(Math.max(-100, Math.min(100, finite(item?.audio?.pan, 0)))),
+          pitch: Math.round(Math.max(-100, Math.min(100, finite(item?.audio?.pitch, 0)))),
+        } : undefined,
+        particle: kind === "particle" ? {
+          preset: ["fire", "smoke", "sparks"].includes(item?.particle?.preset) ? item.particle.preset : "fire",
+          color: /^#[0-9a-f]{6}$/i.test(item?.particle?.color || "")
+            ? item.particle.color
+            : particlePresetColors[["fire", "smoke", "sparks"].includes(item?.particle?.preset) ? item.particle.preset : "fire"],
+          autoplay: item?.particle?.autoplay !== false,
+          maxParticles: Math.round(Math.max(1, Math.min(8, finite(item?.particle?.maxParticles, 6)))),
+          rate: Math.max(0.1, Math.min(30, finite(item?.particle?.rate, 8))),
+          lifetime: Math.round(Math.max(8, Math.min(360, finite(item?.particle?.lifetime, 70)))),
+          speed: Math.max(0, Math.min(0.25, finite(item?.particle?.speed, 0.035))),
+          spread: Math.max(0, Math.min(5, finite(item?.particle?.spread, 0.65))),
+          size: Math.max(0.01, Math.min(2, finite(item?.particle?.size, 0.16))),
+          gravity: Math.max(-0.05, Math.min(0.05, finite(item?.particle?.gravity, -0.0004))),
         } : undefined,
         prefabId: typeof item?.prefabId === "string" ? item.prefabId.slice(0, 96) : undefined,
       };
@@ -377,6 +415,15 @@ function runtimeUiColor(value, opacity = 1) {
     g: Number.parseInt(hex.slice(2, 4), 16),
     b: Number.parseInt(hex.slice(4, 6), 16),
     a: Math.round(Math.max(0, Math.min(1, opacity)) * 128),
+  };
+}
+
+function runtimeMaterialColor(value) {
+  const hex = /^#[0-9a-f]{6}$/i.test(value || "") ? value.slice(1) : "ffffff";
+  return {
+    r: Number.parseInt(hex.slice(0, 2), 16) / 255,
+    g: Number.parseInt(hex.slice(2, 4), 16) / 255,
+    b: Number.parseInt(hex.slice(4, 6), 16) / 255,
   };
 }
 
@@ -564,6 +611,49 @@ function generateAthenaScene(scene) {
     },
   } : null;
 
+  const audio = [];
+  let streamSeen = false;
+  for (const item of scene.objects) {
+    if (!item.runtime || !item.visible || item.source.kind !== "audio" || !item.source.asset) continue;
+    if (!audioExtensions.has(path.extname(item.source.asset).toLowerCase())) continue;
+    if (item.audio.mode === "stream") {
+      if (streamSeen) continue;
+      streamSeen = true;
+    }
+    const transform = transforms.get(item.id);
+    audio.push({
+      id: item.id,
+      name: item.name,
+      asset: item.source.asset,
+      position: transform.position,
+      ...item.audio,
+    });
+    if (audio.length >= 8) break;
+  }
+
+  const particleAssets = {
+    fire: "editor_particles/fire.obj",
+    smoke: "editor_particles/smoke.obj",
+    sparks: "editor_particles/sparks.obj",
+  };
+  const particles = [];
+  let particleBudget = 12;
+  for (const item of scene.objects) {
+    if (!item.runtime || !item.visible || item.source.kind !== "particle" || particleBudget <= 0) continue;
+    const transform = transforms.get(item.id);
+    const maxParticles = Math.min(item.particle.maxParticles, particleBudget);
+    particleBudget -= maxParticles;
+    particles.push({
+      id: item.id,
+      name: item.name,
+      position: transform.position,
+      asset: particleAssets[item.particle.preset],
+      ...item.particle,
+      color: runtimeMaterialColor(item.particle.color),
+      maxParticles,
+    });
+  }
+
   const ui = scene.ui
     .filter((item) => item.runtime && item.visible)
     .map((item) => ({
@@ -591,6 +681,8 @@ function generateAthenaScene(scene) {
     `globalThis.EDITOR_LIGHTS = ${JSON.stringify(lights, null, 2)};`,
     `globalThis.EDITOR_POINT_LIGHTS = ${JSON.stringify(pointLights, null, 2)};`,
     `globalThis.EDITOR_CAMERA = ${JSON.stringify(activeCamera, null, 2)};`,
+    `globalThis.EDITOR_AUDIO = ${JSON.stringify(audio, null, 2)};`,
+    `globalThis.EDITOR_PARTICLES = ${JSON.stringify(particles, null, 2)};`,
     `globalThis.EDITOR_UI = ${JSON.stringify(ui, null, 2)};`,
     "",
   ].join("\n");
@@ -793,7 +885,8 @@ async function importFiles(payload) {
   }
 
   const firstModel = payload.files.find((item) => modelExtensions.has(path.extname(item.name || "").toLowerCase()));
-  const baseName = path.basename(firstModel?.name || "modelo", path.extname(firstModel?.name || ""));
+  const firstAsset = firstModel || payload.files[0];
+  const baseName = path.basename(firstAsset?.name || "asset", path.extname(firstAsset?.name || ""));
   const folder = `${sanitizeSegment(baseName)}-${Date.now().toString(36)}`;
   const destinationRoot = path.join(assetsRoot, "imported", folder);
   await mkdir(destinationRoot, { recursive: true });
@@ -849,9 +942,17 @@ function startBuildAndRun() {
       windowsHide: true,
       detached: true,
     });
-    runner.stdout.on("data", appendRunLog);
+    runner.stdout.on("data", (chunk) => {
+      appendRunLog(chunk);
+      if (String(chunk).includes("PCSX2 iniciado.")) {
+        runState.running = false;
+        runState.phase = "done";
+        runState.ok = true;
+      }
+    });
     runner.stderr.on("data", appendRunLog);
     runner.on("close", (runCode) => {
+      if (runState.phase === "done" && runCode === 0) return;
       runState.running = false;
       runState.phase = runCode === 0 ? "done" : "error";
       runState.ok = runCode === 0;
@@ -864,8 +965,8 @@ function startBuildAndRun() {
 async function handleApi(request, response, url) {
   if (url.pathname === "/api/capabilities" && request.method === "GET") {
     sendJson(response, 200, {
-      editorSchemaVersion: 5,
-      features: ["materials", "lights", "point-light-runtime", "light-flicker", "cameras", "camera-modes", "camera-preview", "components", "trigger-events", "multiple-scenes", "ui-editor", "ui-runtime"],
+      editorSchemaVersion: 7,
+      features: ["materials", "lights", "point-light-runtime", "light-flicker", "cameras", "camera-modes", "camera-preview", "components", "trigger-events", "multiple-scenes", "ui-editor", "ui-runtime", "audio", "audio-runtime", "particles", "particle-runtime", "particle-color"],
     });
     return true;
   }

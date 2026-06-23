@@ -53,6 +53,8 @@ globalThis.EDITOR_LIGHTS = [];
 globalThis.EDITOR_POINT_LIGHTS = [];
 globalThis.EDITOR_CAMERA = null;
 globalThis.EDITOR_UI = [];
+globalThis.EDITOR_AUDIO = [];
+globalThis.EDITOR_PARTICLES = [];
 if (std.exists("scene.generated.js")) {
     std.loadScript("scene.generated.js");
 }
@@ -278,6 +280,244 @@ let previousTriggerIds = [];
 let runtimeMessageText = "";
 let runtimeMessageTimer = 0;
 
+Sound.setVolume(100);
+const runtimeAudio = [];
+for (let audioIndex = 0; audioIndex < EDITOR_AUDIO.length; audioIndex++) {
+    const definition = EDITOR_AUDIO[audioIndex];
+    try {
+        const sound = definition.mode === "sfx" ? Sound.Sfx(definition.asset) : Sound.Stream(definition.asset);
+        if (definition.mode === "sfx") {
+            sound.volume = definition.volume;
+            sound.pan = definition.pan || 0;
+            sound.pitch = definition.pitch || 0;
+        } else {
+            sound.loop = definition.loop === true;
+        }
+        runtimeAudio.push({
+            definition: definition,
+            sound: sound,
+            requested: false,
+            started: false,
+            channel: -1
+        });
+        if (definition.mode === "stream") {
+            console.log("[VeuAzul] Stream pronto: " + definition.asset + " (" + sound.length + " ms)");
+        }
+    } catch (audioError) {
+        console.log("[VeuAzul] Audio nao carregado: " + definition.asset + " - " + audioError);
+    }
+}
+
+function runtimeAudioById(id) {
+    for (let i = 0; i < runtimeAudio.length; i++) {
+        if (runtimeAudio[i].definition.id === id) return runtimeAudio[i];
+    }
+    return null;
+}
+
+function playRuntimeAudio(entry) {
+    if (!entry) return;
+    const definition = entry.definition;
+    if (definition.mode === "stream") {
+        Sound.setVolume(definition.volume);
+        entry.sound.loop = definition.loop === true;
+        entry.requested = true;
+        entry.started = false;
+        entry.sound.play();
+        entry.started = entry.sound.playing();
+        console.log(
+            "[VeuAzul] Audio " + (entry.started ? "tocando" : "aguardando") +
+            ": " + definition.asset
+        );
+        return;
+    }
+    entry.sound.volume = definition.volume;
+    entry.sound.pan = definition.pan || 0;
+    entry.sound.pitch = definition.pitch || 0;
+    const channel = entry.sound.play();
+    entry.channel = channel === undefined ? -1 : channel;
+    entry.requested = definition.loop === true;
+}
+
+function controlRuntimeAudio(id, mode) {
+    const entry = runtimeAudioById(id);
+    if (!entry) return;
+    if (mode === "stop") {
+        entry.requested = false;
+        if (entry.definition.mode === "stream") {
+            entry.sound.pause();
+            entry.sound.rewind();
+            entry.started = false;
+        }
+        return;
+    }
+    playRuntimeAudio(entry);
+}
+
+function updateRuntimeAudio() {
+    for (let i = 0; i < runtimeAudio.length; i++) {
+        const entry = runtimeAudio[i];
+        const definition = entry.definition;
+        if (definition.mode === "stream") {
+            if (!entry.requested) continue;
+            if (entry.sound.playing()) {
+                entry.started = true;
+                continue;
+            }
+            if (entry.started && !definition.loop) {
+                entry.requested = false;
+                continue;
+            }
+            Sound.setVolume(definition.volume);
+            entry.sound.loop = definition.loop === true;
+            entry.sound.play();
+            entry.started = entry.sound.playing();
+            continue;
+        }
+        if (definition.spatial) {
+            const dx = definition.position.x - playerX;
+            const dy = definition.position.y - playerY;
+            const dz = definition.position.z - playerZ;
+            const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            const range = Math.max(0.1, definition.distance || 14.0);
+            const attenuation = clamp(1.0 - distance / range, 0.0, 1.0);
+            const rightAmount = dx * Math.cos(cameraYaw) + dz * Math.sin(cameraYaw);
+            entry.sound.volume = Math.round(definition.volume * attenuation);
+            entry.sound.pan = Math.round(clamp((definition.pan || 0) + rightAmount / range * 100.0, -100.0, 100.0));
+        } else {
+            entry.sound.volume = definition.volume;
+            entry.sound.pan = definition.pan || 0;
+        }
+        entry.sound.pitch = definition.pitch || 0;
+        if (entry.requested) {
+            const playing = entry.channel >= 0 && entry.sound.playing(entry.channel);
+            if (!playing) {
+                const channel = entry.sound.play();
+                entry.channel = channel === undefined ? -1 : channel;
+            }
+        }
+    }
+}
+
+for (let audioIndex = 0; audioIndex < runtimeAudio.length; audioIndex++) {
+    if (runtimeAudio[audioIndex].definition.autoplay) playRuntimeAudio(runtimeAudio[audioIndex]);
+}
+
+const runtimeParticleEmitters = [];
+for (let emitterIndex = 0; emitterIndex < EDITOR_PARTICLES.length; emitterIndex++) {
+    const definition = EDITOR_PARTICLES[emitterIndex];
+    try {
+        const particleData = configureData(new RenderData(definition.asset), { unlit: true });
+        particleData.texture_mapping = false;
+        if (definition.color && typeof particleData.updateMaterial === "function") {
+            particleData.updateMaterial(0, {
+                ambient: definition.color,
+                diffuse: definition.color,
+                specular: { r: 0.0, g: 0.0, b: 0.0 }
+            });
+        }
+        const pool = [];
+        for (let particleIndex = 0; particleIndex < definition.maxParticles; particleIndex++) {
+            const object = new RenderObject(particleData);
+            object.position = definition.position;
+            object.rotation = { x: 0.0, y: 0.0, z: 0.0 };
+            object.scale = { x: 0.0, y: 0.0, z: 0.0 };
+            pool.push({ object: object, alive: false, age: 0.0, life: definition.lifetime, progress: 0.0, x: 0.0, y: 0.0, z: 0.0 });
+        }
+        runtimeParticleEmitters.push({
+            definition: definition,
+            // Some AthenaEnv builds do not retain the JS RenderData wrapper in
+            // RenderObject. Keep it reachable for the lifetime of the emitter
+            // so its native vertex buffers cannot be collected mid-DMA.
+            data: particleData,
+            pool: pool,
+            enabled: definition.autoplay === true,
+            elapsedSeconds: 0.0,
+            burstFrames: 0
+        });
+    } catch (particleError) {
+        console.log("[VeuAzul] Particulas nao carregadas: " + definition.asset + " - " + particleError);
+    }
+}
+
+function particleEmitterById(id) {
+    for (let i = 0; i < runtimeParticleEmitters.length; i++) {
+        if (runtimeParticleEmitters[i].definition.id === id) return runtimeParticleEmitters[i];
+    }
+    return null;
+}
+
+function updateLegacyParticle(particle, definition, particleIndex, particleCount, elapsedSeconds) {
+    const seed = (particleIndex * 73 + 19) % 101;
+    const progress = (elapsedSeconds * definition.rate / Math.max(1, particleCount) + particleIndex / Math.max(1, particleCount)) % 1.0;
+    const angle = seed * 2.399;
+    const radial = ((seed * 37) % 100) / 100.0 * definition.spread;
+    const ageFrames = progress * definition.lifetime;
+    let x = Math.cos(angle) * radial;
+    let z = Math.sin(angle) * radial;
+    let y = definition.speed * ageFrames - definition.gravity * ageFrames * ageFrames * 0.5;
+    if (definition.preset === "smoke") {
+        x += Math.sin(progress * 5.0 + seed) * definition.spread * 0.35;
+        z += Math.cos(progress * 4.0 + seed) * definition.spread * 0.35;
+    } else if (definition.preset === "sparks") {
+        x += Math.cos(angle) * definition.speed * ageFrames;
+        z += Math.sin(angle) * definition.speed * ageFrames;
+        y = definition.speed * ageFrames * 0.75 - Math.abs(definition.gravity || 0.002) * ageFrames * ageFrames * 0.5;
+    }
+    y *= Math.max(0.2, definition.lifetime / 60.0);
+    particle.alive = true;
+    particle.age = ageFrames;
+    particle.life = definition.lifetime;
+    particle.progress = progress;
+    particle.x = definition.position.x + x;
+    particle.y = definition.position.y + y;
+    particle.z = definition.position.z + z;
+}
+
+function controlParticleEmitter(id, mode) {
+    const emitter = particleEmitterById(id);
+    if (!emitter) return;
+    if (mode === "stop") {
+        emitter.enabled = false;
+        emitter.burstFrames = 0;
+        for (let i = 0; i < emitter.pool.length; i++) emitter.pool[i].alive = false;
+        return;
+    }
+    if (mode === "start") {
+        emitter.enabled = true;
+        return;
+    }
+    emitter.elapsedSeconds = 0.0;
+    emitter.burstFrames = Math.max(1, emitter.definition.lifetime);
+    for (let i = 0; i < emitter.pool.length; i++) emitter.pool[i].alive = true;
+}
+
+function updateAndRenderParticles() {
+    for (let emitterIndex = 0; emitterIndex < runtimeParticleEmitters.length; emitterIndex++) {
+        const emitter = runtimeParticleEmitters[emitterIndex];
+        const definition = emitter.definition;
+        const active = emitter.enabled || emitter.burstFrames > 0;
+        if (!active) continue;
+        emitter.elapsedSeconds += 1.0 / 60.0;
+        for (let particleIndex = 0; particleIndex < emitter.pool.length; particleIndex++) {
+            const particle = emitter.pool[particleIndex];
+            updateLegacyParticle(particle, definition, particleIndex, emitter.pool.length, emitter.elapsedSeconds);
+            const progress = particle.progress;
+            const scale = definition.size;
+            particle.object.position = { x: particle.x, y: particle.y, z: particle.z };
+            particle.object.rotation = { x: progress * 2.0, y: progress * 3.0 + particleIndex, z: progress };
+            particle.object.scale = { x: scale, y: scale, z: scale };
+            particle.object.render();
+        }
+        if (emitter.burstFrames > 0) {
+            emitter.burstFrames--;
+            if (emitter.burstFrames === 0 && !emitter.enabled) {
+                for (let i = 0; i < emitter.pool.length; i++) emitter.pool[i].alive = false;
+            }
+        }
+    }
+}
+
 function arrayContains(items, value) {
     for (let i = 0; i < items.length; i++) if (items[i] === value) return true;
     return false;
@@ -299,6 +539,14 @@ function executeRuntimeAction(action) {
             else if (action.mode === "hide") runtimeObjectVisibility[id] = false;
             else runtimeObjectVisibility[id] = !runtimeObjectVisibility[id];
         }
+        return;
+    }
+    if (action.type === "audio") {
+        controlRuntimeAudio(action.targetId, action.mode || "play");
+        return;
+    }
+    if (action.type === "particle") {
+        controlParticleEmitter(action.targetId, action.mode || "burst");
         return;
     }
     if (action.type === "teleport") {
@@ -519,6 +767,7 @@ function updatePlayerAndCamera() {
     updateVerticalMovement();
     updateActiveTriggers();
     processRuntimeEvents();
+    updateRuntimeAudio();
 
     playerObject.position = { x: playerX, y: playerY, z: playerZ };
     playerObject.rotation = { x: 0.0, y: playerYaw, z: 0.0 };
@@ -695,6 +944,7 @@ while (true) {
         applyPointLightsAt(center.x, center.y, center.z);
         if (runtimeObjectVisibility[definition.id] !== false) sceneObjects[i].render();
     }
+    updateAndRenderParticles();
     applyPointLightsAt(playerX, playerY + PLAYER_HEIGHT * 0.5, playerZ);
     playerObject.render();
     disablePointLights();

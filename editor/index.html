@@ -143,6 +143,32 @@
         </div>
       </section>
 
+      <section id="particle-tools-section" class="panel-section particle-tools-section">
+        <div class="section-heading compact">
+          <div>
+            <span class="eyebrow">EFEITOS</span>
+            <h2>Partículas</h2>
+          </div>
+        </div>
+        <div class="particle-tool-grid">
+          <button data-particle="fire"><span>♨</span>Fogo</button>
+          <button data-particle="smoke"><span>☁</span>Fumaça</button>
+          <button data-particle="sparks"><span>✣</span>Faíscas</button>
+        </div>
+      </section>
+
+      <section id="audio-tools-section" class="panel-section media-section">
+        <div class="section-heading compact">
+          <div>
+            <span class="eyebrow">MÍDIA</span>
+            <h2>Áudio</h2>
+          </div>
+        </div>
+        <div class="media-tool-grid">
+          <button id="add-audio-button"><span>♪</span>Adicionar fonte de áudio</button>
+        </div>
+      </section>
+
       <section class="panel-section interface-section">
         <div class="section-heading compact">
           <div>
@@ -428,6 +454,8 @@
                 <option value="message">Mostrar mensagem</option>
                 <option value="visibility">Alterar visibilidade</option>
                 <option value="teleport">Teletransportar jogador</option>
+                <option value="audio">Controlar áudio</option>
+                <option value="particle">Controlar partículas</option>
               </select>
             </label>
             <label id="event-message-row" class="property-row event-wide-property">
@@ -439,8 +467,12 @@
               <input id="event-duration" type="number" min="1" max="3600" step="1" value="180">
             </label>
             <label id="event-target-row" class="property-row select-property" hidden>
-              <span><strong>Objeto</strong><small>Alvo da ação</small></span>
+              <span><strong id="event-target-label">Objeto</strong><small id="event-target-help">Alvo da ação</small></span>
               <select id="event-target"></select>
+            </label>
+            <label id="event-effect-mode-row" class="property-row select-property" hidden>
+              <span><strong>Comando</strong><small>Operação executada no jogo</small></span>
+              <select id="event-effect-mode"></select>
             </label>
             <label id="event-visibility-row" class="property-row select-property" hidden>
               <span><strong>Visibilidade</strong><small>Estado aplicado no jogo</small></span>
@@ -578,6 +610,41 @@
           <p id="camera-runtime-note" class="compatibility-note"></p>
         </section>
 
+        <section id="audio-section" class="inspector-section audio-inspector" hidden>
+          <h3>Áudio</h3>
+          <label class="property-row select-property">
+            <span><strong>Arquivo</strong><small>WAV/OGG para stream · ADP para efeito</small></span>
+            <select id="audio-asset"><option value="">Selecione um áudio</option></select>
+          </label>
+          <label class="property-row select-property">
+            <span><strong>Modo</strong><small>Forma de reprodução no Athena</small></span>
+            <select id="audio-mode"><option value="stream">Stream WAV/OGG</option><option value="sfx">Efeito ADPCM</option></select>
+          </label>
+          <label class="property-row switch-property"><span><strong>Ao iniciar</strong><small>Tocar ao carregar a cena</small></span><input id="audio-autoplay" type="checkbox"></label>
+          <label class="property-row switch-property"><span><strong>Loop</strong><small>Repetir continuamente</small></span><input id="audio-loop" type="checkbox"></label>
+          <label class="property-row number-property"><span><strong>Volume</strong><small>0 a 100</small></span><input id="audio-volume" type="number" min="0" max="100" step="1"></label>
+          <label id="audio-spatial-row" class="property-row switch-property"><span><strong>Espacial</strong><small>Atenuação e pan pela posição</small></span><input id="audio-spatial" type="checkbox"></label>
+          <label id="audio-distance-row" class="property-row number-property"><span><strong>Alcance</strong><small>Distância máxima do efeito</small></span><input id="audio-distance" type="number" min="0.1" max="500" step="0.5"></label>
+          <label id="audio-pan-row" class="property-row number-property"><span><strong>Pan base</strong><small>-100 esquerda · 100 direita</small></span><input id="audio-pan" type="number" min="-100" max="100" step="1"></label>
+          <label id="audio-pitch-row" class="property-row number-property"><span><strong>Pitch</strong><small>-100 a 100</small></span><input id="audio-pitch" type="number" min="-100" max="100" step="1"></label>
+          <p id="audio-runtime-note" class="compatibility-note"></p>
+        </section>
+
+        <section id="particle-section" class="inspector-section particle-inspector" hidden>
+          <h3>Partículas</h3>
+          <label class="property-row select-property"><span><strong>Preset</strong><small>Material e movimento</small></span><select id="particle-preset"><option value="fire">Fogo</option><option value="smoke">Fumaça</option><option value="sparks">Faíscas</option></select></label>
+          <label class="property-row color-property"><span><strong>Cor</strong><small>Tom usado no editor e no PS2</small></span><input id="particle-color" type="color" value="#ff380a"></label>
+          <label class="property-row switch-property"><span><strong>Ao iniciar</strong><small>Emitir ao carregar a cena</small></span><input id="particle-autoplay" type="checkbox"></label>
+          <label class="property-row number-property"><span><strong>Máximo</strong><small>1 a 8 neste emissor</small></span><input id="particle-max" type="number" min="1" max="8" step="1"></label>
+          <label class="property-row number-property"><span><strong>Emissão</strong><small>Partículas por segundo</small></span><input id="particle-rate" type="number" min="0.1" max="30" step="0.5"></label>
+          <label class="property-row number-property"><span><strong>Vida</strong><small>Duração em quadros</small></span><input id="particle-lifetime" type="number" min="8" max="360" step="1"></label>
+          <label class="property-row number-property"><span><strong>Velocidade</strong><small>Unidades por quadro</small></span><input id="particle-speed" type="number" min="0" max="0.25" step="0.005"></label>
+          <label class="property-row number-property"><span><strong>Dispersão</strong><small>Raio de nascimento</small></span><input id="particle-spread" type="number" min="0" max="5" step="0.05"></label>
+          <label class="property-row number-property"><span><strong>Tamanho</strong><small>Escala do fragmento 3D</small></span><input id="particle-size" type="number" min="0.01" max="2" step="0.01"></label>
+          <label class="property-row number-property"><span><strong>Gravidade</strong><small>Negativo sobe · positivo cai</small></span><input id="particle-gravity" type="number" min="-0.05" max="0.05" step="0.0005"></label>
+          <p class="compatibility-note">PS2 · pool global de 12 fragmentos 3D reutilizados. O limite mantém o custo previsível no emulador e no console.</p>
+        </section>
+
         <section class="inspector-section appearance-section">
           <h3>Aparência e saída</h3>
           <label id="object-color-row" class="property-row color-property">
@@ -627,7 +694,7 @@
     <div id="cursor-position">X 0.00 · Y 0.00 · Z 0.00</div>
   </footer>
 
-  <input id="import-input" type="file" multiple accept=".obj,.mtl,.gltf,.glb,.bin,.png,.jpg,.jpeg,.webp,.bmp,.tga" hidden>
+  <input id="import-input" type="file" multiple accept=".obj,.mtl,.gltf,.glb,.bin,.png,.jpg,.jpeg,.webp,.bmp,.tga,.wav,.ogg,.adp" hidden>
   <input id="open-scene-input" type="file" accept=".json,application/json" hidden>
 
   <dialog id="prefab-dialog" class="editor-dialog">

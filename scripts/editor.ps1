@@ -7,6 +7,34 @@ $ErrorActionPreference = "Stop"
 
 $ProjectRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $NodeCommand = Get-Command node.exe -ErrorAction SilentlyContinue
+$EditorUrl = "http://127.0.0.1:$Port/editor/"
+$CapabilitiesUrl = "http://127.0.0.1:$Port/api/capabilities"
+
+try {
+    $Capabilities = Invoke-RestMethod -Uri $CapabilitiesUrl -TimeoutSec 1
+    if ($Capabilities.editorSchemaVersion) {
+        Write-Host "Athena Visual Editor ja esta aberto."
+        Write-Host "Acesse no navegador: $EditorUrl"
+        return
+    }
+} catch {
+    # A porta livre ou ocupada por outro processo e tratada abaixo.
+}
+
+$PortInUse = $false
+$PortProbe = [System.Net.Sockets.TcpClient]::new()
+try {
+    $PortProbe.Connect("127.0.0.1", $Port)
+    $PortInUse = $true
+} catch {
+    $PortInUse = $false
+} finally {
+    $PortProbe.Dispose()
+}
+
+if ($PortInUse) {
+    throw "A porta $Port esta em uso por outro programa. Execute novamente com -Port 4174."
+}
 
 if ($NodeCommand) {
     $NodeExe = $NodeCommand.Source
@@ -20,7 +48,6 @@ if ($NodeCommand) {
 
 $env:ATHENA_EDITOR_PORT = $Port
 Write-Host "Athena Visual Editor"
-Write-Host "Abra no navegador: http://127.0.0.1:$Port/editor/"
+Write-Host "Abra no navegador: $EditorUrl"
 Write-Host "Pressione Ctrl+C para encerrar."
 & $NodeExe (Join-Path $ProjectRoot "editor\server.mjs")
-

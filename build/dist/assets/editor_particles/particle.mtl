@@ -1,0 +1,17 @@
+newmtl particle_fire
+Ka 0.35 0.05 0.01
+Kd 1.00 0.22 0.04
+Ks 0.00 0.00 0.00
+illum 1
+
+newmtl particle_smoke
+Ka 0.10 0.11 0.13
+Kd 0.38 0.42 0.48
+Ks 0.00 0.00 0.00
+illum 1
+
+newmtl particle_sparks
+Ka 0.40 0.22 0.02
+Kd 1.00 0.72 0.08
+Ks 0.00 0.00 0.00
+illum 1

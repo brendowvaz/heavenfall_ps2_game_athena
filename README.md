@@ -53,6 +53,8 @@ Abra `http://127.0.0.1:4173/editor/` no navegador. O editor oferece:
 - componentes de trigger com eventos de entrada, saída e interação executados no PS2;
 - editor de interface 2D em 640 × 448 com painéis, textos, arraste e redimensionamento;
 - múltiplas cenas persistentes, com seleção, duplicação, exclusão e teste da cena ativa;
+- fontes de áudio WAV/OGG e efeitos ADPCM com loop, volume, pan, pitch e alcance espacial;
+- emissores 3D de fogo, fumaça e faíscas com pool de partículas limitado para o PS2;
 - prefabs criados a partir de qualquer seleção, incluindo grupos e colisores;
 - importação múltipla de OBJ/MTL, GLTF/GLB, BIN e texturas;
 - biblioteca dos modelos disponíveis no projeto;
@@ -68,7 +70,11 @@ O modo **Interface** trabalha nas coordenadas nativas de 640 × 448. Painéis us
 
 As dimensões dos colisores seguem a visualização do editor: na caixa, `scale` representa as meias-extensões; na esfera e na cápsula, representa os raios locais. Posição, rotação XYZ, escala hierárquica e altura são exportadas em coordenadas mundiais. Triggers são detectados sem bloquear, e **Bloquear câmera** afeta somente a câmera.
 
-Triggers podem executar ações **Ao entrar**, **Ao sair** ou **Ao interagir** com `Triângulo`. As ações disponíveis nesta etapa mostram mensagens na HUD, mostram/ocultam objetos ou grupos e teletransportam o jogador. Grupos usados como alvo são resolvidos para seus modelos filhos durante a exportação, e todas as ações são executadas pelo `main.js` no PS2.
+Triggers podem executar ações **Ao entrar**, **Ao sair** ou **Ao interagir** com `Triângulo`. As ações mostram mensagens na HUD, mostram/ocultam objetos ou grupos, teletransportam o jogador e controlam áudio ou partículas. Grupos usados como alvo são resolvidos para seus modelos filhos durante a exportação, e todas as ações são executadas pelo `main.js` no PS2.
+
+Fontes de áudio usam as APIs reais do AthenaEnv. WAV e OGG são carregados por `Sound.Stream` como áudio global; apenas o primeiro stream ativo da cena é exportado. Arquivos ADP usam `Sound.Sfx` e aceitam volume, pan, pitch e atenuação espacial calculada pela distância do jogador. Áudio pode tocar ao iniciar ou ser controlado por ações de trigger.
+
+Emissores de partículas usam fragmentos OBJ de baixa geometria, atualizados e desenhados pelo `main.js`. Os presets de fogo, fumaça e faíscas controlam movimento e material; emissão, vida, velocidade, dispersão, tamanho e gravidade são editáveis. O exportador distribui um orçamento global de 12 partículas entre os emissores para manter o custo previsível. Triggers podem iniciar, parar ou disparar uma explosão única.
 
 Prefabs são armazenados em `editor/prefabs`. Ao instanciar um prefab, novos IDs são gerados e a hierarquia interna é preservada; as instâncias já colocadas continuam independentes do arquivo original.
 
