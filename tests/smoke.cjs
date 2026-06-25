@@ -21,12 +21,18 @@ for (const preset of ["fire", "smoke", "sparks"]) {
 for (const marker of ["applyPointerSnap", "togglePivotEditing", "finishBoxSelection", "toggleIsolation", "setupPanelAccordions", "collapsedHierarchy", "applyRecordMaterial", "createLightObject", "applyCampfirePreset", "openCameraPreview", "renderTriggerEvents", "addTriggerAction", "renderUiPreview", "addUiElement", "switchProjectScene", "createProjectScene", "createAudioObject", "createParticleObject", "updateLegacyParticlePreview", "stepLegacyParticlePreview", "OctahedronGeometry", "addAudio", "addParticle"]) {
     if (!editorSource.includes(marker)) throw new Error(`Editor tool missing: ${marker}`);
 }
+for (const marker of ["Heavenfall", "Iniciar Jogo", "CRÉDITOS", "Brendow Vaz"]) {
+    if (!source.includes(marker)) throw new Error(`Runtime menu text missing: ${marker}`);
+}
+for (const marker of ["MENU_AUDIO_ASSET", "updateMenuAudio", "startRuntimeAutoplayAudio"]) {
+    if (!source.includes(marker)) throw new Error(`Runtime menu audio separation missing: ${marker}`);
+}
 for (const id of ["snap-mode", "pivot-button", "box-select-button", "selection-marquee", "isolate-selection-button", "material-section", "light-section", "light-flicker", "light-campfire-preset", "camera-section", "camera-mode", "camera-preview", "trigger-events-editor", "event-action-type", "event-add-button", "scene-picker", "duplicate-scene-button", "ui-mode-button", "ui-editor", "ui-canvas", "ui-inspector", "audio-tools-section", "add-audio-button", "audio-section", "audio-asset", "particle-tools-section", "particle-section", "particle-preset", "particle-color"]) {
     if (!editorHtml.includes(`id="${id}"`)) throw new Error(`Editor control missing: ${id}`);
 }
 source = source.replace(
     "while (true) {",
-    "globalThis.__levelTest = { baseWalkable, isPlayerValid, applyMovement, colliderHits, updateVerticalMovement, executeAction: executeRuntimeAction, getRuntimeMessage: () => runtimeMessageText, getVisibility: (id) => runtimeObjectVisibility[id], getColliders: () => collisionShapes, getAudio: (id) => runtimeAudioById(id), getParticleEmitter: (id) => particleEmitterById(id), setPlayer: (state) => { playerX = state.x; playerY = state.y; playerZ = state.z; playerVelocityY = state.velocityY; playerGrounded = state.grounded; }, getPlayer: () => ({ x: playerX, y: playerY, z: playerZ, velocityY: playerVelocityY, grounded: playerGrounded }) }; for (let __smokeFrame = 0; __smokeFrame < 2; __smokeFrame++) {"
+    "globalThis.__levelTest = { baseWalkable, isPlayerValid, applyMovement, colliderHits, updateVerticalMovement, executeAction: executeRuntimeAction, getRuntimeMessage: () => runtimeMessageText, getVisibility: (id) => runtimeObjectVisibility[id], getColliders: () => collisionShapes, getAudio: (id) => runtimeAudioById(id), getParticleEmitter: (id) => particleEmitterById(id), setPlayer: (state) => { playerX = state.x; playerY = state.y; playerZ = state.z; playerVelocityY = state.velocityY; playerGrounded = state.grounded; }, getPlayer: () => ({ x: playerX, y: playerY, z: playerZ, velocityY: playerVelocityY, grounded: playerGrounded }) }; gameState = GAME_STATE_GAME; for (let __smokeFrame = 0; __smokeFrame < 2; __smokeFrame++) {"
 );
 
 let vertexCount = 0;
@@ -43,6 +49,17 @@ let sandbox;
 
 class MockFont {
     print(x, y, text) { fontPrints.push({ x, y, text }); }
+}
+
+class MockImage {
+    constructor(path) {
+        this.path = path;
+        this.width = 640;
+        this.height = 448;
+    }
+    lock() {}
+    draw() {}
+    ready() { return true; }
 }
 
 class MockRenderData {
@@ -77,6 +94,7 @@ const context = {
     Float32Array,
     Color: { new: (r, g, b, a) => ({ r, g, b, a }) },
     Font: MockFont,
+    Image: MockImage,
     RenderData: MockRenderData,
     RenderObject: MockRenderObject,
     Screen: {

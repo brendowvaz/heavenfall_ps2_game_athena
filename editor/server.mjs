@@ -939,8 +939,6 @@ function startBuildAndRun() {
     appendRunLog("Abrindo PCSX2...");
     const runner = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", runScript], {
       cwd: projectRoot,
-      windowsHide: true,
-      detached: true,
     });
     runner.stdout.on("data", (chunk) => {
       appendRunLog(chunk);
@@ -951,6 +949,12 @@ function startBuildAndRun() {
       }
     });
     runner.stderr.on("data", appendRunLog);
+    runner.on("error", (error) => {
+      runState.running = false;
+      runState.phase = "error";
+      runState.ok = false;
+      appendRunLog(`Falha ao executar o launcher do PCSX2: ${error.message}`);
+    });
     runner.on("close", (runCode) => {
       if (runState.phase === "done" && runCode === 0) return;
       runState.running = false;

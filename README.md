@@ -24,6 +24,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\run-pcsx2.ps1
 ```
 
+Na primeira execução, o launcher cria uma cópia portátil ignorada pelo Git em `build/pcsx2-portable`. Assim, configurações, BIOS, cartões de memória e caches usados nos testes ficam isolados em uma área gravável do workspace.
+
+Para que a janela do emulador seja exibida, inicie o editor por `scripts\editor.ps1` em um PowerShell normal do Windows. Um servidor iniciado por um terminal automatizado sem desktop interativo pode executar o PCSX2 em segundo plano sem conseguir mostrar sua janela; nesse caso, o launcher agora informa o problema em vez de registrar um falso sucesso.
+
 O launcher usa `-elf` e define `build/dist` como raiz HostFS, impedindo que o PCSX2 abra outro jogo recente. No hardware real, copie todo o conteúdo de `build/dist` para o mesmo diretório no dispositivo usado pelo launcher e inicie `athena.elf`.
 
 ## Editor visual

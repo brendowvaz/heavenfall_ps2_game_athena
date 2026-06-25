@@ -9,12 +9,12 @@
     "snapMode": "grid",
     "camera": {
       "position": {
-        "x": 3.1649,
-        "y": 1.1086,
-        "z": 1.904
+        "x": -2.397,
+        "y": 3.0657,
+        "z": 6.3789
       },
       "target": {
-        "x": 2.9682,
+        "x": 3.1782,
         "y": 1.2,
         "z": -1.0882
       }
@@ -580,291 +580,15 @@
       }
     },
     {
-      "id": "cube-mqnvjvo7-zwe93m",
-      "name": "Cubo",
-      "source": {
-        "kind": "primitive",
-        "asset": "editor_primitives/cube.obj",
-        "primitive": "cube"
-      },
-      "parentId": "collision-root",
-      "position": {
-        "x": 8.2656,
-        "y": 1,
-        "z": 2.2385
-      },
-      "rotation": {
-        "x": 0,
-        "y": 0,
-        "z": 0
-      },
-      "scale": {
-        "x": 1,
-        "y": 1,
-        "z": 1
-      },
-      "color": "#8bd5f7",
-      "visible": true,
-      "locked": false,
-      "runtime": true,
-      "material": {
-        "color": "#8bd5f7",
-        "texture": "",
-        "opacity": 1,
-        "roughness": 0.72,
-        "metalness": 0,
-        "emissive": "#000000",
-        "emissiveIntensity": 0,
-        "unlit": false,
-        "doubleSided": true
-      }
-    },
-    {
-      "id": "collider-mqnvkvze-oxwuul",
-      "name": "Colisor caixa",
-      "source": {
-        "kind": "collider",
-        "asset": "",
-        "collider": "box"
-      },
-      "parentId": "collision-root",
-      "position": {
-        "x": 8.2655,
-        "y": 1,
-        "z": 2.2385
-      },
-      "rotation": {
-        "x": 0,
-        "y": 0,
-        "z": 0
-      },
-      "scale": {
-        "x": 1,
-        "y": 1,
-        "z": 1
-      },
-      "color": "#68e0b2",
-      "visible": true,
-      "locked": false,
-      "runtime": true,
-      "collider": {
-        "trigger": false,
-        "cameraBlocker": true
-      },
-      "events": {
-        "onEnter": [],
-        "onExit": [],
-        "onInteract": []
-      }
-    },
-    {
-      "id": "light-mqomhtc0-isim6o",
-      "name": "Luz direcional",
-      "source": {
-        "kind": "light",
-        "asset": "",
-        "light": "directional"
-      },
-      "parentId": null,
-      "position": {
-        "x": -0.9809,
-        "y": 1.8985,
-        "z": -24.0625
-      },
-      "rotation": {
-        "x": 134.0502,
-        "y": -17.3593,
-        "z": 162.8591
-      },
-      "scale": {
-        "x": 1,
-        "y": 1,
-        "z": 1
-      },
-      "color": "#ffc15c",
-      "visible": true,
-      "locked": false,
-      "runtime": true,
-      "light": {
-        "type": "directional",
-        "color": "#fff1cf",
-        "intensity": 2,
-        "distance": 12,
-        "castShadow": true,
-        "flicker": false,
-        "flickerAmount": 0.24,
-        "flickerSpeed": 7.5
-      }
-    },
-    {
-      "id": "light-mqooopqh-0605k1",
-      "name": "Luz ambiente",
-      "source": {
-        "kind": "light",
-        "asset": "",
-        "light": "ambient"
-      },
-      "parentId": null,
-      "position": {
-        "x": -3.8074,
-        "y": 19.2825,
-        "z": -0.8471
-      },
-      "rotation": {
-        "x": 0,
-        "y": 0,
-        "z": 0
-      },
-      "scale": {
-        "x": 1,
-        "y": 1,
-        "z": 1
-      },
-      "color": "#ffc15c",
-      "visible": true,
-      "locked": false,
-      "runtime": true,
-      "light": {
-        "type": "ambient",
-        "color": "#8db9d1",
-        "intensity": 0.45,
-        "distance": 12,
-        "castShadow": false,
-        "flicker": false,
-        "flickerAmount": 0.24,
-        "flickerSpeed": 7.5
-      }
-    },
-    {
-      "id": "particle-mqptxbkr-w6q89x",
-      "name": "Emissor de fumaça",
-      "source": {
-        "kind": "particle",
-        "asset": ""
-      },
-      "parentId": null,
-      "position": {
-        "x": 1.3112,
-        "y": 0.3,
-        "z": -0.807
-      },
-      "rotation": {
-        "x": 0,
-        "y": 0,
-        "z": 0
-      },
-      "scale": {
-        "x": 1,
-        "y": 1,
-        "z": 1
-      },
-      "color": "#ff9c58",
-      "visible": true,
-      "locked": false,
-      "runtime": true,
-      "particle": {
-        "preset": "sparks",
-        "color": "#ffb814",
-        "autoplay": true,
-        "maxParticles": 5,
-        "rate": 3.5,
-        "lifetime": 150,
-        "speed": 0.018,
-        "spread": 0.55,
-        "size": 0.24,
-        "gravity": -0.00015
-      }
-    },
-    {
-      "id": "particle-mqpuaydw-u365mu",
-      "name": "Emissor de fumaça",
-      "source": {
-        "kind": "particle",
-        "asset": ""
-      },
-      "parentId": null,
-      "position": {
-        "x": 1.4168,
-        "y": 0.3,
-        "z": -0.9321
-      },
-      "rotation": {
-        "x": 0,
-        "y": 0,
-        "z": 0
-      },
-      "scale": {
-        "x": 1,
-        "y": 1,
-        "z": 1
-      },
-      "color": "#ff9c58",
-      "visible": true,
-      "locked": false,
-      "runtime": true,
-      "particle": {
-        "preset": "smoke",
-        "color": "#616b7a",
-        "autoplay": true,
-        "maxParticles": 5,
-        "rate": 3.5,
-        "lifetime": 150,
-        "speed": 0.018,
-        "spread": 0.55,
-        "size": 0.24,
-        "gravity": -0.00015
-      }
-    },
-    {
-      "id": "particle-mqpub283-q9r013",
-      "name": "Emissor de fogo",
-      "source": {
-        "kind": "particle",
-        "asset": ""
-      },
-      "parentId": null,
-      "position": {
-        "x": 1.3191,
-        "y": 0.3,
-        "z": -0.9321
-      },
-      "rotation": {
-        "x": 0,
-        "y": 0,
-        "z": 0
-      },
-      "scale": {
-        "x": 1,
-        "y": 1,
-        "z": 1
-      },
-      "color": "#ff9c58",
-      "visible": true,
-      "locked": false,
-      "runtime": true,
-      "particle": {
-        "preset": "fire",
-        "color": "#ff380a",
-        "autoplay": true,
-        "maxParticles": 6,
-        "rate": 8,
-        "lifetime": 70,
-        "speed": 0.035,
-        "spread": 0.4,
-        "size": 0.16,
-        "gravity": -0.0004
-      }
-    },
-    {
-      "id": "audio-mqpy4id5-xjoeiz",
+      "id": "audio-mqstfewn-lel3f1",
       "name": "Nova fonte de áudio",
       "source": {
         "kind": "audio",
-        "asset": "sounds/awesomeness.wav"
+        "asset": "sounds/Final-Bell.ogg"
       },
       "parentId": null,
       "position": {
-        "x": 2.7582,
+        "x": 2.5309,
         "y": 1.2,
         "z": -1.0882
       },
@@ -886,7 +610,7 @@
         "mode": "stream",
         "autoplay": true,
         "loop": true,
-        "volume": 100,
+        "volume": 80,
         "spatial": false,
         "distance": 14,
         "pan": 0,

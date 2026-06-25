@@ -35,6 +35,19 @@ console.log("[VeuAzul] Render inicializado em modo OBJ");
 os.chdir("assets");
 std.loadScript("collision.js");
 
+let menuBackground = null;
+if (std.exists("menu_background.png")) {
+    try {
+        menuBackground = new Image("menu_background.png");
+        menuBackground.width = canvas.width;
+        menuBackground.height = canvas.height;
+        menuBackground.lock();
+    } catch (menuBackgroundError) {
+        console.log("[Heavenfall] Fundo do menu nao carregado: " + menuBackgroundError);
+        menuBackground = null;
+    }
+}
+
 function configureData(data, material) {
     data.pipeline = material && material.unlit ? Render.PL_NO_LIGHTS : Render.PL_DEFAULT;
     data.texture_mapping = true;
@@ -279,8 +292,34 @@ let activeTriggerIds = [];
 let previousTriggerIds = [];
 let runtimeMessageText = "";
 let runtimeMessageTimer = 0;
+const GAME_STATE_MENU = 0;
+const GAME_STATE_CREDITS = 1;
+const GAME_STATE_GAME = 2;
+const MENU_AUDIO_ASSET = "sounds/Final-Bell.ogg";
+const MENU_AUDIO_VOLUME = 100;
+const MENU_OPTIONS = ["Iniciar Jogo", "Créditos"];
+let gameState = GAME_STATE_MENU;
+let menuSelection = 0;
+let menuStickLocked = false;
+let menuPulse = 0;
+let menuFrame = 0;
+let menuAudioRequested = false;
+let menuAudioStarted = false;
+let runtimeAutoplayStarted = false;
 
 Sound.setVolume(100);
+let menuAudio = null;
+if (std.exists(MENU_AUDIO_ASSET)) {
+    try {
+        menuAudio = Sound.Stream(MENU_AUDIO_ASSET);
+        menuAudio.loop = true;
+        console.log("[Heavenfall] Musica do menu pronta: " + MENU_AUDIO_ASSET + " (" + menuAudio.length + " ms)");
+    } catch (menuAudioError) {
+        console.log("[Heavenfall] Musica do menu nao carregada: " + menuAudioError);
+        menuAudio = null;
+    }
+}
+
 const runtimeAudio = [];
 for (let audioIndex = 0; audioIndex < EDITOR_AUDIO.length; audioIndex++) {
     const definition = EDITOR_AUDIO[audioIndex];
@@ -337,6 +376,49 @@ function playRuntimeAudio(entry) {
     const channel = entry.sound.play();
     entry.channel = channel === undefined ? -1 : channel;
     entry.requested = definition.loop === true;
+}
+
+function playMenuAudio() {
+    if (!menuAudio) return;
+    Sound.setVolume(MENU_AUDIO_VOLUME);
+    menuAudio.loop = true;
+    menuAudioRequested = true;
+    if (menuAudio.playing()) {
+        menuAudioStarted = true;
+        return;
+    }
+    menuAudio.play();
+    menuAudioStarted = menuAudio.playing();
+}
+
+function stopMenuAudio() {
+    if (!menuAudio || (!menuAudioRequested && !menuAudioStarted)) return;
+    menuAudioRequested = false;
+    if (menuAudio.playing()) menuAudio.pause();
+    menuAudio.rewind();
+    menuAudioStarted = false;
+}
+
+function updateMenuAudio() {
+    if (!menuAudio) return;
+    if (!menuAudioRequested) playMenuAudio();
+    if (!menuAudioRequested) return;
+    if (menuAudio.playing()) {
+        menuAudioStarted = true;
+        return;
+    }
+    Sound.setVolume(MENU_AUDIO_VOLUME);
+    menuAudio.loop = true;
+    menuAudio.play();
+    menuAudioStarted = menuAudio.playing();
+}
+
+function startRuntimeAutoplayAudio() {
+    if (runtimeAutoplayStarted) return;
+    runtimeAutoplayStarted = true;
+    for (let audioIndex = 0; audioIndex < runtimeAudio.length; audioIndex++) {
+        if (runtimeAudio[audioIndex].definition.autoplay) playRuntimeAudio(runtimeAudio[audioIndex]);
+    }
 }
 
 function controlRuntimeAudio(id, mode) {
@@ -397,10 +479,6 @@ function updateRuntimeAudio() {
             }
         }
     }
-}
-
-for (let audioIndex = 0; audioIndex < runtimeAudio.length; audioIndex++) {
-    if (runtimeAudio[audioIndex].definition.autoplay) playRuntimeAudio(runtimeAudio[audioIndex]);
 }
 
 const runtimeParticleEmitters = [];
@@ -708,6 +786,67 @@ function buttonHeld(button) {
     return pad.pressed(button) || ((pad.btns & button) !== 0);
 }
 
+function moveMenuSelection(direction) {
+    menuSelection += direction;
+    if (menuSelection < 0) menuSelection = MENU_OPTIONS.length - 1;
+    if (menuSelection >= MENU_OPTIONS.length) menuSelection = 0;
+    menuPulse = 12;
+}
+
+function startExistingScenario() {
+    stopMenuAudio();
+    startRuntimeAutoplayAudio();
+    gameState = GAME_STATE_GAME;
+    titleTimer = 330;
+    collisionFlash = 0;
+    runtimeMessageTimer = 0;
+}
+
+function updateMenuInput() {
+    pad.update();
+
+    let direction = 0;
+    if (pad.justPressed(Pads.UP) || pad.justPressed(Pads.LEFT)) direction = -1;
+    else if (pad.justPressed(Pads.DOWN) || pad.justPressed(Pads.RIGHT)) direction = 1;
+
+    const stickX = readAxis(pad.lx);
+    const stickY = readAxis(pad.ly);
+    let analogDirection = 0;
+    if (Math.abs(stickY) >= Math.abs(stickX)) {
+        if (stickY < -0.55) analogDirection = -1;
+        else if (stickY > 0.55) analogDirection = 1;
+    } else {
+        if (stickX < -0.55) analogDirection = -1;
+        else if (stickX > 0.55) analogDirection = 1;
+    }
+
+    if (analogDirection === 0 && Math.abs(stickX) < 0.35 && Math.abs(stickY) < 0.35) {
+        menuStickLocked = false;
+    } else if (analogDirection !== 0 && !menuStickLocked) {
+        direction = analogDirection;
+        menuStickLocked = true;
+    }
+
+    if (direction !== 0) moveMenuSelection(direction);
+
+    if (pad.justPressed(Pads.CROSS)) {
+        if (menuSelection === 0) startExistingScenario();
+        else gameState = GAME_STATE_CREDITS;
+    }
+
+    if (gameState === GAME_STATE_GAME) return;
+    if (menuPulse > 0) menuPulse--;
+    updateMenuAudio();
+}
+
+function updateCreditsInput() {
+    pad.update();
+    if (pad.justPressed(Pads.CROSS) || pad.justPressed(Pads.CIRCLE) || pad.justPressed(Pads.START)) {
+        gameState = GAME_STATE_MENU;
+    }
+    updateMenuAudio();
+}
+
 function updatePlayerAndCamera() {
     pad.update();
 
@@ -841,6 +980,96 @@ function drawAtmosphere() {
     }
 }
 
+function estimateTextWidth(text, scale) {
+    return text.length * 14.0 * scale;
+}
+
+function printCentered(y, text, scale, color) {
+    font.scale = scale;
+    font.color = color;
+    font.print((canvas.width - estimateTextWidth(text, scale)) * 0.5, y, text);
+}
+
+function drawMenuBackground() {
+    Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+
+    if (menuBackground) {
+        menuBackground.draw(0, 0);
+    } else {
+        Draw.rect(0, 0, canvas.width, canvas.height, CLEAR_COLOR);
+    }
+
+    Draw.rect(0, 0, canvas.width, canvas.height, Color.new(2, 7, 13, 48));
+    Draw.rect(0, 0, canvas.width, 86, Color.new(1, 5, 11, 66));
+    Draw.rect(0, canvas.height - 126, canvas.width, 126, Color.new(1, 5, 10, 72));
+    drawAtmosphere();
+
+    for (let y = 0; y < canvas.height; y += 4) {
+        Draw.rect(0, y, canvas.width, 1, Color.new(0, 0, 0, 13));
+    }
+}
+
+function drawMainMenu() {
+    menuFrame++;
+    drawMenuBackground();
+
+    printCentered(46, "Heavenfall", 1.16, Color.new(221, 239, 248, 128));
+    Draw.rect(canvas.width * 0.5 - 96, 88, 192, 1, Color.new(103, 188, 224, 86));
+    Draw.rect(canvas.width * 0.5 - 58, 94, 116, 1, Color.new(184, 222, 240, 55));
+
+    const baseY = Math.floor(canvas.height * 0.55);
+    const itemSpacing = 42;
+    const boxWidth = 286;
+    const boxX = (canvas.width - boxWidth) * 0.5;
+    for (let i = 0; i < MENU_OPTIONS.length; i++) {
+        const selected = i === menuSelection;
+        const y = baseY + i * itemSpacing;
+        const scale = selected ? 0.66 : 0.58;
+        const text = MENU_OPTIONS[i];
+        const textX = (canvas.width - estimateTextWidth(text, scale)) * 0.5;
+
+        if (selected) {
+            const pulse = 74 + Math.floor((Math.sin(menuFrame * 0.15) + 1.0) * 18.0);
+            Draw.rect(boxX, y - 8, boxWidth, 34, Color.new(6, 24, 38, pulse));
+            Draw.rect(boxX, y - 9, boxWidth, 1, Color.new(108, 200, 240, 88));
+            Draw.rect(boxX, y + 27, boxWidth, 1, Color.new(23, 85, 116, 76));
+            Draw.rect(boxX + 18, y + 2, 4, 16, Color.new(159, 225, 250, 116));
+            Draw.rect(boxX + 22, y + 5, 4, 10, Color.new(159, 225, 250, 106));
+            Draw.rect(boxX + 26, y + 8, 4, 4, Color.new(159, 225, 250, 96));
+            font.color = Color.new(232, 244, 250, 128);
+        } else {
+            font.color = Color.new(151, 184, 202, 104);
+        }
+
+        font.scale = scale;
+        font.print(textX, y, text);
+    }
+
+    if (menuPulse > 0) {
+        Draw.rect(boxX - 4, baseY + menuSelection * itemSpacing - 12, boxWidth + 8, 42, Color.new(154, 219, 246, menuPulse * 4));
+    }
+
+    Screen.setParam(Screen.DEPTH_TEST_ENABLE, true);
+    Screen.setParam(Screen.DEPTH_TEST_METHOD, Screen.DEPTH_GEQUAL);
+}
+
+function drawCreditsScreen() {
+    menuFrame++;
+    drawMenuBackground();
+
+    Draw.rect(84, 108, canvas.width - 168, 206, Color.new(2, 8, 15, 82));
+    Draw.rect(104, 131, canvas.width - 208, 1, Color.new(103, 188, 224, 62));
+    Draw.rect(132, 292, canvas.width - 264, 1, Color.new(103, 188, 224, 44));
+
+    printCentered(118, "CRÉDITOS", 0.82, Color.new(232, 244, 250, 128));
+    printCentered(178, "Desenvolvido por", 0.50, Color.new(187, 214, 228, 118));
+    printCentered(209, "Brendow Vaz", 0.64, Color.new(229, 240, 247, 128));
+    printCentered(266, "Obrigado por jogar", 0.52, Color.new(167, 204, 224, 118));
+
+    Screen.setParam(Screen.DEPTH_TEST_ENABLE, true);
+    Screen.setParam(Screen.DEPTH_TEST_METHOD, Screen.DEPTH_GEQUAL);
+}
+
 function editorUiColor(definition, fallbackAlpha) {
     const value = definition || { r: 255, g: 255, b: 255, a: fallbackAlpha };
     return Color.new(
@@ -933,8 +1162,7 @@ function drawHud() {
     Screen.setParam(Screen.DEPTH_TEST_METHOD, Screen.DEPTH_GEQUAL);
 }
 
-while (true) {
-    updatePlayerAndCamera();
+function renderGameFrame() {
     Screen.clear(CLEAR_COLOR);
     Render.begin();
     pointLightTime += 1.0 / 60.0;
@@ -950,4 +1178,36 @@ while (true) {
     disablePointLights();
     drawHud();
     Screen.flip();
+}
+
+while (true) {
+    if (gameState === GAME_STATE_MENU) {
+        updateMenuInput();
+        if (gameState === GAME_STATE_MENU) {
+            Screen.clear(CLEAR_COLOR);
+            drawMainMenu();
+            Screen.flip();
+            continue;
+        }
+        if (gameState === GAME_STATE_CREDITS) {
+            Screen.clear(CLEAR_COLOR);
+            drawCreditsScreen();
+            Screen.flip();
+            continue;
+        }
+    }
+
+    if (gameState === GAME_STATE_CREDITS) {
+        updateCreditsInput();
+        Screen.clear(CLEAR_COLOR);
+        if (gameState === GAME_STATE_MENU) drawMainMenu();
+        else drawCreditsScreen();
+        Screen.flip();
+        continue;
+    }
+
+    stopMenuAudio();
+    startRuntimeAutoplayAudio();
+    updatePlayerAndCamera();
+    renderGameFrame();
 }

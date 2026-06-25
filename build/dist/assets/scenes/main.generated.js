@@ -260,43 +260,6 @@ globalThis.EDITOR_SCENE = [
       "unlit": false,
       "doubleSided": true
     }
-  },
-  {
-    "id": "cube-mqnvjvo7-zwe93m",
-    "name": "Cubo",
-    "asset": "editor_primitives/cube.obj",
-    "position": {
-      "x": 8.2656,
-      "y": 1,
-      "z": 2.2385
-    },
-    "rotation": {
-      "x": 0,
-      "y": 0,
-      "z": 0
-    },
-    "scale": {
-      "x": 1,
-      "y": 1,
-      "z": 1
-    },
-    "boundsCenter": {
-      "x": 8.2656,
-      "y": 1,
-      "z": 2.2385
-    },
-    "boundsRadius": 1.7320508075688772,
-    "material": {
-      "color": "#8bd5f7",
-      "texture": "",
-      "opacity": 1,
-      "roughness": 0.72,
-      "metalness": 0,
-      "emissive": "#000000",
-      "emissiveIntensity": 0,
-      "unlit": false,
-      "doubleSided": true
-    }
   }
 ];
 globalThis.EDITOR_COLLIDERS = [
@@ -424,174 +387,31 @@ globalThis.EDITOR_COLLIDERS = [
     },
     "trigger": false,
     "cameraBlocker": true
-  },
-  {
-    "id": "collider-mqnvkvze-oxwuul",
-    "name": "Colisor caixa",
-    "shape": "box",
-    "contractVersion": 2,
-    "rotationOrder": "XYZ",
-    "scaleMeaning": "halfExtents",
-    "position": {
-      "x": 8.2655,
-      "y": 1,
-      "z": 2.2385
-    },
-    "rotation": {
-      "x": 0,
-      "y": 0,
-      "z": 0
-    },
-    "scale": {
-      "x": 1,
-      "y": 1,
-      "z": 1
-    },
-    "trigger": false,
-    "cameraBlocker": true
   }
 ];
 globalThis.EDITOR_EVENTS = [];
-globalThis.EDITOR_LIGHTS = [
-  {
-    "id": "light-mqomhtc0-isim6o",
-    "name": "Luz direcional",
-    "type": "directional",
-    "color": {
-      "r": 1,
-      "g": 0.8796223968851662,
-      "b": 0.623960391667596
-    },
-    "intensity": 2,
-    "distance": 12,
-    "position": {
-      "x": -0.9809,
-      "y": 1.8985,
-      "z": -24.0625
-    },
-    "direction": {
-      "x": 0.2983628731973174,
-      "y": 0.6859945082018456,
-      "z": 0.6636197183736703
-    }
-  },
-  {
-    "id": "light-mqooopqh-0605k1",
-    "name": "Luz ambiente",
-    "type": "ambient",
-    "color": {
-      "r": 0.2663556047920505,
-      "g": 0.48514994004665124,
-      "b": 0.6375968739867731
-    },
-    "intensity": 0.45,
-    "distance": 12,
-    "position": {
-      "x": -3.8074,
-      "y": 19.2825,
-      "z": -0.8471
-    },
-    "direction": {
-      "x": 0,
-      "y": 0,
-      "z": -1
-    }
-  }
-];
+globalThis.EDITOR_LIGHTS = [];
 globalThis.EDITOR_POINT_LIGHTS = [];
 globalThis.EDITOR_CAMERA = null;
 globalThis.EDITOR_AUDIO = [
   {
-    "id": "audio-mqpy4id5-xjoeiz",
+    "id": "audio-mqstfewn-lel3f1",
     "name": "Nova fonte de áudio",
-    "asset": "sounds/awesomeness.wav",
+    "asset": "sounds/Final-Bell.ogg",
     "position": {
-      "x": 2.7582,
+      "x": 2.5309,
       "y": 1.2,
       "z": -1.0882
     },
     "mode": "stream",
     "autoplay": true,
     "loop": true,
-    "volume": 100,
+    "volume": 80,
     "spatial": false,
     "distance": 14,
     "pan": 0,
     "pitch": 0
   }
 ];
-globalThis.EDITOR_PARTICLES = [
-  {
-    "id": "particle-mqptxbkr-w6q89x",
-    "name": "Emissor de fumaça",
-    "position": {
-      "x": 1.3112,
-      "y": 0.3,
-      "z": -0.807
-    },
-    "asset": "editor_particles/sparks.obj",
-    "preset": "sparks",
-    "color": {
-      "r": 1,
-      "g": 0.7215686274509804,
-      "b": 0.0784313725490196
-    },
-    "autoplay": true,
-    "maxParticles": 5,
-    "rate": 3.5,
-    "lifetime": 150,
-    "speed": 0.018,
-    "spread": 0.55,
-    "size": 0.24,
-    "gravity": -0.00015
-  },
-  {
-    "id": "particle-mqpuaydw-u365mu",
-    "name": "Emissor de fumaça",
-    "position": {
-      "x": 1.4168,
-      "y": 0.3,
-      "z": -0.9321
-    },
-    "asset": "editor_particles/smoke.obj",
-    "preset": "smoke",
-    "color": {
-      "r": 0.3803921568627451,
-      "g": 0.4196078431372549,
-      "b": 0.47843137254901963
-    },
-    "autoplay": true,
-    "maxParticles": 5,
-    "rate": 3.5,
-    "lifetime": 150,
-    "speed": 0.018,
-    "spread": 0.55,
-    "size": 0.24,
-    "gravity": -0.00015
-  },
-  {
-    "id": "particle-mqpub283-q9r013",
-    "name": "Emissor de fogo",
-    "position": {
-      "x": 1.3191,
-      "y": 0.3,
-      "z": -0.9321
-    },
-    "asset": "editor_particles/fire.obj",
-    "preset": "fire",
-    "color": {
-      "r": 1,
-      "g": 0.2196078431372549,
-      "b": 0.0392156862745098
-    },
-    "autoplay": true,
-    "maxParticles": 2,
-    "rate": 8,
-    "lifetime": 70,
-    "speed": 0.035,
-    "spread": 0.4,
-    "size": 0.16,
-    "gravity": -0.0004
-  }
-];
+globalThis.EDITOR_PARTICLES = [];
 globalThis.EDITOR_UI = [];
