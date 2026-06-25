@@ -9,14 +9,14 @@
     "snapMode": "grid",
     "camera": {
       "position": {
-        "x": -2.397,
-        "y": 3.0657,
-        "z": 6.3789
+        "x": 1.2017,
+        "y": 6.5781,
+        "z": -4.1259
       },
       "target": {
-        "x": 3.1782,
-        "y": 1.2,
-        "z": -1.0882
+        "x": 0.0848,
+        "y": 0.4227,
+        "z": -6.7947
       }
     }
   },
@@ -580,16 +580,16 @@
       }
     },
     {
-      "id": "audio-mqstfewn-lel3f1",
+      "id": "audio-mqstseeq-rlh7su",
       "name": "Nova fonte de áudio",
       "source": {
         "kind": "audio",
-        "asset": "sounds/Final-Bell.ogg"
+        "asset": "sounds/4pfmg-m8432.wav"
       },
       "parentId": null,
       "position": {
-        "x": 2.5309,
-        "y": 1.2,
+        "x": 3.1782,
+        "y": 9.783,
         "z": -1.0882
       },
       "rotation": {
@@ -615,6 +615,320 @@
         "distance": 14,
         "pan": 0,
         "pitch": 0
+      }
+    },
+    {
+      "id": "particle-mqsv2zgn-oj2elz",
+      "name": "Emissor de fogo",
+      "source": {
+        "kind": "particle",
+        "asset": ""
+      },
+      "parentId": null,
+      "position": {
+        "x": 3.3882,
+        "y": 0.3,
+        "z": -1.0882
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#ff9c58",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "particle": {
+        "preset": "fire",
+        "color": "#ff380a",
+        "autoplay": true,
+        "maxParticles": 6,
+        "rate": 8,
+        "lifetime": 70,
+        "speed": 0.035,
+        "spread": 0.4,
+        "size": 0.16,
+        "gravity": -0.0004
+      }
+    },
+    {
+      "id": "particle-mqsv30cf-fr42ui",
+      "name": "Emissor de fumaça",
+      "source": {
+        "kind": "particle",
+        "asset": ""
+      },
+      "parentId": null,
+      "position": {
+        "x": 3.3882,
+        "y": 0.3,
+        "z": -1.0882
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#ff9c58",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "particle": {
+        "preset": "smoke",
+        "color": "#616b7a",
+        "autoplay": true,
+        "maxParticles": 5,
+        "rate": 3.5,
+        "lifetime": 150,
+        "speed": 0.018,
+        "spread": 0.55,
+        "size": 0.24,
+        "gravity": -0.00015
+      }
+    },
+    {
+      "id": "particle-mqsv30tb-ns9soz",
+      "name": "Emissor de faíscas",
+      "source": {
+        "kind": "particle",
+        "asset": ""
+      },
+      "parentId": null,
+      "position": {
+        "x": 3.3882,
+        "y": 0.3,
+        "z": -1.0882
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#ff9c58",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "particle": {
+        "preset": "sparks",
+        "color": "#ffb814",
+        "autoplay": true,
+        "maxParticles": 8,
+        "rate": 10,
+        "lifetime": 48,
+        "speed": 0.045,
+        "spread": 0.2,
+        "size": 0.08,
+        "gravity": 0.0018
+      }
+    },
+    {
+      "id": "cube-mqsv37o3-ik30mv",
+      "name": "Cubo",
+      "source": {
+        "kind": "primitive",
+        "asset": "editor_primitives/cube.obj",
+        "primitive": "cube"
+      },
+      "parentId": null,
+      "position": {
+        "x": 1.1899,
+        "y": 1.0842,
+        "z": -2.7506
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "material": {
+        "color": "#8bd5f7",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true
+      }
+    },
+    {
+      "id": "collider-mqsv3hdj-nem4ee",
+      "name": "Colisor caixa",
+      "source": {
+        "kind": "collider",
+        "asset": "",
+        "collider": "box"
+      },
+      "parentId": null,
+      "position": {
+        "x": 1.1899,
+        "y": 1.0842,
+        "z": -2.7506
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#68e0b2",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "collider": {
+        "trigger": false,
+        "cameraBlocker": true
+      },
+      "events": {
+        "onEnter": [],
+        "onExit": [],
+        "onInteract": []
+      }
+    },
+    {
+      "id": "sphere-mqsv3t2f-u9f4xz",
+      "name": "Esfera",
+      "source": {
+        "kind": "primitive",
+        "asset": "editor_primitives/sphere.obj",
+        "primitive": "sphere"
+      },
+      "parentId": null,
+      "position": {
+        "x": 8.4307,
+        "y": 1,
+        "z": -6.6116
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "material": {
+        "color": "#8bd5f7",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true
+      }
+    },
+    {
+      "id": "collider-mqsv3van-zazopg",
+      "name": "Colisor esfera",
+      "source": {
+        "kind": "collider",
+        "asset": "",
+        "collider": "sphere"
+      },
+      "parentId": null,
+      "position": {
+        "x": 8.4308,
+        "y": 1,
+        "z": -6.6116
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#68e0b2",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "collider": {
+        "trigger": false,
+        "cameraBlocker": true
+      },
+      "events": {
+        "onEnter": [],
+        "onExit": [],
+        "onInteract": []
+      }
+    },
+    {
+      "id": "collider-mqsv5i2p-xai73f",
+      "name": "Colisor cápsula",
+      "source": {
+        "kind": "collider",
+        "asset": "",
+        "collider": "capsule"
+      },
+      "parentId": null,
+      "position": {
+        "x": -0.9594,
+        "y": 1,
+        "z": -8.3053
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#68e0b2",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "collider": {
+        "trigger": false,
+        "cameraBlocker": true
+      },
+      "events": {
+        "onEnter": [],
+        "onExit": [],
+        "onInteract": []
       }
     }
   ],

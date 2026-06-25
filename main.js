@@ -243,6 +243,13 @@ function baseWalkable(x, z) {
 }
 
 const collisionShapes = Collision3D.normalizeAll(EDITOR_COLLIDERS);
+let hasRuntimeTriggers = false;
+for (let i = 0; i < collisionShapes.length; i++) {
+    if (collisionShapes[i].trigger) {
+        hasRuntimeTriggers = true;
+        break;
+    }
+}
 const cameraBlockers = [];
 for (let i = 0; i < collisionShapes.length; i++) {
     if (collisionShapes[i].cameraBlocker) cameraBlockers.push(collisionShapes[i]);
@@ -295,7 +302,7 @@ let runtimeMessageTimer = 0;
 const GAME_STATE_MENU = 0;
 const GAME_STATE_CREDITS = 1;
 const GAME_STATE_GAME = 2;
-const MENU_AUDIO_ASSET = "sounds/Final-Bell.ogg";
+const MENU_AUDIO_ASSET = "sounds/menu.wav";
 const MENU_AUDIO_VOLUME = 100;
 const MENU_OPTIONS = ["Iniciar Jogo", "Créditos"];
 let gameState = GAME_STATE_MENU;
@@ -673,7 +680,29 @@ function playerContactsAt(x, y, z) {
     return Collision3D.playerContacts(collisionShapes, x, y, z, PLAYER_RADIUS, PLAYER_HEIGHT, false);
 }
 
+let movementContactCache = [];
+
+function resetMovementContactCache() {
+    movementContactCache = [];
+}
+
+function movementContactsAt(x, y, z) {
+    for (let i = 0; i < movementContactCache.length; i++) {
+        const cached = movementContactCache[i];
+        if (Math.abs(cached.x - x) < 0.0001 && Math.abs(cached.y - y) < 0.0001 && Math.abs(cached.z - z) < 0.0001) {
+            return cached.contacts;
+        }
+    }
+    const contacts = playerContactsAt(x, y, z);
+    movementContactCache.push({ x: x, y: y, z: z, contacts: contacts });
+    return contacts;
+}
+
 function updateActiveTriggers() {
+    if (!hasRuntimeTriggers) {
+        activeTriggerIds = [];
+        return;
+    }
     const triggers = Collision3D.playerContacts(
         collisionShapes, playerX, playerY, playerZ, PLAYER_RADIUS, PLAYER_HEIGHT, true
     );
@@ -696,17 +725,18 @@ function walkableHalfWidth(z) {
 
 function movementAllowed(currentContacts, x, z) {
     if (!baseWalkable(x, z)) return false;
-    const nextContacts = playerContactsAt(x, playerY, z);
+    const nextContacts = movementContactsAt(x, playerY, z);
     return Collision3D.transitionAllowed(currentContacts, nextContacts);
 }
 
 function applyMovement(dx, dz) {
+    resetMovementContactCache();
     const oldX = playerX;
     const oldZ = playerZ;
     const nextZ = clamp(playerZ + dz, -27.4, 24.4);
     const halfWidth = walkableHalfWidth(nextZ);
     const nextX = clamp(playerX + dx, -halfWidth, halfWidth);
-    let currentContacts = playerContactsAt(playerX, playerY, playerZ);
+    let currentContacts = movementContactsAt(playerX, playerY, playerZ);
 
     if (movementAllowed(currentContacts, nextX, nextZ)) {
         playerX = nextX;
@@ -714,7 +744,7 @@ function applyMovement(dx, dz) {
     } else {
         if (movementAllowed(currentContacts, nextX, playerZ)) {
             playerX = nextX;
-            currentContacts = playerContactsAt(playerX, playerY, playerZ);
+            currentContacts = movementContactsAt(playerX, playerY, playerZ);
         }
         if (movementAllowed(currentContacts, playerX, nextZ)) playerZ = nextZ;
     }
@@ -767,6 +797,9 @@ function updateVerticalMovement() {
 function cameraBlocked(x, y, z) {
     return Collision3D.cameraBlocked(cameraBlockers, x, y, z, 0.35);
 }
+
+let cameraCollisionCooldown = 0;
+let cachedCameraFactor = 1.0;
 
 const pad = Pads.get(0);
 pad.update();
@@ -898,9 +931,11 @@ function updatePlayerAndCamera() {
     // Movement axes stay independent. The right stick rotates only the camera.
     const dx = strafe * speed;
     const dz = -forwardInput * speed;
+    let movedThisFrame = false;
 
     if (Math.abs(dx) + Math.abs(dz) > 0.001) {
-        if (applyMovement(dx, dz)) playerYaw = Math.atan2(dx, -dz);
+        movedThisFrame = applyMovement(dx, dz);
+        if (movedThisFrame) playerYaw = Math.atan2(dx, -dz);
     }
 
     updateVerticalMovement();
@@ -933,16 +968,25 @@ function updatePlayerAndCamera() {
     const desiredY = playerY + 2.72 + cameraPitch * 5.0;
     const desiredZ = playerZ - forwardZ * distance + rightZ * shoulder;
 
-    let cameraFactor = 1.0;
-    for (let step = 2; step <= 10; step++) {
-        const factor = step / 10.0;
-        const sampleX = targetX + (desiredX - targetX) * factor;
-        const sampleY = targetY + (desiredY - targetY) * factor;
-        const sampleZ = targetZ + (desiredZ - targetZ) * factor;
-        if (cameraBlocked(sampleX, sampleY, sampleZ)) {
-            cameraFactor = Math.max(0.2, factor - 0.12);
-            break;
+    let cameraFactor = cachedCameraFactor;
+    const cameraWasRotated = Math.abs(lookX) + Math.abs(lookY) > 0.001;
+    const shouldProbeCamera = cameraWasRotated || cameraCollisionCooldown <= 0;
+    if (shouldProbeCamera) {
+        cameraFactor = 1.0;
+        for (let step = 2; step <= 10; step++) {
+            const factor = step / 10.0;
+            const sampleX = targetX + (desiredX - targetX) * factor;
+            const sampleY = targetY + (desiredY - targetY) * factor;
+            const sampleZ = targetZ + (desiredZ - targetZ) * factor;
+            if (cameraBlocked(sampleX, sampleY, sampleZ)) {
+                cameraFactor = Math.max(0.2, factor - 0.12);
+                break;
+            }
         }
+        cachedCameraFactor = cameraFactor;
+        cameraCollisionCooldown = movedThisFrame ? 1 : 3;
+    } else {
+        cameraCollisionCooldown--;
     }
 
     Camera.position(

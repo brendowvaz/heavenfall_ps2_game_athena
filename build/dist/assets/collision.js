@@ -35,6 +35,11 @@
         const rotation = source.rotation || {};
         const scale = source.scale || {};
         const quaternion = quaternionFromEuler(rotation);
+        const broadRadius = Math.sqrt(
+            absoluteSize(scale.x) * absoluteSize(scale.x) +
+            absoluteSize(scale.y) * absoluteSize(scale.y) +
+            absoluteSize(scale.z) * absoluteSize(scale.z)
+        );
         return {
             id: String(source.id || source.name || ("collider-" + index)),
             name: String(source.name || source.id || ("Collider " + index)),
@@ -56,6 +61,7 @@
             },
             trigger: source.trigger === true,
             cameraBlocker: source.cameraBlocker !== false,
+            broadRadius: broadRadius,
             qx: quaternion.x,
             qy: quaternion.y,
             qz: quaternion.z,
@@ -129,6 +135,11 @@
         for (let i = 0; i < colliders.length; i++) {
             const collider = colliders[i];
             if (triggersOnly ? !collider.trigger : collider.trigger) continue;
+            const broadRadius = (collider.broadRadius || Math.max(collider.scale.x, collider.scale.y, collider.scale.z)) + radius;
+            const dx = x - collider.position.x;
+            const dz = z - collider.position.z;
+            if (dx * dx + dz * dz > broadRadius * broadRadius) continue;
+            if (upper < collider.position.y - broadRadius || lower > collider.position.y + broadRadius) continue;
             let hit = false;
             for (let sample = 0; sample < sampleCount; sample++) {
                 const t = sampleCount === 1 ? 0.5 : sample / (sampleCount - 1);
@@ -165,6 +176,11 @@
         for (let i = 0; i < colliders.length; i++) {
             const collider = colliders[i];
             if (!collider.cameraBlocker || collider.trigger) continue;
+            const broadRadius = (collider.broadRadius || Math.max(collider.scale.x, collider.scale.y, collider.scale.z)) + radius;
+            const dx = x - collider.position.x;
+            const dy = y - collider.position.y;
+            const dz = z - collider.position.z;
+            if (dx * dx + dy * dy + dz * dz > broadRadius * broadRadius) continue;
             if (sphereHits(collider, x, y, z, radius)) return true;
         }
         return false;
