@@ -1,5 +1,5 @@
 import vm from "node:vm";
-import { generateAthenaScene, normalizeScene, worldTransforms } from "../editor/server.mjs";
+import { convertObjToRuntimeObj, generateAthenaScene, normalizeScene, worldTransforms } from "../editor/server.mjs";
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -8,6 +8,27 @@ function assert(condition, message) {
 function approximately(actual, expected, epsilon = 0.0001) {
   return Math.abs(actual - expected) <= epsilon;
 }
+
+const convertedQuad = convertObjToRuntimeObj(`
+mtllib missing.mtl
+o Quad
+v 0 0 0
+v 1 0 0
+v 1 1 0
+v 0 1 0
+vt 0 0
+vt 1 0
+vt 1 1
+vt 0 1
+vn 0 0 1
+usemtl Missing
+f 1/1/1 2/2/1 3/3/1 4/4/1
+`, "quad.obj");
+assert(convertedQuad.triangles === 2, "Runtime OBJ conversion must triangulate quads");
+assert((convertedQuad.source.match(/^f\s+/gm) || []).length === 2, "Converted OBJ must write triangle faces");
+assert((convertedQuad.source.match(/^v\s+/gm) || []).length === 6, "Converted OBJ must de-index triangle vertices");
+assert(!/^mtllib\s+/m.test(convertedQuad.source) && !/^usemtl\s+/m.test(convertedQuad.source),
+  "Converted OBJ must not depend on external material files");
 
 const scene = normalizeScene({
   name: "Collision export test",

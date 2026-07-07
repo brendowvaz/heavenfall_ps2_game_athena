@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
-import { createReadStream, readFileSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync, writeFileSync } from "node:fs";
 import {
   mkdir,
   readFile,
@@ -58,6 +58,7 @@ const mimeTypes = {
 };
 
 const assetBoundsCache = new Map();
+const runtimeObjSuffix = ".runtime.obj";
 
 let runState = {
   running: false,
@@ -477,11 +478,12 @@ function generateAthenaScene(scene) {
     .filter((item) => item.runtime && item.visible && item.source.asset && ["model", "primitive"].includes(item.source.kind))
     .map((item) => {
       const transform = transforms.get(item.id);
-      const bounds = runtimeBounds(item.source.asset, transform);
+      const asset = runtimeAssetFor(item.source.asset);
+      const bounds = runtimeBounds(asset, transform);
       return {
         id: item.id,
         name: item.name,
-        asset: item.source.asset,
+        asset,
         position: transform.position,
         rotation: transform.rotation,
         scale: transform.scale,
@@ -879,6 +881,158 @@ function sanitizeRelativePath(value) {
   return parts.filter((part) => part && part !== "." && part !== "..").map(sanitizeSegment).join("/");
 }
 
+function isRuntimeObjAsset(value) {
+  return String(value || "").toLowerCase().endsWith(runtimeObjSuffix);
+}
+
+function runtimeObjPathFor(value) {
+  return String(value || "").replace(/\.obj$/i, runtimeObjSuffix);
+}
+
+function runtimeAssetFor(value) {
+  const normalized = safeAssetPath(value);
+  if (!normalized || path.extname(normalized).toLowerCase() !== ".obj" || isRuntimeObjAsset(normalized)) {
+    return normalized;
+  }
+  if (!normalized.startsWith("imported/")) return normalized;
+  const runtimeAsset = runtimeObjPathFor(normalized);
+  const runtimeAbsolute = path.resolve(assetsRoot, runtimeAsset);
+  if (!isInside(assetsRoot, runtimeAbsolute)) return normalized;
+  if (existsSync(runtimeAbsolute)) return runtimeAsset;
+
+  const sourceAbsolute = path.resolve(assetsRoot, normalized);
+  if (!isInside(assetsRoot, sourceAbsolute) || !existsSync(sourceAbsolute)) return normalized;
+  const runtimeObj = convertObjToRuntimeObj(readFileSync(sourceAbsolute, "utf8"), normalized);
+  writeFileSync(runtimeAbsolute, runtimeObj.source, "utf8");
+  return runtimeAsset;
+}
+
+function objIndex(value, length) {
+  const number = Number.parseInt(value, 10);
+  if (!Number.isInteger(number) || number === 0) return -1;
+  return number > 0 ? number - 1 : length + number;
+}
+
+function fixedObjNumber(value) {
+  if (!Number.isFinite(value)) return "0";
+  const text = Number(value).toFixed(6).replace(/\.?0+$/, "");
+  return text === "-0" ? "0" : text;
+}
+
+function faceNormal(a, b, c) {
+  const ux = b[0] - a[0];
+  const uy = b[1] - a[1];
+  const uz = b[2] - a[2];
+  const vx = c[0] - a[0];
+  const vy = c[1] - a[1];
+  const vz = c[2] - a[2];
+  const nx = uy * vz - uz * vy;
+  const ny = uz * vx - ux * vz;
+  const nz = ux * vy - uy * vx;
+  const length = Math.hypot(nx, ny, nz) || 1;
+  return [nx / length, ny / length, nz / length];
+}
+
+function convertObjToRuntimeObj(source, label = "asset.obj") {
+  const positions = [];
+  const texcoords = [];
+  const normals = [];
+  const outputPositions = [];
+  const outputTexcoords = [];
+  const outputNormals = [];
+  const outputFaces = [];
+  let sourceFaces = 0;
+  let skippedFaces = 0;
+
+  for (const rawLine of String(source || "").split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const parts = line.split(/\s+/);
+    if (parts[0] === "v") {
+      const values = parts.slice(1).map(Number);
+      if (values.length >= 3 && values.slice(0, 3).every(Number.isFinite)) {
+        positions.push({
+          xyz: values.slice(0, 3),
+          color: values.length >= 6 && values.slice(3, 6).every(Number.isFinite) ? values.slice(3, 6) : null,
+        });
+      }
+    } else if (parts[0] === "vt") {
+      const values = parts.slice(1, 3).map(Number);
+      texcoords.push(values.length >= 2 && values.every(Number.isFinite) ? values : [0, 0]);
+    } else if (parts[0] === "vn") {
+      const values = parts.slice(1, 4).map(Number);
+      normals.push(values.length >= 3 && values.every(Number.isFinite) ? values : [0, 1, 0]);
+    } else if (parts[0] === "f") {
+      sourceFaces++;
+      const vertices = parts.slice(1).map((token) => {
+        const [positionToken, texcoordToken, normalToken] = token.split("/");
+        return {
+          positionIndex: objIndex(positionToken, positions.length),
+          texcoordIndex: texcoordToken ? objIndex(texcoordToken, texcoords.length) : -1,
+          normalIndex: normalToken ? objIndex(normalToken, normals.length) : -1,
+        };
+      });
+      if (vertices.length < 3) {
+        skippedFaces++;
+        continue;
+      }
+      for (let vertex = 1; vertex < vertices.length - 1; vertex++) {
+        const triangle = [vertices[0], vertices[vertex], vertices[vertex + 1]];
+        const trianglePositions = triangle.map((item) => positions[item.positionIndex]);
+        if (trianglePositions.some((item) => !item)) {
+          skippedFaces++;
+          continue;
+        }
+        const fallbackNormal = faceNormal(trianglePositions[0].xyz, trianglePositions[1].xyz, trianglePositions[2].xyz);
+        const faceIndices = [];
+        for (const item of triangle) {
+          const position = positions[item.positionIndex];
+          const texcoord = texcoords[item.texcoordIndex] || [0, 0];
+          const normal = normals[item.normalIndex] || fallbackNormal;
+          outputPositions.push(position);
+          outputTexcoords.push(texcoord);
+          outputNormals.push(normal);
+          faceIndices.push(outputPositions.length);
+        }
+        outputFaces.push(faceIndices);
+      }
+    }
+  }
+
+  if (outputFaces.length === 0) {
+    throw new Error(`OBJ sem faces triangulaveis: ${label}`);
+  }
+
+  const lines = [
+    "# Runtime-safe OBJ generated by Athena Visual Editor",
+    `# Source: ${label}`,
+    `# Source faces: ${sourceFaces}; triangles: ${outputFaces.length}; skipped: ${skippedFaces}`,
+    `o ${sanitizeSegment(path.basename(label, path.extname(label)))}_runtime`,
+  ];
+
+  for (const position of outputPositions) {
+    const values = [...position.xyz, ...(position.color || [])].map(fixedObjNumber);
+    lines.push(`v ${values.join(" ")}`);
+  }
+  for (const texcoord of outputTexcoords) {
+    lines.push(`vt ${fixedObjNumber(texcoord[0])} ${fixedObjNumber(texcoord[1])}`);
+  }
+  for (const normal of outputNormals) {
+    lines.push(`vn ${normal.slice(0, 3).map(fixedObjNumber).join(" ")}`);
+  }
+  for (const face of outputFaces) {
+    lines.push(`f ${face.map((index) => `${index}/${index}/${index}`).join(" ")}`);
+  }
+
+  return {
+    source: `${lines.join("\n")}\n`,
+    vertices: outputPositions.length,
+    triangles: outputFaces.length,
+    sourceFaces,
+    skippedFaces,
+  };
+}
+
 async function importFiles(payload) {
   if (!Array.isArray(payload?.files) || payload.files.length === 0) {
     throw new Error("No files supplied");
@@ -892,6 +1046,7 @@ async function importFiles(payload) {
   await mkdir(destinationRoot, { recursive: true });
 
   const imported = [];
+  const modelFiles = [];
   for (const file of payload.files.slice(0, 256)) {
     const relative = sanitizeRelativePath(file.relativePath || file.name);
     const extension = path.extname(relative).toLowerCase();
@@ -901,12 +1056,24 @@ async function importFiles(payload) {
     await mkdir(path.dirname(destination), { recursive: true });
     const buffer = Buffer.from(String(file.data || ""), "base64");
     await writeFile(destination, buffer);
-    imported.push(`imported/${folder}/${relative}`.replaceAll("\\", "/"));
+    const importedPath = `imported/${folder}/${relative}`.replaceAll("\\", "/");
+    imported.push(importedPath);
+    if (modelExtensions.has(extension)) modelFiles.push(importedPath);
+
+    if (extension === ".obj" && !isRuntimeObjAsset(relative)) {
+      const runtimeRelative = runtimeObjPathFor(relative);
+      const runtimeDestination = path.resolve(destinationRoot, runtimeRelative);
+      if (!isInside(destinationRoot, runtimeDestination)) continue;
+      await mkdir(path.dirname(runtimeDestination), { recursive: true });
+      const runtimeObj = convertObjToRuntimeObj(buffer.toString("utf8"), relative);
+      await writeFile(runtimeDestination, runtimeObj.source, "utf8");
+      imported.push(`imported/${folder}/${runtimeRelative}`.replaceAll("\\", "/"));
+    }
   }
 
   return {
     files: imported,
-    models: imported.filter((file) => modelExtensions.has(path.extname(file).toLowerCase())),
+    models: modelFiles,
   };
 }
 
@@ -1036,7 +1203,7 @@ async function handleApi(request, response, url) {
       const files = await walkAssets();
       sendJson(response, 200, {
         files,
-        models: files.filter((file) => modelExtensions.has(file.extension)),
+        models: files.filter((file) => modelExtensions.has(file.extension) && !isRuntimeObjAsset(file.path)),
       });
     } catch (error) {
       sendJson(response, 500, { error: error.message });
@@ -1145,4 +1312,4 @@ if (isMainModule) {
   });
 }
 
-export { normalizeScene, worldTransforms, generateAthenaScene };
+export { normalizeScene, worldTransforms, generateAthenaScene, convertObjToRuntimeObj };

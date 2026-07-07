@@ -334,6 +334,43 @@ globalThis.EDITOR_SCENE = [
       "unlit": false,
       "doubleSided": true
     }
+  },
+  {
+    "id": "plane-mquad1fj-0xucmf",
+    "name": "Plano",
+    "asset": "editor_primitives/plane.obj",
+    "position": {
+      "x": 0.8841,
+      "y": 5.9612,
+      "z": 4.144
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": {
+      "x": 1,
+      "y": 1,
+      "z": 1
+    },
+    "boundsCenter": {
+      "x": 0.8841,
+      "y": 5.9612,
+      "z": 4.144
+    },
+    "boundsRadius": 4.242640687119285,
+    "material": {
+      "color": "#8bd5f7",
+      "texture": "",
+      "opacity": 1,
+      "roughness": 0.72,
+      "metalness": 0,
+      "emissive": "#000000",
+      "emissiveIntensity": 0,
+      "unlit": false,
+      "doubleSided": true
+    }
   }
 ];
 globalThis.EDITOR_COLLIDERS = [
@@ -513,26 +550,26 @@ globalThis.EDITOR_COLLIDERS = [
     "cameraBlocker": true
   },
   {
-    "id": "collider-mqsv5i2p-xai73f",
-    "name": "Colisor cápsula",
-    "shape": "capsule",
+    "id": "collider-mquadpg8-88nl6w",
+    "name": "Colisor caixa",
+    "shape": "box",
     "contractVersion": 2,
     "rotationOrder": "XYZ",
-    "scaleMeaning": "localRadii",
+    "scaleMeaning": "halfExtents",
     "position": {
-      "x": -0.9594,
-      "y": 1,
-      "z": -8.3053
+      "x": 0.8824,
+      "y": 5.8894,
+      "z": 4.1441
     },
     "rotation": {
       "x": 0,
       "y": 0,
-      "z": 0
+      "z": -3.141592653589793
     },
     "scale": {
-      "x": 1,
-      "y": 1,
-      "z": 1
+      "x": 2.9568,
+      "y": 0.0181,
+      "z": 2.8734
     },
     "trigger": false,
     "cameraBlocker": true

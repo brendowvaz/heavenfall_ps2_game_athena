@@ -9,14 +9,14 @@
     "snapMode": "grid",
     "camera": {
       "position": {
-        "x": 1.2017,
-        "y": 6.5781,
-        "z": -4.1259
+        "x": 20.37,
+        "y": 5.3523,
+        "z": 8.2209
       },
       "target": {
-        "x": 0.0848,
-        "y": 0.4227,
-        "z": -6.7947
+        "x": 1.7451,
+        "y": 2.5126,
+        "z": 7.2155
       }
     }
   },
@@ -894,18 +894,18 @@
       }
     },
     {
-      "id": "collider-mqsv5i2p-xai73f",
-      "name": "Colisor cápsula",
+      "id": "plane-mquad1fj-0xucmf",
+      "name": "Plano",
       "source": {
-        "kind": "collider",
-        "asset": "",
-        "collider": "capsule"
+        "kind": "primitive",
+        "asset": "editor_primitives/plane.obj",
+        "primitive": "plane"
       },
       "parentId": null,
       "position": {
-        "x": -0.9594,
-        "y": 1,
-        "z": -8.3053
+        "x": 0.8841,
+        "y": 5.9612,
+        "z": 4.144
       },
       "rotation": {
         "x": 0,
@@ -916,6 +916,46 @@
         "x": 1,
         "y": 1,
         "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "material": {
+        "color": "#8bd5f7",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true
+      }
+    },
+    {
+      "id": "collider-mquadpg8-88nl6w",
+      "name": "Colisor caixa",
+      "source": {
+        "kind": "collider",
+        "asset": "",
+        "collider": "box"
+      },
+      "parentId": null,
+      "position": {
+        "x": 0.8824,
+        "y": 5.8894,
+        "z": 4.1441
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 2.9568,
+        "y": -0.0181,
+        "z": 2.8734
       },
       "color": "#68e0b2",
       "visible": true,
