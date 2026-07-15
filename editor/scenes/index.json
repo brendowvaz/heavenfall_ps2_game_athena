@@ -1,11 +1,15 @@
 {
-  "version": 1,
+  "version": 2,
   "activeSceneId": "main",
+  "startupSceneId": "main",
   "scenes": [
     {
       "id": "main",
       "name": "Ruínas do Véu Azul",
-      "updatedAt": "2026-07-15T11:12:14.624Z"
+      "updatedAt": "2026-07-15T11:12:14.624Z",
+      "objectCount": 28,
+      "uiCount": 0,
+      "graphCount": 0
     }
   ]
 }

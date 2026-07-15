@@ -20,6 +20,7 @@ Esta integração foi revisada contra `DanielSant0s/AthenaEnv` em `main`, commit
 | Entrada e jogador | `Pads` | Spawn, raio, altura, velocidades, pulo, gravidade e movimento relativo à câmera. |
 | Colisão e triggers | matemática local do projeto | Caixa, elipsoide e cápsula com transformação 3D; mensagens, visibilidade, teleporte, áudio, partículas e vídeo. Não são anunciados como ODE. |
 | Visual scripting | QuickJS, `Pads` e componentes já documentados acima | Grafos declarativos com início, triggers, botões, temporizadores, condições, variáveis, espera e ações seguras. O executor limita cada disparo a 128 passos e não aceita código arbitrário. |
+| Gerenciamento de cenas | `std.loadScript` no carregamento inicial | O editor mantém várias cenas e exporta todas separadamente. `scene.generated.js` contém somente a cena marcada como inicial; o catálogo gerado não promete troca instantânea de cena sem descarregar recursos. |
 
 ## Formatos aceitos
 
@@ -43,4 +44,4 @@ O módulo ODE oficial é uma simulação física completa. O projeto usa colisã
 
 ## Validação
 
-`npm test` cobre exportação hierárquica, materiais, animação, configurações de runtime, colisores rotacionados, cápsulas, triggers, visual scripting, variáveis, esperas, UI, vídeo, áudio, partículas e projetores de sombra. `npm run editor:check` valida a sintaxe do servidor e do cliente. O build sempre regenera `scene.generated.js` a partir da cena ativa antes de copiar o pacote para `build/dist`.
+`npm test` cobre exportação hierárquica, materiais, animação, configurações de runtime, colisores rotacionados, cápsulas, triggers, visual scripting, variáveis, esperas, gerenciamento de cenas, UI, vídeo, áudio, partículas e projetores de sombra. `npm run editor:check` valida a sintaxe do servidor e do cliente. O build regenera todas as cenas e usa a cena inicial em `scene.generated.js` antes de copiar o pacote para `build/dist`.

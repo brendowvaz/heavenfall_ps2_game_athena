@@ -28,6 +28,7 @@
       <span class="save-dot" id="save-dot" title="Estado do arquivo"></span>
       <select id="scene-picker" class="scene-picker" aria-label="Cena atual"></select>
       <input id="scene-name" class="scene-title" value="Cena Athena" aria-label="Nome da cena">
+      <button id="scene-manager-button" class="scene-project-button" title="Gerenciar cenas">☷</button>
       <button id="duplicate-scene-button" class="scene-project-button" title="Duplicar cena">⧉</button>
       <button id="delete-scene-button" class="scene-project-button danger" title="Excluir cena">×</button>
     </div>
@@ -852,6 +853,30 @@
         <button id="confirm-prefab-button" value="default" class="primary-button">Criar prefab</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="scene-manager-dialog" class="editor-dialog scene-manager-dialog">
+    <div class="scene-manager-shell">
+      <header class="scene-manager-header">
+        <div>
+          <span class="eyebrow">PROJETO</span>
+          <h2>Gerenciamento de cenas</h2>
+          <p id="scene-manager-summary">Organize as cenas e escolha qual abre ao iniciar o jogo.</p>
+        </div>
+        <button id="scene-manager-close-button" class="scene-manager-close" type="button" aria-label="Fechar">×</button>
+      </header>
+      <div class="scene-manager-legend">
+        <span><i class="scene-status-dot startup"></i>Inicial no PS2</span>
+        <span><i class="scene-status-dot active"></i>Aberta no editor</span>
+      </div>
+      <div id="scene-manager-list" class="scene-manager-list" role="list"></div>
+      <footer class="scene-manager-actions">
+        <button id="scene-manager-new-button" class="secondary-button" type="button">＋ Nova cena</button>
+        <button id="scene-manager-duplicate-button" class="secondary-button" type="button">⧉ Duplicar aberta</button>
+        <button id="scene-manager-export-button" class="secondary-button" type="button">⇩ Exportar projeto</button>
+        <button id="scene-manager-done-button" class="primary-button" type="button">Concluído</button>
+      </footer>
+    </div>
   </dialog>
 
   <script type="module" src="/editor/app.js"></script>

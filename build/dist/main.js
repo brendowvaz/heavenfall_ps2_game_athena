@@ -107,6 +107,8 @@ function createRenderData(asset, material) {
 // transform data in a tiny generated script avoids JSON parsing and path
 // differences between PCSX2 HostFS and real hardware.
 globalThis.EDITOR_SCENE = [];
+globalThis.EDITOR_SCENE_META = { id: "", name: "" };
+globalThis.EDITOR_SCENE_PROJECT = { version: 1, startupSceneId: "", scenes: [] };
 globalThis.EDITOR_SETTINGS = {};
 globalThis.EDITOR_COLLIDERS = [];
 globalThis.EDITOR_EVENTS = [];
@@ -118,6 +120,9 @@ globalThis.EDITOR_UI = [];
 globalThis.EDITOR_AUDIO = [];
 globalThis.EDITOR_PARTICLES = [];
 globalThis.EDITOR_SHADOWS = [];
+if (std.exists("scenes/project.generated.js")) {
+    std.loadScript("scenes/project.generated.js");
+}
 if (std.exists("scene.generated.js")) {
     std.loadScript("scene.generated.js");
 }

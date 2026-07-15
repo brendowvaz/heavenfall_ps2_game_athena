@@ -1,32 +1,63 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { generateAthenaScene, normalizeScene } from "../editor/server.mjs";
+import {
+  generateAthenaScene,
+  generateSceneProjectManifest,
+  normalizeScene,
+  normalizeSceneProject,
+} from "../editor/server.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..");
-let source = path.join(projectRoot, "editor", "scene.json");
-const destination = path.join(projectRoot, "assets", "scene.generated.js");
-let activeSceneId = null;
+const editorRoot = path.join(projectRoot, "editor");
+const sceneProjectFile = path.join(editorRoot, "scenes", "index.json");
+const generatedScenesRoot = path.join(projectRoot, "assets", "scenes");
+const generatedSceneFile = path.join(projectRoot, "assets", "scene.generated.js");
 
+let project;
 try {
-  const project = JSON.parse(await readFile(path.join(projectRoot, "editor", "scenes", "index.json"), "utf8"));
-  if (typeof project.activeSceneId === "string" && project.activeSceneId) {
-    const candidate = path.join(projectRoot, "editor", "scenes", `${project.activeSceneId}.json`);
-    await readFile(candidate, "utf8");
-    source = candidate;
-    activeSceneId = project.activeSceneId;
-  }
+  project = normalizeSceneProject(JSON.parse(await readFile(sceneProjectFile, "utf8")));
 } catch {
-  // Legacy projects continue to export editor/scene.json.
+  const legacy = normalizeScene(JSON.parse(await readFile(path.join(editorRoot, "scene.json"), "utf8")));
+  project = {
+    version: 2,
+    activeSceneId: "main",
+    startupSceneId: "main",
+    scenes: [{ id: "main", name: legacy.name, updatedAt: new Date(0).toISOString() }],
+  };
 }
 
-const scene = normalizeScene(JSON.parse(await readFile(source, "utf8")));
-const generated = generateAthenaScene(scene);
-await writeFile(destination, generated, "utf8");
-if (activeSceneId) {
-  const sceneOutput = path.join(projectRoot, "assets", "scenes");
-  await mkdir(sceneOutput, { recursive: true });
-  await writeFile(path.join(sceneOutput, `${activeSceneId}.generated.js`), generated, "utf8");
+await mkdir(generatedScenesRoot, { recursive: true });
+const loadedScenes = new Map();
+for (const entry of project.scenes) {
+  const source = path.join(editorRoot, "scenes", `${entry.id}.json`);
+  let scene;
+  try {
+    scene = normalizeScene(JSON.parse(await readFile(source, "utf8")));
+  } catch {
+    if (project.scenes.length !== 1) throw new Error(`Não foi possível exportar a cena ${entry.id}.`);
+    scene = normalizeScene(JSON.parse(await readFile(path.join(editorRoot, "scene.json"), "utf8")));
+  }
+  loadedScenes.set(entry.id, scene);
+  entry.name = scene.name;
+  entry.objectCount = scene.objects.length;
+  entry.uiCount = scene.ui.length;
+  entry.graphCount = scene.logic.graphs.length;
+  await writeFile(
+    path.join(generatedScenesRoot, `${entry.id}.generated.js`),
+    generateAthenaScene(scene, { id: entry.id }),
+    "utf8",
+  );
 }
-console.log(`Cena do editor exportada: ${scene.objects.length} registros.`);
+
+const startup = loadedScenes.get(project.startupSceneId);
+if (!startup) throw new Error("A cena inicial do projeto não existe.");
+await writeFile(generatedSceneFile, generateAthenaScene(startup, { id: project.startupSceneId }), "utf8");
+await writeFile(
+  path.join(generatedScenesRoot, "project.generated.js"),
+  generateSceneProjectManifest(project),
+  "utf8",
+);
+
+console.log(`${project.scenes.length} cena(s) exportada(s); inicial: ${project.startupSceneId}.`);

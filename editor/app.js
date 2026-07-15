@@ -67,6 +67,7 @@ const state = {
   previewCameraId: null,
   scenes: [],
   activeSceneId: null,
+  startupSceneId: null,
   uiMode: false,
   logicMode: false,
   selectedUiId: null,
@@ -4287,18 +4288,143 @@ function renderSceneProject(project = null) {
   if (project) {
     state.scenes = Array.isArray(project.scenes) ? project.scenes : [];
     state.activeSceneId = project.activeSceneId || state.scenes[0]?.id || null;
+    state.startupSceneId = project.startupSceneId || state.activeSceneId;
   }
   const picker = $("scene-picker");
   picker.replaceChildren();
-  for (const entry of state.scenes) picker.append(new Option(entry.name, entry.id));
+  for (const entry of state.scenes) {
+    picker.append(new Option(`${entry.id === state.startupSceneId ? "★ " : ""}${entry.name}`, entry.id));
+  }
   picker.value = state.activeSceneId || "";
+  const startupEntry = state.scenes.find((entry) => entry.id === state.startupSceneId);
+  picker.title = startupEntry?.name
+    ? `Cena inicial: ${startupEntry.name}`
+    : "Cena atual";
+  $("run-button").title = startupEntry?.name
+    ? `Empacotar e testar a cena inicial: ${startupEntry.name}`
+    : "Empacotar e testar no PS2";
   $("delete-scene-button").disabled = state.scenes.length <= 1;
   $("duplicate-scene-button").disabled = !state.activeSceneId;
+  renderSceneManager();
+}
+
+function sceneCountLabel(count, singular, plural = `${singular}s`) {
+  const value = Math.max(0, Number(count) || 0);
+  return `${value} ${value === 1 ? singular : plural}`;
+}
+
+function renderSceneManager() {
+  const list = $("scene-manager-list");
+  if (!list) return;
+  list.replaceChildren();
+  const startup = state.scenes.find((entry) => entry.id === state.startupSceneId);
+  $("scene-manager-summary").textContent = `${state.scenes.length} cena${state.scenes.length === 1 ? "" : "s"} no projeto · inicial: ${startup?.name || "não definida"}`;
+
+  state.scenes.forEach((entry, index) => {
+    const row = document.createElement("article");
+    row.className = "scene-manager-item";
+    row.classList.toggle("active", entry.id === state.activeSceneId);
+    row.classList.toggle("startup", entry.id === state.startupSceneId);
+    row.setAttribute("role", "listitem");
+
+    const order = document.createElement("div");
+    order.className = "scene-order-actions";
+    const up = document.createElement("button");
+    up.type = "button";
+    up.textContent = "↑";
+    up.title = "Mover para cima";
+    up.disabled = index === 0;
+    up.addEventListener("click", () => moveProjectScene(entry.id, -1));
+    const down = document.createElement("button");
+    down.type = "button";
+    down.textContent = "↓";
+    down.title = "Mover para baixo";
+    down.disabled = index === state.scenes.length - 1;
+    down.addEventListener("click", () => moveProjectScene(entry.id, 1));
+    order.append(up, down);
+
+    const info = document.createElement("div");
+    info.className = "scene-manager-info";
+    const nameRow = document.createElement("div");
+    nameRow.className = "scene-manager-name-row";
+    const name = document.createElement("input");
+    name.className = "scene-manager-name";
+    name.value = entry.name;
+    name.maxLength = 120;
+    name.setAttribute("aria-label", `Nome da cena ${entry.name}`);
+    name.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        name.blur();
+      } else if (event.key === "Escape") {
+        name.value = entry.name;
+        name.blur();
+      }
+    });
+    name.addEventListener("change", () => renameProjectScene(entry.id, name.value));
+    nameRow.append(name);
+    if (entry.id === state.activeSceneId) {
+      const badge = document.createElement("span");
+      badge.className = "scene-manager-badge";
+      badge.textContent = "aberta";
+      nameRow.append(badge);
+    }
+    const meta = document.createElement("div");
+    meta.className = "scene-manager-meta";
+    const updated = new Date(entry.updatedAt);
+    const updatedLabel = Number.isNaN(updated.getTime()) ? "data desconhecida" : updated.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+    meta.textContent = [
+      sceneCountLabel(entry.objectCount, "objeto"),
+      sceneCountLabel(entry.uiCount, "item de UI", "itens de UI"),
+      sceneCountLabel(entry.graphCount, "grafo"),
+      updatedLabel,
+    ].join(" · ");
+    info.append(nameRow, meta);
+
+    const startupButton = document.createElement("button");
+    startupButton.type = "button";
+    startupButton.className = "scene-startup-button";
+    startupButton.classList.toggle("is-startup", entry.id === state.startupSceneId);
+    startupButton.textContent = entry.id === state.startupSceneId ? "★ Inicial" : "Definir inicial";
+    startupButton.disabled = entry.id === state.startupSceneId;
+    startupButton.addEventListener("click", () => setStartupProjectScene(entry.id));
+
+    const actions = document.createElement("div");
+    actions.className = "scene-manager-row-actions";
+    const open = document.createElement("button");
+    open.type = "button";
+    open.textContent = entry.id === state.activeSceneId ? "Aberta" : "Editar";
+    open.disabled = entry.id === state.activeSceneId;
+    open.addEventListener("click", async () => {
+      if (await switchProjectScene(entry.id)) $("scene-manager-dialog").close();
+    });
+    const duplicate = document.createElement("button");
+    duplicate.type = "button";
+    duplicate.textContent = "Duplicar";
+    duplicate.addEventListener("click", () => createProjectScene({ duplicate: true, duplicateFrom: entry.id }));
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "danger";
+    remove.textContent = "Excluir";
+    remove.disabled = state.scenes.length <= 1;
+    remove.addEventListener("click", () => deleteProjectScene(entry.id));
+    actions.append(open, duplicate, remove);
+
+    row.append(order, info, startupButton, actions);
+    list.append(row);
+  });
+}
+
+async function saveDirtySceneBeforeNavigation() {
+  if (!state.dirty) return true;
+  const saved = await saveScene({ quiet: true });
+  if (saved) toast("Alterações salvas antes de trocar de cena.", "success", 2200);
+  return saved;
 }
 
 async function switchProjectScene(sceneId) {
   if (!sceneId || sceneId === state.activeSceneId) return true;
-  if (state.dirty && !window.confirm("Descartar as alterações não salvas e trocar de cena?")) {
+  if (!await saveDirtySceneBeforeNavigation()) {
     renderSceneProject();
     return false;
   }
@@ -4309,7 +4435,7 @@ async function switchProjectScene(sceneId) {
     if (!response.ok) throw new Error(result.error || "Falha ao trocar de cena");
     renderSceneProject(result.project);
     await loadDocument(result.scene);
-    toast(`${result.scene.name} agora será executada no PS2.`, "success");
+    toast(`${result.scene.name} aberta para edição.`, "success");
     return true;
   } catch (error) {
     toast(error.message, "error");
@@ -4320,10 +4446,11 @@ async function switchProjectScene(sceneId) {
   }
 }
 
-async function createProjectScene({ duplicate = false } = {}) {
-  if (state.dirty && !window.confirm("Descartar as alterações não salvas e criar outra cena?")) return;
+async function createProjectScene({ duplicate = false, duplicateFrom = null } = {}) {
+  if (!await saveDirtySceneBeforeNavigation()) return;
   const currentName = state.document?.name || "Cena";
-  const suggested = duplicate ? `${currentName} — cópia` : "Nova cena";
+  const sourceEntry = state.scenes.find((entry) => entry.id === (duplicateFrom || state.activeSceneId));
+  const suggested = duplicate ? `${sourceEntry?.name || currentName} — cópia` : "Nova cena";
   const name = window.prompt("Nome da cena:", suggested)?.trim();
   if (!name) return;
   setLoading(1, duplicate ? "Duplicando cena…" : "Criando cena…");
@@ -4331,7 +4458,7 @@ async function createProjectScene({ duplicate = false } = {}) {
     const response = await fetch("/api/scenes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, ...(duplicate ? { duplicateFrom: state.activeSceneId } : {}) }),
+      body: JSON.stringify({ name, ...(duplicate ? { duplicateFrom: duplicateFrom || state.activeSceneId } : {}) }),
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Falha ao criar a cena");
@@ -4345,22 +4472,107 @@ async function createProjectScene({ duplicate = false } = {}) {
   }
 }
 
-async function deleteProjectScene() {
-  const entry = state.scenes.find((item) => item.id === state.activeSceneId);
+async function deleteProjectScene(sceneId = state.activeSceneId) {
+  const id = typeof sceneId === "string" ? sceneId : state.activeSceneId;
+  const entry = state.scenes.find((item) => item.id === id);
   if (!entry || state.scenes.length <= 1) return;
   if (!window.confirm(`Excluir permanentemente a cena “${entry.name}”?`)) return;
   setLoading(1, "Excluindo cena…");
   try {
+    const deletingActiveScene = entry.id === state.activeSceneId;
     const response = await fetch(`/api/scenes/${encodeURIComponent(entry.id)}`, { method: "DELETE" });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Falha ao excluir a cena");
     renderSceneProject(result.project);
-    await loadDocument(result.scene);
+    if (deletingActiveScene) await loadDocument(result.scene);
     toast("Cena excluída.", "success");
   } catch (error) {
     toast(error.message, "error");
   } finally {
     setLoading(-1);
+  }
+}
+
+async function setStartupProjectScene(sceneId) {
+  if (sceneId === state.startupSceneId) return;
+  if (sceneId === state.activeSceneId && !await saveDirtySceneBeforeNavigation()) return;
+  try {
+    const response = await fetch(`/api/scenes/${encodeURIComponent(sceneId)}/startup`, { method: "POST" });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Falha ao definir a cena inicial");
+    renderSceneProject(result.project);
+    const entry = state.scenes.find((item) => item.id === sceneId);
+    toast(`${entry?.name || "Cena"} será aberta ao iniciar o jogo.`, "success");
+  } catch (error) {
+    toast(error.message, "error");
+  }
+}
+
+async function renameProjectScene(sceneId, requestedName) {
+  const entry = state.scenes.find((item) => item.id === sceneId);
+  const name = String(requestedName || "").trim().slice(0, 120);
+  if (!entry || !name || name === entry.name) {
+    renderSceneManager();
+    return;
+  }
+  try {
+    if (sceneId === state.activeSceneId) {
+      state.document.name = name;
+      $("scene-name").value = name;
+      markDirty();
+      if (!await saveScene({ quiet: true })) throw new Error("Não foi possível salvar o novo nome");
+    } else {
+      const response = await fetch(`/api/scenes/${encodeURIComponent(sceneId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Falha ao renomear a cena");
+      renderSceneProject(result.project);
+    }
+    toast("Cena renomeada.", "success", 2200);
+  } catch (error) {
+    toast(error.message, "error");
+    renderSceneManager();
+  }
+}
+
+async function moveProjectScene(sceneId, direction) {
+  const index = state.scenes.findIndex((entry) => entry.id === sceneId);
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= state.scenes.length) return;
+  const order = state.scenes.map((entry) => entry.id);
+  [order[index], order[target]] = [order[target], order[index]];
+  try {
+    const response = await fetch("/api/scenes", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ order }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Falha ao reordenar as cenas");
+    renderSceneProject(result.project);
+  } catch (error) {
+    toast(error.message, "error");
+  }
+}
+
+async function exportSceneProjectFile() {
+  if (!await saveDirtySceneBeforeNavigation()) return;
+  try {
+    const response = await fetch("/api/project/export", { cache: "no-store" });
+    const project = await response.json();
+    if (!response.ok) throw new Error(project.error || "Falha ao exportar o projeto");
+    const blob = new Blob([`${JSON.stringify(project, null, 2)}\n`], { type: "application/json" });
+    const anchor = document.createElement("a");
+    anchor.href = URL.createObjectURL(blob);
+    anchor.download = "athena-project.json";
+    anchor.click();
+    URL.revokeObjectURL(anchor.href);
+    toast("Projeto completo exportado.", "success");
+  } catch (error) {
+    toast(error.message, "error");
   }
 }
 
@@ -5100,6 +5312,15 @@ function bindUi() {
   $("import-input").addEventListener("change", (event) => importFiles(event.target.files));
   $("open-scene-button").addEventListener("click", () => $("open-scene-input").click());
   $("scene-picker").addEventListener("change", (event) => switchProjectScene(event.target.value));
+  $("scene-manager-button").addEventListener("click", () => {
+    renderSceneManager();
+    $("scene-manager-dialog").showModal();
+  });
+  $("scene-manager-close-button").addEventListener("click", () => $("scene-manager-dialog").close());
+  $("scene-manager-done-button").addEventListener("click", () => $("scene-manager-dialog").close());
+  $("scene-manager-new-button").addEventListener("click", () => createProjectScene());
+  $("scene-manager-duplicate-button").addEventListener("click", () => createProjectScene({ duplicate: true }));
+  $("scene-manager-export-button").addEventListener("click", exportSceneProjectFile);
   $("duplicate-scene-button").addEventListener("click", () => createProjectScene({ duplicate: true }));
   $("delete-scene-button").addEventListener("click", deleteProjectScene);
   $("scene-root-row").addEventListener("dragover", (event) => {
@@ -5302,7 +5523,7 @@ async function boot() {
       const capabilities = await capabilitiesResponse.json();
       state.serverSchemaVersion = Number(capabilities.editorSchemaVersion) || 0;
     }
-    state.serverOutdated = state.serverSchemaVersion < 9;
+    state.serverOutdated = state.serverSchemaVersion < 10;
     const data = await sceneResponse.json();
     if (!sceneResponse.ok) throw new Error(data.error || "Falha ao abrir a cena");
     await loadDocument(data);

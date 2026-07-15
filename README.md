@@ -63,7 +63,7 @@ Abra `http://127.0.0.1:4173/editor/` no navegador. O editor oferece:
 - projetores de sombra oficiais com textura, grade, direção da luz, bias, deslocamento, cor, blend e opção de seguir o jogador;
 - editor de interface 2D em 640 × 448 com painéis, textos, imagens e vídeos MPEG, arraste e redimensionamento;
 - fontes TTF/OTF ou bitmap na UI, medição exata, alinhamento, contorno ou sombra projetada;
-- múltiplas cenas persistentes, com seleção, duplicação, exclusão e teste da cena ativa;
+- gerenciamento de cenas persistentes, com criação, renomeação, duplicação, exclusão, reordenação, estatísticas, cena inicial independente e exportação do projeto completo;
 - fontes de áudio WAV/OGG e efeitos ADPCM com loop, volume, pan, pitch e alcance espacial;
 - emissores 3D de fogo, fumaça e faíscas com pool de partículas limitado para o PS2;
 - prefabs criados a partir de qualquer seleção, incluindo grupos e colisores;
@@ -75,7 +75,9 @@ Abra `http://127.0.0.1:4173/editor/` no navegador. O editor oferece:
 
 Ao importar OBJ ou GLTF com arquivos externos, selecione também o MTL, BIN e as texturas relacionados. Eles serão copiados juntos para `assets/imported`.
 
-Cada cena fica em `editor/scenes`, enquanto `editor/scene.json` continua como espelho compatível da cena ativa. A cena escolhida no seletor superior é exportada para `assets/scene.generated.js` e também mantém sua própria cópia em `assets/scenes`. Ao salvar ou testar, essa é a cena realmente executada pelo PS2.
+Cada cena fica em `editor/scenes`, enquanto `editor/scene.json` continua como espelho compatível da cena aberta no editor. O botão **Gerenciar cenas** permite criar, renomear, duplicar, excluir e ordenar cenas, além de mostrar quantos objetos, elementos de interface e grafos cada uma possui. Alterações pendentes são salvas antes da navegação para impedir perdas acidentais.
+
+A cena **Inicial** é independente da cena aberta para edição: ela é exportada para `assets/scene.generated.js` e é a que o PS2 carrega ao iniciar. Todas as cenas também recebem uma cópia própria em `assets/scenes`, acompanhadas de `project.generated.js`, que registra a ordem, os nomes e os arquivos gerados. **Exportar projeto** baixa um único JSON com o índice e o conteúdo de todas as cenas.
 
 O modo **Interface** trabalha nas coordenadas nativas de 640 × 448. Painéis usam `Draw.rect`, textos usam `Font`, imagens usam `Image` e vídeos usam `Video`/`Video.frame` no `main.js`. Posição, tamanho, cor, opacidade, conteúdo, alinhamento, fonte e efeitos configurados no editor entram no runtime. Contorno e sombra de texto são mutuamente exclusivos, como exige a documentação oficial. Vídeos podem iniciar automaticamente ou ser controlados por ações de trigger. Arraste um elemento para posicioná-lo e use a alça inferior para redimensionar.
 
