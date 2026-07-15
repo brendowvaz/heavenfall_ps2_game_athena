@@ -477,6 +477,67 @@ h2, h3, p { margin: 0; }
 .ui-resize-handle { position: absolute; right: -5px; bottom: -5px; width: 10px; height: 10px; border: 1px solid #301944; background: #d3a4ff; cursor: nwse-resize; }
 .viewport.ui-mode .viewport-top-left, .viewport.ui-mode .axis-gizmo, .viewport.ui-mode .camera-preview { display: none !important; }
 .viewport.ui-mode #ui-mode-button { background: rgba(193,124,255,.2); color: #eddaff; }
+.logic-summary { color: #668497; font-size: 9px; line-height: 1.45; }
+.logic-editor { position: absolute; z-index: 12; inset: 0; display: grid; grid-template-rows: 44px minmax(0,1fr) 28px; background: #050b11; color: #9eb4c1; pointer-events: auto; }
+.logic-editor-header, .logic-editor-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--border-strong); background: #08121a; padding: 0 10px; }
+.logic-editor-header > div { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.logic-editor-header strong { color: #82def8; font-size: 9px; letter-spacing: .12em; white-space: nowrap; }
+.logic-editor-header select { width: min(220px, 22vw); height: 27px; border: 1px solid var(--border); border-radius: 3px; background: #061019; color: #b7cbd6; font-size: 10px; }
+.logic-editor-header button, .logic-editor-footer button { height: 25px; padding: 0 8px; border: 1px solid var(--border); border-radius: 3px; background: rgba(255,255,255,.025); color: #7893a2; font-size: 9px; cursor: pointer; }
+.logic-editor-header button:hover, .logic-editor-footer button:hover { color: #ccecf7; border-color: #35677c; }
+.logic-enabled { display: flex; align-items: center; gap: 4px; color: #7893a2; font-size: 9px; white-space: nowrap; }
+.logic-editor-body { min-height: 0; display: grid; grid-template-columns: 148px minmax(220px,1fr) 224px; }
+.logic-palette, .logic-properties-panel { min-width: 0; overflow-y: auto; background: #071019; }
+.logic-palette { border-right: 1px solid var(--border-strong); }
+.logic-properties-panel { border-left: 1px solid var(--border-strong); }
+.logic-panel-heading { position: sticky; z-index: 2; top: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 5px; padding: 10px; border-bottom: 1px solid var(--border); background: #071019; }
+.logic-panel-heading strong { color: #69899b; font-size: 8px; letter-spacing: .12em; }
+.logic-panel-heading small { color: #445f6e; font-size: 8px; }
+#logic-node-palette { display: grid; gap: 5px; padding: 8px; }
+.logic-palette-group { display: grid; gap: 4px; margin-bottom: 5px; }
+.logic-palette-group > strong { margin: 3px 2px 1px; color: #476a7c; font-size: 8px; text-transform: uppercase; letter-spacing: .08em; }
+.logic-palette-button { min-height: 27px; padding: 5px 7px; border: 1px solid #173040; border-radius: 3px; background: #091722; color: #7899aa; text-align: left; font-size: 9px; cursor: pointer; }
+.logic-palette-button:hover { border-color: #39768c; color: #bde9f7; }
+.logic-canvas-scroll { min-width: 0; min-height: 0; overflow: auto; background: #04090e; }
+.logic-canvas { position: relative; width: 4000px; height: 3000px; background-color: #050b11; background-image: linear-gradient(rgba(66,118,143,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(66,118,143,.08) 1px, transparent 1px); background-size: 24px 24px; }
+.logic-links { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
+.logic-link { fill: none; stroke: #316e88; stroke-width: 2; opacity: .8; }
+.logic-link.true { stroke: #55aa83; }
+.logic-link.false { stroke: #a45b6a; }
+.logic-node { position: absolute; width: 190px; min-height: 76px; border: 1px solid #264657; border-radius: 5px; background: #0a1620; box-shadow: 0 8px 22px rgba(0,0,0,.3); user-select: none; }
+.logic-node.selected { border-color: #63cce9; box-shadow: 0 0 0 1px rgba(99,204,233,.25), 0 10px 26px rgba(0,0,0,.38); }
+.logic-node.event { border-top-color: #d79952; }
+.logic-node.condition { border-top-color: #a87bd0; }
+.logic-node.variable { border-top-color: #6fb78f; }
+.logic-node.flow { border-top-color: #7191d0; }
+.logic-node-header { height: 28px; display: flex; align-items: center; justify-content: space-between; gap: 5px; padding: 0 7px; border-bottom: 1px solid rgba(255,255,255,.055); cursor: move; }
+.logic-node-header strong { overflow: hidden; color: #afc5d0; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.logic-node-header button { width: 19px; height: 19px; padding: 0; border: 0; background: transparent; color: #5e7180; cursor: pointer; }
+.logic-node-summary { min-height: 29px; padding: 7px 9px 5px; overflow: hidden; color: #5f7a89; font-size: 8px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.logic-ports { min-height: 21px; display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; padding: 0 7px 7px; }
+.logic-input-port, .logic-output-port { position: relative; display: flex; align-items: center; gap: 4px; border: 0; background: transparent; color: #5f7e8e; font-size: 8px; cursor: crosshair; }
+.logic-input-port::before, .logic-output-port::after { content: ""; width: 9px; height: 9px; border: 2px solid #4d879f; border-radius: 50%; background: #08131c; }
+.logic-output-port.true::after { border-color: #55aa83; }
+.logic-output-port.false::after { border-color: #a45b6a; }
+.logic-output-list { display: flex; gap: 5px; margin-left: auto; }
+.logic-output-port.connecting { color: #d9f6ff; }
+.logic-output-port.connecting::after { background: #57cdef; box-shadow: 0 0 8px #57cdef; }
+#logic-properties { display: grid; gap: 9px; padding: 10px; }
+.logic-property { display: grid; gap: 4px; color: #658091; font-size: 8px; }
+.logic-property input, .logic-property select, .logic-property textarea { width: 100%; min-height: 27px; border: 1px solid #17303e; border-radius: 3px; background: #061019; color: #a9bec9; padding: 5px 7px; font: inherit; font-size: 9px; }
+.logic-property textarea { resize: vertical; min-height: 54px; }
+.logic-property.inline { grid-template-columns: minmax(0,1fr) auto; align-items: center; }
+.logic-vector { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 4px; }
+.logic-variable-heading { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; color: #6e8e9f; font-size: 8px; text-transform: uppercase; letter-spacing: .08em; }
+.logic-variable-heading button, .logic-variable-row button, .logic-delete-node { height: 24px; border: 1px solid #203947; border-radius: 3px; background: transparent; color: #68808e; font-size: 8px; cursor: pointer; }
+.logic-variable-list { display: grid; gap: 6px; }
+.logic-variable-row { display: grid; grid-template-columns: minmax(0,1fr) 22px; gap: 4px; padding: 6px; border: 1px solid #142a37; border-radius: 3px; }
+.logic-variable-row small { grid-column: 1 / -1; color: #4f6977; font-size: 8px; }
+.logic-empty { padding: 16px 7px; color: #4b6573; font-size: 9px; line-height: 1.5; text-align: center; }
+.logic-delete-node { width: 100%; color: #9a6570; border-color: rgba(164,91,106,.25); }
+.logic-editor-footer { border-top: 1px solid var(--border-strong); border-bottom: 0; color: #4f6d7c; font-size: 8px; }
+.viewport.logic-mode > canvas, .viewport.logic-mode .viewport-top-left, .viewport.logic-mode .viewport-top-right, .viewport.logic-mode .axis-gizmo, .viewport.logic-mode .camera-preview, .viewport.logic-mode .selection-marquee { visibility: hidden; }
+.secondary-inspector-action { border-color: rgba(87,206,245,.2); color: #719caf; background: rgba(87,206,245,.035); }
 .camera-preview { position: absolute; z-index: 8; right: 16px; bottom: 16px; width: min(360px, calc(100% - 32px)); border: 1px solid rgba(87,206,245,.35); border-radius: 6px; overflow: hidden; background: #050b11; box-shadow: 0 14px 42px rgba(0,0,0,.48); }
 .camera-preview-header { height: 34px; display: flex; align-items: center; justify-content: space-between; padding: 0 7px 0 10px; border-bottom: 1px solid var(--border); background: rgba(11,25,36,.96); }
 .camera-preview-header > span { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
@@ -677,6 +738,8 @@ kbd { min-width: 17px; height: 16px; display: inline-grid; place-items: center; 
   .toolbar-clipboard .compact-button span { font-size: 14px; }
   .secondary-button { display: none; }
 }
+.logic-mode-active .workspace { grid-template-columns: var(--left) minmax(520px, 1fr); }
+.logic-mode-active .right-panel { display: none; }
 
 @media (max-width: 1150px) {
   :root { --left: 225px; --right: 280px; }

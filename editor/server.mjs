@@ -13,6 +13,7 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as THREE from "three";
+import { normalizeLogic } from "./visual-scripting.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..");
@@ -392,6 +393,7 @@ function normalizeScene(input) {
       };
     }),
     ui: (Array.isArray(input?.ui) ? input.ui : []).slice(0, 256).map(normalizeUiElement),
+    logic: normalizeLogic(input?.logic),
   };
 
   const byId = new Map(scene.objects.map((item) => [item.id, item]));
@@ -614,6 +616,17 @@ function generateAthenaScene(scene) {
     }))
     .filter((item) => item.onEnter.length || item.onExit.length || item.onInteract.length);
 
+  const logic = {
+    version: 1,
+    variables: scene.logic.variables,
+    graphs: scene.logic.graphs.map((graph) => ({
+      ...graph,
+      nodes: graph.nodes.map((node) => node.type === "actionVisibility"
+        ? { ...node, config: { ...node.config, targetIds: runtimeTargets(node.config.targetId) } }
+        : node),
+    })),
+  };
+
   const lights = scene.objects
     .filter((item) => item.runtime && item.visible && item.source.kind === "light" && item.light.type !== "point")
     .slice(0, 4)
@@ -773,6 +786,7 @@ function generateAthenaScene(scene) {
     `globalThis.EDITOR_SCENE = ${JSON.stringify(objects, null, 2)};`,
     `globalThis.EDITOR_COLLIDERS = ${JSON.stringify(colliders, null, 2)};`,
     `globalThis.EDITOR_EVENTS = ${JSON.stringify(events, null, 2)};`,
+    `globalThis.EDITOR_LOGIC = ${JSON.stringify(logic, null, 2)};`,
     `globalThis.EDITOR_LIGHTS = ${JSON.stringify(lights, null, 2)};`,
     `globalThis.EDITOR_POINT_LIGHTS = ${JSON.stringify(pointLights, null, 2)};`,
     `globalThis.EDITOR_CAMERA = ${JSON.stringify(activeCamera, null, 2)};`,
@@ -1230,8 +1244,8 @@ function startBuildAndRun() {
 async function handleApi(request, response, url) {
   if (url.pathname === "/api/capabilities" && request.method === "GET") {
     sendJson(response, 200, {
-      editorSchemaVersion: 8,
-      features: ["materials", "material-runtime", "model-animation", "lights", "point-light-runtime", "light-flicker", "shadow-projectors", "cameras", "camera-modes", "camera-preview", "components", "trigger-events", "multiple-scenes", "runtime-settings", "ui-editor", "ui-runtime", "ui-images", "ui-video", "ui-fonts", "audio", "audio-runtime", "particles", "particle-runtime", "particle-color"],
+      editorSchemaVersion: 9,
+      features: ["materials", "material-runtime", "model-animation", "lights", "point-light-runtime", "light-flicker", "shadow-projectors", "cameras", "camera-modes", "camera-preview", "components", "trigger-events", "visual-scripting", "logic-variables", "multiple-scenes", "runtime-settings", "ui-editor", "ui-runtime", "ui-images", "ui-video", "ui-fonts", "audio", "audio-runtime", "particles", "particle-runtime", "particle-color"],
     });
     return true;
   }

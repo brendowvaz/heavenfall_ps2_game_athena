@@ -33,6 +33,7 @@ console.log("[VeuAzul] Render inicializado em modo OBJ");
 // AthenaEnv resolves OBJ materials and their textures from the current folder.
 os.chdir("assets");
 std.loadScript("collision.js");
+if (std.exists("visual-scripting-runtime.js")) std.loadScript("visual-scripting-runtime.js");
 
 let menuBackground = null;
 if (std.exists("menu_background.png")) {
@@ -109,6 +110,7 @@ globalThis.EDITOR_SCENE = [];
 globalThis.EDITOR_SETTINGS = {};
 globalThis.EDITOR_COLLIDERS = [];
 globalThis.EDITOR_EVENTS = [];
+globalThis.EDITOR_LOGIC = { version: 1, variables: [], graphs: [] };
 globalThis.EDITOR_LIGHTS = [];
 globalThis.EDITOR_POINT_LIGHTS = [];
 globalThis.EDITOR_CAMERA = null;
@@ -781,6 +783,7 @@ function runTriggerPhase(triggerId, phase) {
             executeRuntimeAction(actions[actionIndex]);
         }
     }
+    if (runtimeVisualScripts) runtimeVisualScripts.trigger(triggerId, phase);
 }
 
 function processRuntimeEvents() {
@@ -934,6 +937,28 @@ let cachedCameraFactor = 1.0;
 const pad = Pads.get(0);
 pad.update();
 
+function executeVisualScriptAction(type, config) {
+    if (type === "actionMessage") executeRuntimeAction({ type: "message", text: config.text, duration: config.duration });
+    else if (type === "actionVisibility") executeRuntimeAction({
+        type: "visibility", targetId: config.targetId, targetIds: config.targetIds, mode: config.mode
+    });
+    else if (type === "actionTeleport") executeRuntimeAction({ type: "teleport", position: config.position });
+    else if (type === "actionAudio") executeRuntimeAction({ type: "audio", targetId: config.targetId, mode: config.mode });
+    else if (type === "actionParticle") executeRuntimeAction({ type: "particle", targetId: config.targetId, mode: config.mode });
+    else if (type === "actionVideo") executeRuntimeAction({ type: "video", targetId: config.targetId, mode: config.mode });
+}
+
+const runtimeVisualScripts = typeof VisualScriptingRuntime !== "undefined"
+    ? VisualScriptingRuntime.create(EDITOR_LOGIC, {
+        execute: executeVisualScriptAction,
+        buttonPressed: function (buttonName) {
+            const button = Pads[buttonName];
+            return button !== undefined && pad.justPressed(button);
+        },
+        log: function (message) { console.log("[VisualScript] " + message); }
+    })
+    : null;
+
 // AthenaEnv builds differ: some expose signed axes centered at 0, while others
 // expose unsigned axes centered at 128. Detect the active convention at boot.
 const unsignedAxes = pad.lx > 64 && pad.lx < 192 && pad.ly > 64 && pad.ly < 192;
@@ -963,6 +988,7 @@ function startExistingScenario() {
     titleTimer = 330;
     collisionFlash = 0;
     runtimeMessageTimer = 0;
+    if (runtimeVisualScripts) runtimeVisualScripts.start();
 }
 
 function updateMenuInput() {
@@ -1071,6 +1097,7 @@ function updatePlayerAndCamera() {
     updateVerticalMovement();
     updateActiveTriggers();
     processRuntimeEvents();
+    if (runtimeVisualScripts) runtimeVisualScripts.step();
     updateRuntimeAudio();
 
     playerObject.position = { x: playerX, y: playerY, z: playerZ };

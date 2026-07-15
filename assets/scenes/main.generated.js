@@ -745,6 +745,11 @@ globalThis.EDITOR_COLLIDERS = [
   }
 ];
 globalThis.EDITOR_EVENTS = [];
+globalThis.EDITOR_LOGIC = {
+  "version": 1,
+  "variables": [],
+  "graphs": []
+};
 globalThis.EDITOR_LIGHTS = [
   {
     "id": "light-mrlgfick-2o3fmn",

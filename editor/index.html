@@ -217,6 +217,17 @@
         <div id="ui-element-list" class="ui-element-list"></div>
       </section>
 
+      <section class="panel-section logic-section">
+        <div class="section-heading compact">
+          <div>
+            <span class="eyebrow">COMPORTAMENTO</span>
+            <h2>Visual scripting</h2>
+          </div>
+          <button id="open-logic-editor-button" class="import-button">Abrir</button>
+        </div>
+        <p id="logic-summary" class="logic-summary">Nenhum fluxo configurado</p>
+      </section>
+
       <section class="panel-section prefab-section">
         <div class="section-heading compact">
           <div>
@@ -260,6 +271,7 @@
         <button id="collider-visibility-button" class="active" title="Mostrar colisores">COL</button>
         <button id="grid-button" class="active" title="Mostrar grade">#</button>
         <button id="ui-mode-button" title="Editar interface 2D">UI</button>
+        <button id="logic-mode-button" title="Editar lógica visual">LOGIC</button>
       </div>
 
       <div id="axis-gizmo" class="axis-gizmo" aria-label="Orientação da câmera">
@@ -285,6 +297,43 @@
           <small>640 × 448 · arraste e redimensione</small>
         </div>
         <div id="ui-canvas" class="ui-canvas" aria-label="Prévia da interface 2D"></div>
+      </div>
+
+      <div id="logic-editor" class="logic-editor" hidden>
+        <div class="logic-editor-header">
+          <div>
+            <strong>VISUAL SCRIPTING</strong>
+            <select id="logic-graph-select" aria-label="Fluxo atual"></select>
+            <label class="logic-enabled"><input id="logic-graph-enabled" type="checkbox" checked> Ativo</label>
+          </div>
+          <div>
+            <button id="logic-new-graph-button">Novo fluxo</button>
+            <button id="logic-duplicate-graph-button">Duplicar</button>
+            <button id="logic-delete-graph-button" class="danger-text">Excluir</button>
+            <button id="logic-validate-button">Validar</button>
+            <button id="logic-close-button" title="Fechar visual scripting">×</button>
+          </div>
+        </div>
+        <div class="logic-editor-body">
+          <aside class="logic-palette">
+            <div class="logic-panel-heading"><strong>NÓS</strong><small>Adicione ao fluxo</small></div>
+            <div id="logic-node-palette"></div>
+          </aside>
+          <div id="logic-canvas-scroll" class="logic-canvas-scroll">
+            <div id="logic-canvas" class="logic-canvas">
+              <svg id="logic-links" class="logic-links" width="4000" height="3000" aria-hidden="true"></svg>
+              <div id="logic-nodes"></div>
+            </div>
+          </div>
+          <aside class="logic-properties-panel">
+            <div class="logic-panel-heading"><strong>PROPRIEDADES</strong><small id="logic-properties-subtitle">Fluxo</small></div>
+            <div id="logic-properties"></div>
+          </aside>
+        </div>
+        <div class="logic-editor-footer">
+          <span id="logic-connection-hint">Clique em uma saída e depois na entrada de outro nó para conectar.</span>
+          <button id="logic-cancel-connection-button" hidden>Cancelar conexão</button>
+        </div>
       </div>
 
       <div id="camera-preview" class="camera-preview" hidden>
@@ -541,6 +590,7 @@
               </div>
             </div>
             <button id="event-add-button" class="inspector-action-button">Adicionar ação</button>
+            <button id="event-convert-logic-button" class="inspector-action-button secondary-inspector-action">Converter ações em grafo</button>
             <div id="event-action-list" class="event-action-list"></div>
           </div>
         </section>

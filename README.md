@@ -59,6 +59,7 @@ Abra `http://127.0.0.1:4173/editor/` no navegador. O editor oferece:
 - câmeras de cena com modos seguir, fixa e fixa olhando o jogador, além de preview em 640 × 448;
 - colisores visuais de caixa, esfera e cápsula, com trigger e bloqueio de câmera;
 - componentes de trigger com eventos de entrada, saída e interação executados no PS2;
+- visual scripting por grafos com eventos de início, trigger, botão e temporizador; condições, variáveis, espera e ações para mensagens, visibilidade, teleporte, áudio, partículas e vídeo;
 - projetores de sombra oficiais com textura, grade, direção da luz, bias, deslocamento, cor, blend e opção de seguir o jogador;
 - editor de interface 2D em 640 × 448 com painéis, textos, imagens e vídeos MPEG, arraste e redimensionamento;
 - fontes TTF/OTF ou bitmap na UI, medição exata, alinhamento, contorno ou sombra projetada;
@@ -81,6 +82,10 @@ O modo **Interface** trabalha nas coordenadas nativas de 640 × 448. Painéis us
 As dimensões dos colisores seguem a visualização do editor: na caixa, `scale` representa as meias-extensões; na esfera e na cápsula, representa os raios locais. Posição, rotação XYZ, escala hierárquica e altura são exportadas em coordenadas mundiais. Triggers são detectados sem bloquear, e **Bloquear câmera** afeta somente a câmera.
 
 Triggers podem executar ações **Ao entrar**, **Ao sair** ou **Ao interagir** com `Triângulo`. As ações mostram mensagens na HUD, mostram/ocultam objetos ou grupos, teletransportam o jogador e controlam áudio ou partículas. Grupos usados como alvo são resolvidos para seus modelos filhos durante a exportação, e todas as ações são executadas pelo `main.js` no PS2.
+
+O modo **LOGIC** amplia esses eventos para grafos visuais reutilizáveis. Um fluxo começa em **Ao iniciar**, **Trigger**, **Botão pressionado** ou **Temporizador** e segue pelas conexões entre condições, ações, alterações de variável e esperas em quadros. Condições possuem saídas separadas para **sim** e **não**. O botão **Validar** encontra nós desconectados, variáveis ausentes e ações sem alvo antes da exportação. As ações antigas de um trigger podem ser convertidas para um grafo pelo inspector; a conversão remove a lista antiga para evitar execução duplicada.
+
+Os grafos são dados declarativos, não código arbitrário. O runtime interpreta somente os nós permitidos, limita cada evento a 128 passos e interrompe ciclos acidentais. Isso mantém o resultado compatível com o QuickJS do AthenaEnv sem usar `eval` ou gerar chamadas não documentadas.
 
 Fontes de áudio usam as APIs reais do AthenaEnv. WAV e OGG são carregados por `Sound.Stream` como áudio global; apenas o primeiro stream ativo da cena é exportado. Arquivos ADP usam `Sound.Sfx` e aceitam volume, pan, pitch e atenuação espacial calculada pela distância do jogador. Áudio pode tocar ao iniciar ou ser controlado por ações de trigger.
 

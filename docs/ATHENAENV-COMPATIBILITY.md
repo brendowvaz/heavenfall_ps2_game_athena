@@ -1,0 +1,46 @@
+# Compatibilidade com o AthenaEnv oficial
+
+Esta integração foi revisada contra `DanielSant0s/AthenaEnv` em `main`, commit [`941a699`](https://github.com/DanielSant0s/AthenaEnv/commit/941a6990b011fe1543754c8cb4645c579e27c73b), de 9 de maio de 2026. O objetivo deste arquivo é impedir que o editor prometa uma função que o runtime oficial não oferece.
+
+## Recursos de cena disponíveis
+
+| Área do editor | API oficial usada no PS2 | Contrato e limites |
+| --- | --- | --- |
+| Modelos OBJ, GLTF e GLB | `RenderData`, `RenderObject` | OBJ importado pode ser convertido para triângulos independentes; MTL e texturas continuam suportados. |
+| Materiais | `RenderData.updateMaterial`, `RenderData(mesh, texture)` | Cor, ambiente/difuso/especular, emissão, brilho, `disolve`, textura, face dupla, mapeamento, Flat/Gouraud, clipping preciso e pipelines `PL_DEFAULT`, `PL_SPECULAR` e `PL_NO_LIGHTS`. |
+| Animação | `AnimCollection`, `RenderObject.playAnim` | Clipes esqueléticos de GLTF/GLB, autoplay e loop. O modelo precisa conter esqueleto/animação compatível. |
+| Luzes | `Lights` | O Athena oferece quatro slots. Ambiente e direcional são nativos; luz pontual com alcance é uma aproximação por objeto, pois a API não possui posição/alcance nativos. |
+| Câmera | `Render.setView`, `Render.setCamera` | FOV, planos de corte, seguir, fixa e fixa olhando o jogador. |
+| Interface | `Draw`, `Font`, `Image`, `Video` | Painel, texto, PNG/BMP/JPEG e MPEG. Fontes de imagem ou TTF/OTF são aceitas pelo Athena; o importador expõe TTF/OTF e as imagens oficiais. |
+| Efeitos de texto | propriedades de `Font`, `getTextSize` | Cor, escala, alinhamento, contorno ou dropshadow. Contorno e dropshadow não coexistem. |
+| Áudio | `Sound.Stream`, `Sound.Sfx` | WAV/OGG para stream e ADP para SFX. Loop nativo, volume, pan e pitch; espacialização é calculada pelo jogo. |
+| Vídeo | `Video`, `Video.frame` | M2V/MPG/MPEG, autoplay, loop, opacidade e ações tocar/pausar/parar. `update()` é executado a cada quadro. |
+| Sombras | `Shadows.Projector` | Até quatro projetores exportados, com tamanho, grade, direção, bias, deslocamento, cor e blend. Raycast ODE não é ativado sem um `ODE.Space`. |
+| Tela e diagnóstico | `Screen` e `Render.stats` | Fundo, VSync, FPS, draw calls, triângulos e VRAM usada. |
+| Entrada e jogador | `Pads` | Spawn, raio, altura, velocidades, pulo, gravidade e movimento relativo à câmera. |
+| Colisão e triggers | matemática local do projeto | Caixa, elipsoide e cápsula com transformação 3D; mensagens, visibilidade, teleporte, áudio, partículas e vídeo. Não são anunciados como ODE. |
+| Visual scripting | QuickJS, `Pads` e componentes já documentados acima | Grafos declarativos com início, triggers, botões, temporizadores, condições, variáveis, espera e ações seguras. O executor limita cada disparo a 128 passos e não aceita código arbitrário. |
+
+## Formatos aceitos
+
+- Modelos e dependências: `.obj`, `.mtl`, `.gltf`, `.glb`, `.bin`.
+- Imagens realmente documentadas pelo Athena: `.png`, `.bmp`, `.jpg`, `.jpeg`.
+- Fontes: `.ttf`, `.otf` ou uma fonte bitmap `.png`, `.bmp`, `.jpg`, `.jpeg`. O seletor mostra todas as imagens porque o formato do atlas é interpretado pelo próprio `Font` oficial.
+- Áudio: `.wav`, `.ogg`, `.adp`.
+- Vídeo MPEG: `.m2v`, `.mpg`, `.mpeg`.
+
+WebP e TGA foram removidos do importador porque não constam como formatos suportados pelo módulo `Image` oficial.
+
+## APIs que não são propriedades de cena
+
+`std`, `os`, `System`, `Archive`, `IOP`, `Mutex`, `Thread`, `Timer`, `Network`, `Request`, `Socket` e `WebSocket` são serviços de programa, não dados visuais de uma cena. Expor cada função como um campo do inspector criaria controles sem semântica e código inseguro; elas continuam disponíveis para scripts escritos manualmente.
+
+O visual scripting não expõe esses serviços como texto executável. Seus nós são uma lista fechada de comportamentos que o projeto já sabe exportar e validar. Eventos de controle usam as constantes oficiais de `Pads`; temporizadores e esperas são contados no loop do jogo, evitando depender de callbacks concorrentes durante a renderização.
+
+`RenderBatch`, `SceneNode` e `AsyncLoader` são estratégias internas de renderização/carregamento. O editor já preserva hierarquia e exporta transformações mundiais, mas não apresenta esses detalhes como propriedades artísticas. Uma futura troca para esses módulos deve ser uma otimização mensurável do runtime, sem alterar o documento da cena.
+
+O módulo ODE oficial é uma simulação física completa. O projeto usa colisão cinemática determinística para o jogador; misturar corpos ODE sem definir massa, passos, joints e sincronização mudaria a jogabilidade. Por isso o editor não finge que os colisores atuais são corpos ODE. `Shadows.Projector.enableRaycast` também permanece desligado até existir um mundo/space ODE real.
+
+## Validação
+
+`npm test` cobre exportação hierárquica, materiais, animação, configurações de runtime, colisores rotacionados, cápsulas, triggers, visual scripting, variáveis, esperas, UI, vídeo, áudio, partículas e projetores de sombra. `npm run editor:check` valida a sintaxe do servidor e do cliente. O build sempre regenera `scene.generated.js` a partir da cena ativa antes de copiar o pacote para `build/dist`.

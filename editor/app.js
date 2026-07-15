@@ -4,6 +4,15 @@ import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { MTLLoader } from "three/addons/loaders/MTLLoader.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
+import {
+  LOGIC_BUTTONS,
+  LOGIC_NODE_DEFINITIONS,
+  createLogicGraph,
+  createLogicNode,
+  createLogicVariable,
+  normalizeLogic,
+  validateLogic,
+} from "./visual-scripting.js";
 
 const $ = (id) => document.getElementById(id);
 const viewport = $("viewport");
@@ -59,7 +68,11 @@ const state = {
   scenes: [],
   activeSceneId: null,
   uiMode: false,
+  logicMode: false,
   selectedUiId: null,
+  selectedLogicGraphId: null,
+  selectedLogicNodeId: null,
+  logicConnecting: null,
   serverSchemaVersion: 0,
   serverOutdated: false,
 };
@@ -1768,13 +1781,14 @@ function selectUiElement(id) {
 }
 
 function setUiMode(active) {
+  if (active && state.logicMode) setLogicMode(false);
   state.uiMode = Boolean(active);
   $("ui-editor").hidden = !state.uiMode;
   viewport.classList.toggle("ui-mode", state.uiMode);
   $("ui-mode-button").classList.toggle("active", state.uiMode);
   $("open-ui-editor-button").textContent = state.uiMode ? "Fechar" : "Editar";
-  orbit.enabled = !state.uiMode;
-  transformHelper.visible = !state.uiMode;
+  orbit.enabled = !state.uiMode && !state.logicMode;
+  transformHelper.visible = !state.uiMode && !state.logicMode;
   if (state.uiMode) {
     setSelection(null);
     renderUiPreview();
@@ -2053,6 +2067,7 @@ function renderTriggerEvents(record) {
     empty.textContent = "Nenhuma ação configurada";
     list.append(empty);
   }
+  $("event-convert-logic-button").disabled = count === 0;
   updateEventDraftUi();
 }
 
@@ -2095,6 +2110,679 @@ function addTriggerAction() {
   pushHistorySnapshot(before);
   renderInspector();
   setStatus(`Ação adicionada: ${eventPhaseLabel(phase)}`);
+}
+
+function currentLogicGraph() {
+  return state.document?.logic?.graphs?.find((graph) => graph.id === state.selectedLogicGraphId) || null;
+}
+
+function currentLogicNode() {
+  return currentLogicGraph()?.nodes.find((node) => node.id === state.selectedLogicNodeId) || null;
+}
+
+function renderLogicSummary() {
+  const graphs = state.document?.logic?.graphs || [];
+  const variables = state.document?.logic?.variables || [];
+  const nodes = graphs.reduce((total, graph) => total + graph.nodes.length, 0);
+  $("logic-summary").textContent = graphs.length
+    ? `${graphs.length} fluxo${graphs.length === 1 ? "" : "s"} · ${nodes} nó${nodes === 1 ? "" : "s"} · ${variables.length} ${variables.length === 1 ? "variável" : "variáveis"}`
+    : "Nenhum fluxo configurado";
+}
+
+function logicCategoryLabel(category) {
+  return { event: "Eventos", condition: "Condições", action: "Ações", variable: "Variáveis", flow: "Fluxo" }[category] || category;
+}
+
+function logicTargetName(id) {
+  return recordById(id)?.name || uiElementById(id)?.name || id || "Sem alvo";
+}
+
+function logicNodeSummary(node) {
+  const config = node.config || {};
+  if (node.type === "eventStart") return "Executa uma vez ao iniciar o jogo";
+  if (node.type === "eventTrigger") return `${eventPhaseLabel(config.phase)} · ${logicTargetName(config.triggerId)}`;
+  if (node.type === "eventInput") return `Pad.${config.button}`;
+  if (node.type === "eventTimer") return `${config.intervalFrames} quadros${config.repeat ? " · repetir" : ""}`;
+  if (node.type === "conditionVariable") {
+    const variable = state.document.logic.variables.find((item) => item.id === config.variableId);
+    return `${variable?.name || "Variável"} ${{ eq: "=", neq: "≠", gt: ">", gte: "≥", lt: "<", lte: "≤" }[config.operator]} ${String(config.value)}`;
+  }
+  if (node.type === "actionMessage") return config.text;
+  if (node.type === "actionVisibility") return `${config.mode} · ${logicTargetName(config.targetId)}`;
+  if (node.type === "actionTeleport") return `${config.position.x}, ${config.position.y}, ${config.position.z}`;
+  if (["actionAudio", "actionParticle", "actionVideo"].includes(node.type)) return `${config.mode} · ${logicTargetName(config.targetId)}`;
+  if (node.type === "actionSetVariable") {
+    const variable = state.document.logic.variables.find((item) => item.id === config.variableId);
+    return `${variable?.name || "Variável"} · ${config.operation}`;
+  }
+  if (node.type === "flowDelay") return `${config.frames} quadros`;
+  return "";
+}
+
+function logicCommit(mutator, message) {
+  if (!state.document) return;
+  const before = serializeScene();
+  mutator();
+  state.document.logic = normalizeLogic(state.document.logic, uid);
+  pushHistorySnapshot(before);
+  renderLogicSummary();
+  renderLogicEditor();
+  if (message) setStatus(message);
+}
+
+function renderLogicPalette() {
+  const palette = $("logic-node-palette");
+  palette.replaceChildren();
+  for (const category of ["event", "condition", "action", "variable", "flow"]) {
+    const group = document.createElement("div");
+    group.className = "logic-palette-group";
+    const heading = document.createElement("strong");
+    heading.textContent = logicCategoryLabel(category);
+    group.append(heading);
+    for (const [type, definition] of Object.entries(LOGIC_NODE_DEFINITIONS)) {
+      if (definition.category !== category) continue;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "logic-palette-button";
+      button.dataset.logicNodeType = type;
+      button.textContent = definition.label;
+      button.disabled = !currentLogicGraph();
+      button.addEventListener("click", () => addLogicNode(type));
+      group.append(button);
+    }
+    palette.append(group);
+  }
+}
+
+function renderLogicLinks() {
+  const graph = currentLogicGraph();
+  const svg = $("logic-links");
+  svg.replaceChildren();
+  if (!graph || $("logic-editor").hidden) return;
+  const canvasRect = $("logic-canvas").getBoundingClientRect();
+  for (const link of graph.links) {
+    const output = document.querySelector(`[data-logic-output-node="${link.from}"][data-logic-output-port="${link.fromPort}"]`);
+    const input = document.querySelector(`[data-logic-input-node="${link.to}"]`);
+    if (!output || !input) continue;
+    const fromRect = output.getBoundingClientRect();
+    const toRect = input.getBoundingClientRect();
+    const x1 = fromRect.right - canvasRect.left;
+    const y1 = fromRect.top + fromRect.height * 0.5 - canvasRect.top;
+    const x2 = toRect.left - canvasRect.left;
+    const y2 = toRect.top + toRect.height * 0.5 - canvasRect.top;
+    const curve = Math.max(50, Math.abs(x2 - x1) * 0.45);
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", `M ${x1} ${y1} C ${x1 + curve} ${y1}, ${x2 - curve} ${y2}, ${x2} ${y2}`);
+    path.setAttribute("class", `logic-link ${link.fromPort}`);
+    svg.append(path);
+  }
+}
+
+function beginLogicNodeDrag(event, node, element) {
+  if (event.button !== 0 || event.target.closest("button")) return;
+  event.preventDefault();
+  state.selectedLogicNodeId = node.id;
+  renderLogicProperties();
+  element.classList.add("selected");
+  const before = serializeScene();
+  const start = { x: event.clientX, y: event.clientY, nodeX: node.x, nodeY: node.y };
+  const move = (moveEvent) => {
+    node.x = Math.max(0, Math.min(3810, cleanNumber(start.nodeX + moveEvent.clientX - start.x)));
+    node.y = Math.max(0, Math.min(2920, cleanNumber(start.nodeY + moveEvent.clientY - start.y)));
+    element.style.left = `${node.x}px`;
+    element.style.top = `${node.y}px`;
+    renderLogicLinks();
+    markDirty();
+  };
+  const finish = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", finish);
+    window.removeEventListener("pointercancel", finish);
+    pushHistorySnapshot(before);
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", finish);
+  window.addEventListener("pointercancel", finish);
+}
+
+function startLogicConnection(nodeId, port) {
+  if (state.logicConnecting?.nodeId === nodeId && state.logicConnecting?.port === port) state.logicConnecting = null;
+  else state.logicConnecting = { nodeId, port };
+  renderLogicNodes();
+  $("logic-cancel-connection-button").hidden = !state.logicConnecting;
+  $("logic-connection-hint").textContent = state.logicConnecting
+    ? "Agora clique na entrada do nó de destino."
+    : "Clique em uma saída e depois na entrada de outro nó para conectar.";
+  setStatus(state.logicConnecting ? "Saída selecionada · escolha o nó de destino" : "Conexão cancelada");
+}
+
+function finishLogicConnection(targetId) {
+  const graph = currentLogicGraph();
+  const source = state.logicConnecting;
+  if (!graph || !source) {
+    setStatus("Selecione primeiro uma saída do grafo");
+    return;
+  }
+  const duplicate = graph.links.some((link) => link.from === source.nodeId && link.fromPort === source.port && link.to === targetId);
+  if (!duplicate) logicCommit(() => graph.links.push({ id: uid("link"), from: source.nodeId, fromPort: source.port, to: targetId }), "Nós conectados");
+  state.logicConnecting = null;
+  $("logic-cancel-connection-button").hidden = true;
+  $("logic-connection-hint").textContent = "Clique em uma saída e depois na entrada de outro nó para conectar.";
+  renderLogicNodes();
+}
+
+function renderLogicNodes() {
+  const container = $("logic-nodes");
+  container.replaceChildren();
+  const graph = currentLogicGraph();
+  if (!graph) {
+    requestAnimationFrame(renderLogicLinks);
+    return;
+  }
+  for (const node of graph.nodes) {
+    const definition = LOGIC_NODE_DEFINITIONS[node.type];
+    const element = document.createElement("article");
+    element.className = `logic-node ${definition.category}${node.id === state.selectedLogicNodeId ? " selected" : ""}`;
+    element.style.left = `${node.x}px`;
+    element.style.top = `${node.y}px`;
+    element.dataset.logicNodeId = node.id;
+    element.dataset.logicNodeType = node.type;
+
+    const header = document.createElement("div");
+    header.className = "logic-node-header";
+    const title = document.createElement("strong");
+    title.textContent = definition.label;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "×";
+    remove.title = "Excluir nó";
+    remove.addEventListener("click", (event) => { event.stopPropagation(); deleteLogicNode(node.id); });
+    header.append(title, remove);
+    header.addEventListener("pointerdown", (event) => beginLogicNodeDrag(event, node, element));
+
+    const summary = document.createElement("div");
+    summary.className = "logic-node-summary";
+    summary.textContent = logicNodeSummary(node);
+    summary.title = summary.textContent;
+    const ports = document.createElement("div");
+    ports.className = "logic-ports";
+    if (definition.inputs.length) {
+      const input = document.createElement("button");
+      input.type = "button";
+      input.className = "logic-input-port";
+      input.textContent = "entrada";
+      input.dataset.logicInputNode = node.id;
+      input.addEventListener("click", (event) => { event.stopPropagation(); finishLogicConnection(node.id); });
+      ports.append(input);
+    }
+    const outputs = document.createElement("div");
+    outputs.className = "logic-output-list";
+    for (const port of definition.outputs) {
+      const output = document.createElement("button");
+      output.type = "button";
+      output.className = `logic-output-port ${port}${state.logicConnecting?.nodeId === node.id && state.logicConnecting?.port === port ? " connecting" : ""}`;
+      output.textContent = { next: "saída", true: "sim", false: "não" }[port] || port;
+      output.dataset.logicOutputNode = node.id;
+      output.dataset.logicOutputPort = port;
+      output.addEventListener("click", (event) => { event.stopPropagation(); startLogicConnection(node.id, port); });
+      outputs.append(output);
+    }
+    ports.append(outputs);
+    element.append(header, summary, ports);
+    element.addEventListener("click", () => {
+      state.selectedLogicNodeId = node.id;
+      renderLogicNodes();
+      renderLogicProperties();
+    });
+    container.append(element);
+  }
+  requestAnimationFrame(renderLogicLinks);
+}
+
+function logicField(labelText, control) {
+  const label = document.createElement("label");
+  label.className = "logic-property";
+  const caption = document.createElement("span");
+  caption.textContent = labelText;
+  label.append(caption, control);
+  return label;
+}
+
+function logicSelect(options, value) {
+  const select = document.createElement("select");
+  for (const option of options) select.append(new Option(option.label, option.value));
+  select.value = value === undefined || value === null ? "" : String(value);
+  return select;
+}
+
+function bindLogicControl(control, apply, message = "Lógica atualizada") {
+  const liveText = control.tagName === "TEXTAREA" || (control.tagName === "INPUT" && (!control.type || control.type === "text"));
+  if (liveText) {
+    let before = null;
+    control.addEventListener("focus", () => { before ||= serializeScene(); });
+    control.addEventListener("input", () => {
+      before ||= serializeScene();
+      apply(control);
+      markDirty();
+      renderLogicSummary();
+      renderLogicNodes();
+    });
+    control.addEventListener("change", () => {
+      state.document.logic = normalizeLogic(state.document.logic, uid);
+      pushHistorySnapshot(before);
+      before = null;
+      renderLogicEditor();
+      if (message) setStatus(message);
+    });
+    return control;
+  }
+  control.addEventListener("change", () => logicCommit(() => apply(control), message));
+  return control;
+}
+
+function logicObjectOptions(predicate, emptyLabel = "Selecione um alvo") {
+  const options = [{ label: emptyLabel, value: "" }];
+  for (const record of state.document.objects) if (predicate(record)) options.push({ label: record.name, value: record.id });
+  return options;
+}
+
+function logicPrimitiveControl(variable, value, apply) {
+  if (variable?.type === "boolean") {
+    const control = document.createElement("input");
+    control.type = "checkbox";
+    control.checked = value === true;
+    return bindLogicControl(control, (input) => apply(input.checked));
+  }
+  const control = document.createElement("input");
+  control.type = variable?.type === "number" ? "number" : "text";
+  control.value = value === undefined || value === null ? "" : value;
+  return bindLogicControl(control, (input) => apply(variable?.type === "number" ? clampNumber(input.value) : input.value));
+}
+
+function appendLogicVector(container, label, vectorValue, apply) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "logic-property";
+  const caption = document.createElement("span");
+  caption.textContent = label;
+  const fields = document.createElement("div");
+  fields.className = "logic-vector";
+  for (const axis of ["x", "y", "z"]) {
+    const input = document.createElement("input");
+    input.type = "number";
+    input.step = "0.1";
+    input.title = axis.toUpperCase();
+    input.value = vectorValue[axis];
+    bindLogicControl(input, (control) => apply(axis, clampNumber(control.value)));
+    fields.append(input);
+  }
+  wrapper.append(caption, fields);
+  container.append(wrapper);
+}
+
+function renderLogicVariables(container) {
+  const heading = document.createElement("div");
+  heading.className = "logic-variable-heading";
+  const title = document.createElement("span");
+  title.textContent = "Variáveis da cena";
+  const add = document.createElement("button");
+  add.type = "button";
+  add.textContent = "+ Adicionar";
+  add.addEventListener("click", addLogicVariable);
+  heading.append(title, add);
+  container.append(heading);
+  const list = document.createElement("div");
+  list.className = "logic-variable-list";
+  for (const variable of state.document.logic.variables) {
+    const row = document.createElement("div");
+    row.className = "logic-variable-row";
+    const name = document.createElement("input");
+    name.value = variable.name;
+    bindLogicControl(name, (control) => { variable.name = control.value.trim() || "Variável"; });
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "×";
+    remove.title = "Excluir variável";
+    remove.addEventListener("click", () => deleteLogicVariable(variable.id));
+    const type = logicSelect([
+      { label: "Booleano", value: "boolean" }, { label: "Número", value: "number" }, { label: "Texto", value: "string" },
+    ], variable.type);
+    bindLogicControl(type, (control) => {
+      variable.type = control.value;
+      variable.initialValue = control.value === "number" ? 0 : control.value === "string" ? "" : false;
+    });
+    const value = logicPrimitiveControl(variable, variable.initialValue, (next) => { variable.initialValue = next; });
+    const valueLabel = document.createElement("small");
+    valueLabel.textContent = "Valor inicial";
+    row.append(name, remove, type, valueLabel, value);
+    list.append(row);
+  }
+  if (!state.document.logic.variables.length) {
+    const empty = document.createElement("div");
+    empty.className = "logic-empty";
+    empty.textContent = "Crie variáveis para guardar chaves, contadores e estados entre eventos.";
+    list.append(empty);
+  }
+  container.append(list);
+}
+
+function appendLogicSelect(container, label, options, value, apply) {
+  container.append(logicField(label, bindLogicControl(logicSelect(options, value), (control) => apply(control.value))));
+}
+
+function appendLogicNumber(container, label, value, apply, min = 1, max = 216000) {
+  const input = document.createElement("input");
+  input.type = "number";
+  input.min = String(min);
+  input.max = String(max);
+  input.value = value;
+  container.append(logicField(label, bindLogicControl(input, (control) => apply(clampNumber(control.value, value)))));
+}
+
+function renderLogicNodeProperties(container, graph, node) {
+  const config = node.config;
+  if (node.type === "eventTrigger") {
+    appendLogicSelect(container, "Trigger", logicObjectOptions((record) => record.source.kind === "collider" && record.collider?.trigger, "Selecione um trigger"), config.triggerId, (value) => { config.triggerId = value; });
+    appendLogicSelect(container, "Quando", [
+      { label: "Ao entrar", value: "onEnter" }, { label: "Ao sair", value: "onExit" }, { label: "Ao interagir", value: "onInteract" },
+    ], config.phase, (value) => { config.phase = value; });
+  } else if (node.type === "eventInput") {
+    appendLogicSelect(container, "Botão", LOGIC_BUTTONS.map((button) => ({ label: button, value: button })), config.button, (value) => { config.button = value; });
+  } else if (node.type === "eventTimer") {
+    appendLogicNumber(container, "Intervalo em quadros", config.intervalFrames, (value) => { config.intervalFrames = value; });
+    const repeat = document.createElement("input");
+    repeat.type = "checkbox";
+    repeat.checked = config.repeat;
+    container.append(logicField("Repetir", bindLogicControl(repeat, (control) => { config.repeat = control.checked; })));
+  } else if (node.type === "conditionVariable") {
+    const variables = [{ label: "Selecione uma variável", value: "" }, ...state.document.logic.variables.map((variable) => ({ label: variable.name, value: variable.id }))];
+    appendLogicSelect(container, "Variável", variables, config.variableId, (value) => {
+      config.variableId = value;
+      const selected = state.document.logic.variables.find((variable) => variable.id === value);
+      config.value = selected?.type === "number" ? 0 : selected?.type === "string" ? "" : false;
+    });
+    appendLogicSelect(container, "Comparação", [
+      { label: "Igual", value: "eq" }, { label: "Diferente", value: "neq" }, { label: "Maior", value: "gt" },
+      { label: "Maior ou igual", value: "gte" }, { label: "Menor", value: "lt" }, { label: "Menor ou igual", value: "lte" },
+    ], config.operator, (value) => { config.operator = value; });
+    const variable = state.document.logic.variables.find((item) => item.id === config.variableId);
+    container.append(logicField("Valor", logicPrimitiveControl(variable, config.value, (value) => { config.value = value; })));
+  } else if (node.type === "actionMessage") {
+    const text = document.createElement("textarea");
+    text.maxLength = 160;
+    text.value = config.text;
+    container.append(logicField("Mensagem", bindLogicControl(text, (control) => { config.text = control.value; })));
+    appendLogicNumber(container, "Duração em quadros", config.duration, (value) => { config.duration = value; }, 1, 3600);
+  } else if (node.type === "actionVisibility") {
+    appendLogicSelect(container, "Objeto ou grupo", logicObjectOptions((record) => ["model", "primitive", "group"].includes(record.source.kind)), config.targetId, (value) => { config.targetId = value; });
+    appendLogicSelect(container, "Operação", [
+      { label: "Alternar", value: "toggle" }, { label: "Mostrar", value: "show" }, { label: "Ocultar", value: "hide" },
+    ], config.mode, (value) => { config.mode = value; });
+  } else if (node.type === "actionTeleport") {
+    appendLogicVector(container, "Destino do jogador", config.position, (axis, value) => { config.position[axis] = value; });
+  } else if (node.type === "actionAudio") {
+    appendLogicSelect(container, "Fonte de áudio", logicObjectOptions((record) => record.source.kind === "audio"), config.targetId, (value) => { config.targetId = value; });
+    appendLogicSelect(container, "Comando", [{ label: "Tocar", value: "play" }, { label: "Parar", value: "stop" }], config.mode, (value) => { config.mode = value; });
+  } else if (node.type === "actionParticle") {
+    appendLogicSelect(container, "Emissor", logicObjectOptions((record) => record.source.kind === "particle"), config.targetId, (value) => { config.targetId = value; });
+    appendLogicSelect(container, "Comando", [{ label: "Explodir", value: "burst" }, { label: "Iniciar", value: "start" }, { label: "Parar", value: "stop" }], config.mode, (value) => { config.mode = value; });
+  } else if (node.type === "actionVideo") {
+    const videos = [{ label: "Selecione um vídeo", value: "" }, ...state.document.ui.filter((item) => item.type === "video").map((item) => ({ label: item.name, value: item.id }))];
+    appendLogicSelect(container, "Vídeo de UI", videos, config.targetId, (value) => { config.targetId = value; });
+    appendLogicSelect(container, "Comando", [{ label: "Tocar", value: "play" }, { label: "Pausar", value: "pause" }, { label: "Parar", value: "stop" }], config.mode, (value) => { config.mode = value; });
+  } else if (node.type === "actionSetVariable") {
+    const variables = [{ label: "Selecione uma variável", value: "" }, ...state.document.logic.variables.map((variable) => ({ label: variable.name, value: variable.id }))];
+    appendLogicSelect(container, "Variável", variables, config.variableId, (value) => {
+      config.variableId = value;
+      config.operation = "set";
+      const selected = state.document.logic.variables.find((variable) => variable.id === value);
+      config.value = selected?.type === "number" ? 0 : selected?.type === "string" ? "" : false;
+    });
+    const variable = state.document.logic.variables.find((item) => item.id === config.variableId);
+    const operations = variable?.type === "boolean"
+      ? [{ label: "Definir", value: "set" }, { label: "Alternar", value: "toggle" }]
+      : variable?.type === "number"
+        ? [{ label: "Definir", value: "set" }, { label: "Somar", value: "add" }, { label: "Subtrair", value: "subtract" }]
+        : [{ label: "Definir", value: "set" }];
+    appendLogicSelect(container, "Operação", operations, config.operation, (value) => { config.operation = value; });
+    if (config.operation !== "toggle") container.append(logicField("Valor", logicPrimitiveControl(variable, config.value, (value) => { config.value = value; })));
+  } else if (node.type === "flowDelay") {
+    appendLogicNumber(container, "Esperar quadros", config.frames, (value) => { config.frames = value; });
+  } else {
+    const description = document.createElement("div");
+    description.className = "logic-empty";
+    description.textContent = "Este evento não precisa de configuração.";
+    container.append(description);
+  }
+
+  const relatedLinks = graph.links.filter((link) => link.from === node.id || link.to === node.id);
+  if (relatedLinks.length) {
+    const heading = document.createElement("div");
+    heading.className = "logic-variable-heading";
+    heading.textContent = "Conexões";
+    container.append(heading);
+    for (const link of relatedLinks) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "logic-delete-node";
+      const otherId = link.from === node.id ? link.to : link.from;
+      const other = graph.nodes.find((candidate) => candidate.id === otherId);
+      button.textContent = `Remover · ${LOGIC_NODE_DEFINITIONS[other?.type]?.label || "nó"}`;
+      button.addEventListener("click", () => logicCommit(() => { graph.links = graph.links.filter((candidate) => candidate.id !== link.id); }, "Conexão removida"));
+      container.append(button);
+    }
+  }
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "logic-delete-node";
+  remove.textContent = "Excluir este nó";
+  remove.addEventListener("click", () => deleteLogicNode(node.id));
+  container.append(remove);
+}
+
+function renderLogicProperties() {
+  const container = $("logic-properties");
+  container.replaceChildren();
+  const graph = currentLogicGraph();
+  const node = currentLogicNode();
+  $("logic-properties-subtitle").textContent = node ? LOGIC_NODE_DEFINITIONS[node.type].label : "Fluxo";
+  if (!graph) {
+    const empty = document.createElement("div");
+    empty.className = "logic-empty";
+    empty.textContent = "Crie um fluxo para começar. Cada fluxo pode responder a diferentes eventos da cena.";
+    container.append(empty);
+    renderLogicVariables(container);
+    return;
+  }
+  if (!node) {
+    const name = document.createElement("input");
+    name.value = graph.name;
+    bindLogicControl(name, (control) => { graph.name = control.value.trim() || "Fluxo"; }, "Fluxo renomeado");
+    container.append(logicField("Nome do fluxo", name));
+    const info = document.createElement("div");
+    info.className = "logic-empty";
+    info.textContent = `${graph.nodes.length} nó${graph.nodes.length === 1 ? "" : "s"} · ${graph.links.length} conexão${graph.links.length === 1 ? "" : "ões"}. Selecione um nó para editar.`;
+    container.append(info);
+    renderLogicVariables(container);
+    return;
+  }
+  renderLogicNodeProperties(container, graph, node);
+}
+
+function renderLogicEditor() {
+  const graphSelect = $("logic-graph-select");
+  const graphs = state.document?.logic?.graphs || [];
+  graphSelect.replaceChildren(new Option(graphs.length ? "Selecione um fluxo" : "Nenhum fluxo", ""));
+  for (const graph of graphs) graphSelect.append(new Option(graph.name, graph.id));
+  graphSelect.value = currentLogicGraph()?.id || "";
+  $("logic-graph-enabled").checked = currentLogicGraph()?.enabled !== false;
+  $("logic-graph-enabled").disabled = !currentLogicGraph();
+  $("logic-duplicate-graph-button").disabled = !currentLogicGraph();
+  $("logic-delete-graph-button").disabled = !currentLogicGraph();
+  renderLogicPalette();
+  renderLogicNodes();
+  renderLogicProperties();
+}
+
+function setLogicMode(active) {
+  if (active && state.uiMode) setUiMode(false);
+  state.logicMode = Boolean(active);
+  document.body.classList.toggle("logic-mode-active", state.logicMode);
+  $("logic-editor").hidden = !state.logicMode;
+  viewport.classList.toggle("logic-mode", state.logicMode);
+  $("logic-mode-button").classList.toggle("active", state.logicMode);
+  $("open-logic-editor-button").textContent = state.logicMode ? "Fechar" : "Abrir";
+  orbit.enabled = !state.logicMode && !state.uiMode;
+  transformHelper.visible = !state.logicMode && !state.uiMode;
+  if (state.logicMode) {
+    setSelection(null);
+    renderLogicEditor();
+    setStatus("Visual scripting · grafos seguros para o AthenaEnv");
+  } else {
+    state.logicConnecting = null;
+    setStatus(`${state.document?.name || "Cena"} · modo 3D`);
+  }
+}
+
+function addLogicGraph() {
+  const graph = createLogicGraph(`Fluxo ${state.document.logic.graphs.length + 1}`, uid);
+  logicCommit(() => state.document.logic.graphs.push(graph), "Novo fluxo criado");
+  state.selectedLogicGraphId = graph.id;
+  state.selectedLogicNodeId = graph.nodes[0]?.id || null;
+  renderLogicEditor();
+}
+
+function duplicateLogicGraph() {
+  const source = currentLogicGraph();
+  if (!source) return;
+  const nodeIds = new Map();
+  const copy = deepClone(source);
+  copy.id = uid("graph");
+  copy.name = `${source.name} — cópia`;
+  for (const node of copy.nodes) {
+    const previous = node.id;
+    node.id = uid("node");
+    node.x += 28;
+    node.y += 28;
+    nodeIds.set(previous, node.id);
+  }
+  for (const link of copy.links) {
+    link.id = uid("link");
+    link.from = nodeIds.get(link.from);
+    link.to = nodeIds.get(link.to);
+  }
+  logicCommit(() => state.document.logic.graphs.push(copy), "Fluxo duplicado");
+  state.selectedLogicGraphId = copy.id;
+  state.selectedLogicNodeId = null;
+  renderLogicEditor();
+}
+
+function deleteLogicGraph() {
+  const graph = currentLogicGraph();
+  if (!graph || !window.confirm(`Excluir o fluxo “${graph.name}”?`)) return;
+  logicCommit(() => { state.document.logic.graphs = state.document.logic.graphs.filter((candidate) => candidate.id !== graph.id); }, "Fluxo excluído");
+  state.selectedLogicGraphId = state.document.logic.graphs[0]?.id || null;
+  state.selectedLogicNodeId = null;
+  renderLogicEditor();
+}
+
+function addLogicNode(type) {
+  const graph = currentLogicGraph();
+  if (!graph) return;
+  const scroll = $("logic-canvas-scroll");
+  let x = scroll.scrollLeft + 100;
+  let y = scroll.scrollTop + 100;
+  let attempts = 0;
+  while (graph.nodes.some((candidate) => Math.abs(candidate.x - x) < 210 && Math.abs(candidate.y - y) < 105) && attempts < 40) {
+    x += 230;
+    if (x > scroll.scrollLeft + Math.max(690, scroll.clientWidth - 210)) {
+      x = scroll.scrollLeft + 100;
+      y += 140;
+    }
+    attempts++;
+  }
+  const node = createLogicNode(type, uid, { x, y });
+  logicCommit(() => graph.nodes.push(node), `${LOGIC_NODE_DEFINITIONS[type].label} adicionado`);
+  state.selectedLogicNodeId = node.id;
+  renderLogicEditor();
+}
+
+function deleteLogicNode(nodeId) {
+  const graph = currentLogicGraph();
+  if (!graph) return;
+  logicCommit(() => {
+    graph.nodes = graph.nodes.filter((node) => node.id !== nodeId);
+    graph.links = graph.links.filter((link) => link.from !== nodeId && link.to !== nodeId);
+  }, "Nó excluído");
+  if (state.selectedLogicNodeId === nodeId) state.selectedLogicNodeId = null;
+  if (state.logicConnecting?.nodeId === nodeId) state.logicConnecting = null;
+  renderLogicEditor();
+}
+
+function addLogicVariable() {
+  const name = window.prompt("Nome da variável:", `Variável ${state.document.logic.variables.length + 1}`)?.trim();
+  if (!name) return;
+  logicCommit(() => state.document.logic.variables.push(createLogicVariable(name, "boolean", uid)), "Variável criada");
+}
+
+function deleteLogicVariable(variableId) {
+  const variable = state.document.logic.variables.find((item) => item.id === variableId);
+  if (!variable || !window.confirm(`Excluir a variável “${variable.name}”?`)) return;
+  logicCommit(() => { state.document.logic.variables = state.document.logic.variables.filter((item) => item.id !== variableId); }, "Variável excluída");
+}
+
+function validateVisualScripting() {
+  const issues = validateLogic(state.document.logic);
+  if (!issues.length) {
+    toast("Visual scripting válido e pronto para exportar.", "success");
+    setStatus("Nenhum problema encontrado nos grafos");
+    return;
+  }
+  toast(`${issues.length} problema${issues.length === 1 ? "" : "s"}: ${issues.slice(0, 3).join(" · ")}`, "error", 9000);
+  setStatus(`${issues.length} problema${issues.length === 1 ? "" : "s"} no visual scripting`);
+}
+
+function convertTriggerActionsToLogic() {
+  const record = currentRecord();
+  if (!record?.collider?.trigger) return;
+  const count = eventPhases.reduce((total, phase) => total + (record.events?.[phase]?.length || 0), 0);
+  if (!count) {
+    toast("Este trigger ainda não possui ações para converter.", "info");
+    return;
+  }
+  if (!window.confirm("Converter as ações deste trigger em um grafo? As listas antigas serão removidas para evitar execução duplicada.")) return;
+  const graph = createLogicGraph(`${record.name} · eventos`, uid, false);
+  let row = 0;
+  for (const phase of eventPhases) {
+    const actions = record.events[phase] || [];
+    if (!actions.length) continue;
+    const eventNode = createLogicNode("eventTrigger", uid, { x: 80, y: 80 + row * 150 });
+    eventNode.config = { triggerId: record.id, phase };
+    graph.nodes.push(eventNode);
+    let previous = eventNode;
+    for (let index = 0; index < actions.length; index++) {
+      const action = actions[index];
+      const type = {
+        message: "actionMessage", visibility: "actionVisibility", teleport: "actionTeleport",
+        audio: "actionAudio", particle: "actionParticle", video: "actionVideo",
+      }[action.type];
+      if (!type) continue;
+      const node = createLogicNode(type, uid, { x: 330 + index * 230, y: 80 + row * 150 });
+      node.config = deepClone(action);
+      delete node.config.id;
+      graph.nodes.push(node);
+      graph.links.push({ id: uid("link"), from: previous.id, fromPort: "next", to: node.id });
+      previous = node;
+    }
+    row++;
+  }
+  logicCommit(() => {
+    state.document.logic.graphs.push(graph);
+    record.events = normalizeRecordEvents();
+  }, "Ações convertidas para visual scripting");
+  state.selectedLogicGraphId = graph.id;
+  state.selectedLogicNodeId = graph.nodes[0]?.id || null;
+  setLogicMode(true);
+  toast("Trigger convertido. O comportamento agora está no grafo visual.", "success");
 }
 
 function renderUiInspector(item = currentUiElement()) {
@@ -2562,7 +3250,13 @@ async function loadDocument(documentData, { preserveHistory = false, dirty = fal
     },
     objects: normalizedObjects,
     ui: (Array.isArray(documentData?.ui) ? documentData.ui : []).map(normalizeUiElement),
+    logic: normalizeLogic(documentData?.logic, uid),
   };
+  if (!state.document.logic.graphs.some((graph) => graph.id === state.selectedLogicGraphId)) {
+    state.selectedLogicGraphId = state.document.logic.graphs[0]?.id || null;
+  }
+  state.selectedLogicNodeId = null;
+  state.logicConnecting = null;
 
   if (!preserveHistory) {
     state.undo.length = 0;
@@ -2593,6 +3287,8 @@ async function loadDocument(documentData, { preserveHistory = false, dirty = fal
   renderHierarchy();
   renderUiElements();
   renderUiPreview();
+  renderLogicSummary();
+  if (state.logicMode) renderLogicEditor();
   renderInspector();
   updateClipboardButtons();
   updateViewportStats();
@@ -4176,6 +4872,7 @@ function bindInspector() {
   });
   $("event-action-type").addEventListener("change", updateEventDraftUi);
   $("event-add-button").addEventListener("click", addTriggerAction);
+  $("event-convert-logic-button").addEventListener("click", convertTriggerActionsToLogic);
 
   for (const id of ["material-color", "material-opacity", "material-roughness", "material-metalness", "material-emissive", "material-emissive-intensity"]) {
     $(id).addEventListener("beforeinput", stageFieldHistory);
@@ -4342,6 +5039,30 @@ function bindUi() {
   });
   $("ui-mode-button").addEventListener("click", () => setUiMode(!state.uiMode));
   $("open-ui-editor-button").addEventListener("click", () => setUiMode(!state.uiMode));
+  $("logic-mode-button").addEventListener("click", () => setLogicMode(!state.logicMode));
+  $("open-logic-editor-button").addEventListener("click", () => setLogicMode(!state.logicMode));
+  $("logic-close-button").addEventListener("click", () => setLogicMode(false));
+  $("logic-new-graph-button").addEventListener("click", addLogicGraph);
+  $("logic-duplicate-graph-button").addEventListener("click", duplicateLogicGraph);
+  $("logic-delete-graph-button").addEventListener("click", deleteLogicGraph);
+  $("logic-validate-button").addEventListener("click", validateVisualScripting);
+  $("logic-graph-select").addEventListener("change", (event) => {
+    state.selectedLogicGraphId = event.target.value || null;
+    state.selectedLogicNodeId = null;
+    state.logicConnecting = null;
+    renderLogicEditor();
+  });
+  $("logic-graph-enabled").addEventListener("change", (event) => {
+    const graph = currentLogicGraph();
+    if (graph) logicCommit(() => { graph.enabled = event.target.checked; }, event.target.checked ? "Fluxo ativado" : "Fluxo desativado");
+  });
+  $("logic-cancel-connection-button").addEventListener("click", () => startLogicConnection(state.logicConnecting?.nodeId, state.logicConnecting?.port));
+  $("logic-canvas").addEventListener("pointerdown", (event) => {
+    if (event.target !== $("logic-canvas") && event.target !== $("logic-nodes") && event.target !== $("logic-links")) return;
+    state.selectedLogicNodeId = null;
+    renderLogicNodes();
+    renderLogicProperties();
+  });
   $("focus-button").addEventListener("click", focusSelection);
   $("save-button").addEventListener("click", () => saveScene());
   $("export-button").addEventListener("click", exportSceneFile);
@@ -4467,13 +5188,17 @@ function bindUi() {
     } else if (event.ctrlKey && event.key.toLowerCase() === "d") {
       event.preventDefault();
       duplicateSelection();
+    } else if ((event.key === "Delete" || event.key === "Backspace") && state.logicMode) {
+      event.preventDefault();
+      if (state.selectedLogicNodeId) deleteLogicNode(state.selectedLogicNodeId);
     } else if ((event.key === "Delete" || event.key === "Backspace") && state.uiMode) {
       event.preventDefault();
       deleteUiElement();
     } else if (event.key === "Delete" || event.key === "Backspace") {
       event.preventDefault();
       deleteSelection();
-    } else if (state.uiMode && event.key === "Escape") setUiMode(false);
+    } else if (state.logicMode && event.key === "Escape") setLogicMode(false);
+    else if (state.uiMode && event.key === "Escape") setUiMode(false);
     else if (event.key.toLowerCase() === "w") setTransformMode("translate");
     else if (event.key.toLowerCase() === "e") setTransformMode("rotate");
     else if (event.key.toLowerCase() === "r") setTransformMode("scale");
@@ -4577,12 +5302,12 @@ async function boot() {
       const capabilities = await capabilitiesResponse.json();
       state.serverSchemaVersion = Number(capabilities.editorSchemaVersion) || 0;
     }
-    state.serverOutdated = state.serverSchemaVersion < 8;
+    state.serverOutdated = state.serverSchemaVersion < 9;
     const data = await sceneResponse.json();
     if (!sceneResponse.ok) throw new Error(data.error || "Falha ao abrir a cena");
     await loadDocument(data);
     if (state.serverOutdated) {
-      toast("Servidor desatualizado detectado. Reinicie scripts/editor.ps1 para usar mídia, animações e projetores de sombra.", "error", 12000);
+      toast("Servidor desatualizado detectado. Reinicie scripts/editor.ps1 para usar visual scripting e os componentes atuais.", "error", 12000);
       setStatus("Servidor desatualizado — reinicie o editor");
     } else {
       toast("Editor pronto. Selecione um objeto para começar.", "success", 2800);
