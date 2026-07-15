@@ -35,15 +35,19 @@
         const rotation = source.rotation || {};
         const scale = source.scale || {};
         const quaternion = quaternionFromEuler(rotation);
+        const shape = source.shape === "sphere" || source.shape === "capsule" ? source.shape : "box";
+        // A capsule spans one scaled radius beyond each end of its local-Z
+        // segment, so its total half-extent on that axis is 2 * scale.z.
+        const broadZ = shape === "capsule" ? absoluteSize(scale.z) * 2.0 : absoluteSize(scale.z);
         const broadRadius = Math.sqrt(
             absoluteSize(scale.x) * absoluteSize(scale.x) +
             absoluteSize(scale.y) * absoluteSize(scale.y) +
-            absoluteSize(scale.z) * absoluteSize(scale.z)
+            broadZ * broadZ
         );
         return {
             id: String(source.id || source.name || ("collider-" + index)),
             name: String(source.name || source.id || ("Collider " + index)),
-            shape: source.shape === "sphere" || source.shape === "capsule" ? source.shape : "box",
+            shape: shape,
             position: {
                 x: finite(position.x, 0.0),
                 y: finite(position.y, 0.0),
@@ -130,7 +134,10 @@
         const output = [];
         const lower = bottomY + radius;
         const upper = bottomY + Math.max(radius, height - radius);
-        const sampleCount = upper - lower > radius * 0.5 ? 3 : 1;
+        const sampleSpan = Math.max(0.0, upper - lower);
+        const sampleCount = sampleSpan <= EPSILON
+            ? 1
+            : Math.min(12, Math.max(2, Math.ceil(sampleSpan / Math.max(EPSILON, radius * 1.5)) + 1));
 
         for (let i = 0; i < colliders.length; i++) {
             const collider = colliders[i];

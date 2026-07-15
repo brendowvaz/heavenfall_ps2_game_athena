@@ -9,10 +9,9 @@ canvas.double_buffering = true;
 canvas.psm = Screen.CT32;
 canvas.psmz = Screen.Z16S;
 Screen.setMode(canvas);
-Screen.setVSync(true);
 Screen.setFrameCounter(true);
 
-const CLEAR_COLOR = Color.new(7, 15, 28, 128);
+let CLEAR_COLOR = Color.new(7, 15, 28, 128);
 const HUD_WHITE = Color.new(210, 231, 246, 128);
 const HUD_BLUE = Color.new(76, 184, 235, 128);
 
@@ -48,18 +47,66 @@ if (std.exists("menu_background.png")) {
     }
 }
 
+const runtimeMaterialTextures = [];
+
+function scaledMaterialColor(value, scale) {
+    const color = value || { r: 1.0, g: 1.0, b: 1.0 };
+    return {
+        r: clamp(color.r * scale, 0.0, 1.0),
+        g: clamp(color.g * scale, 0.0, 1.0),
+        b: clamp(color.b * scale, 0.0, 1.0)
+    };
+}
+
 function configureData(data, material) {
-    data.pipeline = material && material.unlit ? Render.PL_NO_LIGHTS : Render.PL_DEFAULT;
-    data.texture_mapping = true;
-    data.face_culling = Render.CULL_FACE_NONE;
-    data.shade_model = Render.SHADE_GOURAUD;
+    const useSpecular = material && !material.unlit && material.metalness > 0.001;
+    data.pipeline = material && material.unlit
+        ? Render.PL_NO_LIGHTS
+        : useSpecular && Render.PL_SPECULAR !== undefined ? Render.PL_SPECULAR : Render.PL_DEFAULT;
+    data.texture_mapping = !material || material.textureMapping !== false;
+    data.face_culling = !material || material.doubleSided !== false ? Render.CULL_FACE_NONE : Render.CULL_FACE_BACK;
+    data.shade_model = material && material.smoothShading === false ? 0 : 1;
+    data.accurate_clipping = material && material.accurateClipping === true;
+    if (material && typeof data.updateMaterial === "function") {
+        const base = material.color || { r: 1.0, g: 1.0, b: 1.0 };
+        const metalness = clamp(material.metalness || 0.0, 0.0, 1.0);
+        const roughness = clamp(material.roughness === undefined ? 0.72 : material.roughness, 0.0, 1.0);
+        const emissionStrength = Math.max(0.0, material.emissiveIntensity || 0.0);
+        const properties = {
+            ambient: scaledMaterialColor(base, material.unlit ? 1.0 : 0.28),
+            diffuse: scaledMaterialColor(base, material.unlit ? 1.0 : 1.0 - metalness * 0.45),
+            specular: scaledMaterialColor(base, metalness),
+            emission: scaledMaterialColor(material.emissive, emissionStrength),
+            shininess: (1.0 - roughness) * 128.0,
+            // The official AthenaEnv property is intentionally spelled "disolve".
+            disolve: clamp(material.opacity === undefined ? 1.0 : material.opacity, 0.0, 1.0)
+        };
+        const materials = data.materials;
+        const count = materials && materials.length ? materials.length : 1;
+        for (let index = 0; index < count; index++) data.updateMaterial(index, properties);
+    }
     return data;
+}
+
+function createRenderData(asset, material) {
+    if (material && material.texture && std.exists(material.texture)) {
+        try {
+            const texture = new Image(material.texture);
+            texture.lock();
+            runtimeMaterialTextures.push(texture);
+            return configureData(new RenderData(asset, texture), material);
+        } catch (textureError) {
+            console.log("[VeuAzul] Textura substituta nao carregada: " + material.texture + " - " + textureError);
+        }
+    }
+    return configureData(new RenderData(asset), material);
 }
 
 // The visual editor writes this file whenever the scene is saved. Keeping the
 // transform data in a tiny generated script avoids JSON parsing and path
 // differences between PCSX2 HostFS and real hardware.
 globalThis.EDITOR_SCENE = [];
+globalThis.EDITOR_SETTINGS = {};
 globalThis.EDITOR_COLLIDERS = [];
 globalThis.EDITOR_EVENTS = [];
 globalThis.EDITOR_LIGHTS = [];
@@ -68,9 +115,14 @@ globalThis.EDITOR_CAMERA = null;
 globalThis.EDITOR_UI = [];
 globalThis.EDITOR_AUDIO = [];
 globalThis.EDITOR_PARTICLES = [];
+globalThis.EDITOR_SHADOWS = [];
 if (std.exists("scene.generated.js")) {
     std.loadScript("scene.generated.js");
 }
+
+const runtimeBackground = EDITOR_SETTINGS.background || { r: 7, g: 15, b: 28, a: 128 };
+CLEAR_COLOR = Color.new(runtimeBackground.r, runtimeBackground.g, runtimeBackground.b, runtimeBackground.a);
+Screen.setVSync(EDITOR_SETTINGS.vsync !== false);
 
 if (EDITOR_CAMERA) {
     Render.setView(EDITOR_CAMERA.fov || 64.0, EDITOR_CAMERA.near || 0.5, EDITOR_CAMERA.far || 180.0);
@@ -116,13 +168,30 @@ const runtimeObjectVisibility = {};
 for (let i = 0; i < EDITOR_SCENE.length; i++) {
     const definition = EDITOR_SCENE[i];
     console.log("[VeuAzul] Carregando objeto " + definition.name + " (" + definition.asset + ")");
-    const sceneData = configureData(new RenderData(definition.asset), definition.material);
+    const sceneData = createRenderData(definition.asset, definition.material);
     const sceneObject = new RenderObject(sceneData);
     sceneObject.position = definition.position;
     sceneObject.rotation = definition.rotation;
     sceneObject.scale = definition.scale;
     sceneObjects.push(sceneObject);
     runtimeObjectVisibility[definition.id] = true;
+}
+
+const runtimeAnimationCollections = [];
+for (let animationIndex = 0; animationIndex < sceneObjects.length; animationIndex++) {
+    const definition = EDITOR_SCENE[animationIndex];
+    if (!definition.animation || !definition.animation.autoplay || !/\.(gltf|glb)$/i.test(definition.asset)) continue;
+    if (typeof AnimCollection === "undefined" || typeof sceneObjects[animationIndex].playAnim !== "function") continue;
+    try {
+        const animations = new AnimCollection(definition.asset);
+        const clip = definition.animation.clip && animations[definition.animation.clip] !== undefined
+            ? animations[definition.animation.clip]
+            : animations[0];
+        if (clip !== undefined) sceneObjects[animationIndex].playAnim(clip, definition.animation.loop !== false);
+        runtimeAnimationCollections.push(animations);
+    } catch (animationError) {
+        console.log("[VeuAzul] Animacao nao carregada: " + definition.asset + " - " + animationError);
+    }
 }
 
 const playerData = configureData(new RenderData("player.obj"));
@@ -236,6 +305,7 @@ function clamp(value, minimum, maximum) {
 }
 
 function baseWalkable(x, z) {
+    if (EDITOR_SETTINGS.legacyArenaBounds === false) return true;
     const arena = (x * x) / (15.1 * 15.1) + ((z + 3.0) * (z + 3.0)) / (14.2 * 14.2) <= 1.0;
     const northHall = z >= -28.2 && z <= -10.0 && Math.abs(x) <= 5.3 + (z + 28.2) * 0.12;
     const southHall = z >= 6.0 && z <= 25.2 && Math.abs(x) <= 5.7 - Math.max(0.0, z - 18.0) * 0.10;
@@ -275,14 +345,17 @@ if (!usingEditorColliders) {
 }
 console.log("[VeuAzul] Colisao 3D: " + collisionShapes.length + " colisores, " + cameraBlockers.length + " bloqueadores de camera");
 
-const PLAYER_RADIUS = 0.68;
-const PLAYER_HEIGHT = 2.25;
-const PLAYER_GROUND_Y = 0.08;
-const JUMP_SPEED = 0.30;
-const GRAVITY = 0.014;
+const runtimePlayer = EDITOR_SETTINGS.player || {};
+const PLAYER_RADIUS = Math.max(0.1, runtimePlayer.radius || 0.68);
+const PLAYER_HEIGHT = Math.max(PLAYER_RADIUS * 2.0, runtimePlayer.height || 2.25);
+const PLAYER_GROUND_Y = runtimePlayer.spawn && runtimePlayer.spawn.y !== undefined ? runtimePlayer.spawn.y : 0.08;
+const WALK_SPEED = Math.max(0.01, runtimePlayer.walkSpeed || 0.125);
+const RUN_SPEED = Math.max(WALK_SPEED, runtimePlayer.runSpeed || 0.19);
+const JUMP_SPEED = Math.max(0.0, runtimePlayer.jumpSpeed === undefined ? 0.30 : runtimePlayer.jumpSpeed);
+const GRAVITY = Math.max(0.0001, runtimePlayer.gravity || 0.014);
 const SUPPORT_PROBE = 0.08;
 const LANDING_SEARCH_STEPS = 7;
-const SPAWN = { x: 0.0, z: 18.0 };
+const SPAWN = runtimePlayer.spawn || { x: 0.0, y: PLAYER_GROUND_Y, z: 18.0 };
 let playerX = SPAWN.x;
 let playerZ = SPAWN.z;
 let playerY = PLAYER_GROUND_Y;
@@ -335,6 +408,7 @@ for (let audioIndex = 0; audioIndex < EDITOR_AUDIO.length; audioIndex++) {
         if (definition.mode === "sfx") {
             sound.volume = definition.volume;
             sound.pan = definition.pan || 0;
+            sound.loop = definition.loop === true;
             sound.pitch = definition.pitch || 0;
         } else {
             sound.loop = definition.loop === true;
@@ -379,6 +453,7 @@ function playRuntimeAudio(entry) {
     }
     entry.sound.volume = definition.volume;
     entry.sound.pan = definition.pan || 0;
+    entry.sound.loop = definition.loop === true;
     entry.sound.pitch = definition.pitch || 0;
     const channel = entry.sound.play();
     entry.channel = channel === undefined ? -1 : channel;
@@ -525,6 +600,55 @@ for (let emitterIndex = 0; emitterIndex < EDITOR_PARTICLES.length; emitterIndex+
     }
 }
 
+const runtimeShadows = [];
+if (typeof Shadows !== "undefined") {
+    for (let shadowIndex = 0; shadowIndex < EDITOR_SHADOWS.length; shadowIndex++) {
+        const definition = EDITOR_SHADOWS[shadowIndex];
+        try {
+            const texture = new Image(definition.asset);
+            texture.lock();
+            const projector = new Shadows.Projector(texture);
+            projector.setSize(definition.width, definition.height);
+            projector.setGrid(definition.gridX, definition.gridZ);
+            projector.setLightDir(
+                definition.lightDirection.x,
+                definition.lightDirection.y,
+                definition.lightDirection.z
+            );
+            projector.setBias(definition.bias);
+            projector.setLightOffset(definition.lightOffset);
+            projector.setColor(
+                definition.color.r,
+                definition.color.g,
+                definition.color.b,
+                definition.opacity
+            );
+            const blendMode = definition.blend === "alpha"
+                ? Shadows.SHADOW_BLEND_ALPHA
+                : definition.blend === "add" ? Shadows.SHADOW_BLEND_ADD : Shadows.SHADOW_BLEND_DARKEN;
+            projector.setBlend(blendMode);
+            projector.position = definition.position;
+            runtimeShadows.push({ definition: definition, projector: projector, texture: texture });
+        } catch (shadowError) {
+            console.log("[VeuAzul] Projetor de sombra nao carregado: " + definition.asset + " - " + shadowError);
+        }
+    }
+}
+
+function renderRuntimeShadows() {
+    for (let i = 0; i < runtimeShadows.length; i++) {
+        const entry = runtimeShadows[i];
+        if (entry.definition.followPlayer) {
+            entry.projector.position = {
+                x: playerX,
+                y: entry.definition.position.y,
+                z: playerZ
+            };
+        }
+        entry.projector.render();
+    }
+}
+
 function particleEmitterById(id) {
     for (let i = 0; i < runtimeParticleEmitters.length; i++) {
         if (runtimeParticleEmitters[i].definition.id === id) return runtimeParticleEmitters[i];
@@ -634,6 +758,10 @@ function executeRuntimeAction(action) {
         controlParticleEmitter(action.targetId, action.mode || "burst");
         return;
     }
+    if (action.type === "video") {
+        controlRuntimeVideo(action.targetId, action.mode || "play");
+        return;
+    }
     if (action.type === "teleport") {
         const position = action.position || { x: 0.0, y: PLAYER_GROUND_Y, z: 18.0 };
         playerX = position.x;
@@ -716,6 +844,7 @@ function isPlayerValid(x, z) {
 }
 
 function walkableHalfWidth(z) {
+    if (EDITOR_SETTINGS.legacyArenaBounds === false) return 100000.0;
     if (z >= 6.0) return 5.25;
     if (z <= -10.0) return 4.85;
     const normalized = (z + 3.0) / 14.2;
@@ -733,9 +862,10 @@ function applyMovement(dx, dz) {
     resetMovementContactCache();
     const oldX = playerX;
     const oldZ = playerZ;
-    const nextZ = clamp(playerZ + dz, -27.4, 24.4);
+    const boundedArena = EDITOR_SETTINGS.legacyArenaBounds !== false;
+    const nextZ = boundedArena ? clamp(playerZ + dz, -27.4, 24.4) : playerZ + dz;
     const halfWidth = walkableHalfWidth(nextZ);
-    const nextX = clamp(playerX + dx, -halfWidth, halfWidth);
+    const nextX = boundedArena ? clamp(playerX + dx, -halfWidth, halfWidth) : playerX + dx;
     let currentContacts = movementContactsAt(playerX, playerY, playerZ);
 
     if (movementAllowed(currentContacts, nextX, nextZ)) {
@@ -886,11 +1016,11 @@ function updatePlayerAndCamera() {
     if (pad.justPressed(Pads.SELECT)) {
         playerX = SPAWN.x;
         playerZ = SPAWN.z;
-        playerY = PLAYER_GROUND_Y;
+        playerY = SPAWN.y === undefined ? PLAYER_GROUND_Y : SPAWN.y;
         playerVelocityY = 0.0;
         playerGrounded = true;
         playerYaw = 0.0;
-        cameraYaw = 0.0;
+        cameraYaw = EDITOR_CAMERA ? EDITOR_CAMERA.rotation.y : 0.0;
     }
     if (pad.justPressed(Pads.START)) showHud = !showHud;
     if (pad.justPressed(Pads.L1)) shoulderSide *= -1.0;
@@ -927,10 +1057,10 @@ function updatePlayerAndCamera() {
     const forwardZ = -Math.cos(cameraYaw);
     const rightX = Math.cos(cameraYaw);
     const rightZ = Math.sin(cameraYaw);
-    const speed = pad.pressed(Pads.CROSS) ? 0.19 : 0.125;
-    // Movement axes stay independent. The right stick rotates only the camera.
-    const dx = strafe * speed;
-    const dz = -forwardInput * speed;
+    const speed = buttonHeld(Pads.CROSS) ? RUN_SPEED : WALK_SPEED;
+    // Movement is camera-relative: left stick/D-pad always follows the view.
+    const dx = (rightX * strafe + forwardX * forwardInput) * speed;
+    const dz = (rightZ * strafe + forwardZ * forwardInput) * speed;
     let movedThisFrame = false;
 
     if (Math.abs(dx) + Math.abs(dz) > 0.001) {
@@ -1124,6 +1254,75 @@ function editorUiColor(definition, fallbackAlpha) {
     );
 }
 
+function editorUiColorWithOpacity(definition, fallbackAlpha, opacity) {
+    const value = definition || { r: 255, g: 255, b: 255, a: fallbackAlpha };
+    const alpha = value.a === undefined ? fallbackAlpha : value.a;
+    return Color.new(
+        value.r === undefined ? 255 : value.r,
+        value.g === undefined ? 255 : value.g,
+        value.b === undefined ? 255 : value.b,
+        Math.round(clamp(alpha * (opacity === undefined ? 1.0 : opacity), 0, 128))
+    );
+}
+
+const runtimeUiFonts = {};
+const runtimeUiMedia = {};
+for (let uiResourceIndex = 0; uiResourceIndex < EDITOR_UI.length; uiResourceIndex++) {
+    const resourceDefinition = EDITOR_UI[uiResourceIndex];
+    if (resourceDefinition.type === "text" && resourceDefinition.fontAsset
+        && runtimeUiFonts[resourceDefinition.fontAsset] === undefined) {
+        try {
+            runtimeUiFonts[resourceDefinition.fontAsset] = new Font(resourceDefinition.fontAsset);
+        } catch (uiFontError) {
+            console.log("[VeuAzul] Fonte de UI nao carregada: " + resourceDefinition.fontAsset + " - " + uiFontError);
+            runtimeUiFonts[resourceDefinition.fontAsset] = null;
+        }
+    }
+    if (resourceDefinition.type === "image" && resourceDefinition.asset) {
+        try {
+            const uiImage = new Image(resourceDefinition.asset);
+            uiImage.lock();
+            runtimeUiMedia[resourceDefinition.id] = { type: "image", media: uiImage };
+        } catch (uiImageError) {
+            console.log("[VeuAzul] Imagem de UI nao carregada: " + resourceDefinition.asset + " - " + uiImageError);
+        }
+    }
+    if (resourceDefinition.type === "video" && resourceDefinition.asset && typeof Video !== "undefined") {
+        try {
+            const uiVideo = new Video(resourceDefinition.asset);
+            uiVideo.loop = resourceDefinition.loop === true;
+            runtimeUiMedia[resourceDefinition.id] = {
+                type: "video",
+                media: uiVideo,
+                requested: resourceDefinition.autoplay === true,
+                started: false,
+                frame: null
+            };
+        } catch (uiVideoError) {
+            console.log("[VeuAzul] Video de UI nao carregado: " + resourceDefinition.asset + " - " + uiVideoError);
+        }
+    }
+}
+
+function controlRuntimeVideo(id, mode) {
+    const entry = runtimeUiMedia[id];
+    if (!entry || entry.type !== "video") return;
+    if (mode === "stop") {
+        entry.requested = false;
+        entry.started = false;
+        entry.media.stop();
+        return;
+    }
+    if (mode === "pause") {
+        entry.requested = false;
+        entry.media.pause();
+        return;
+    }
+    if (entry.media.ended) entry.media.stop();
+    entry.requested = true;
+    entry.started = false;
+}
+
 function drawEditorInterface() {
     if (!EDITOR_UI || EDITOR_UI.length === 0) return;
     const scaleX = canvas.width / 640.0;
@@ -1139,21 +1338,62 @@ function drawEditorInterface() {
             Draw.rect(x, y, width, height, editorUiColor(item.background, 104));
             continue;
         }
+        if (item.type === "image") {
+            const imageEntry = runtimeUiMedia[item.id];
+            if (!imageEntry) continue;
+            imageEntry.media.width = width;
+            imageEntry.media.height = height;
+            imageEntry.media.color = editorUiColorWithOpacity(item.color, 128, item.opacity);
+            imageEntry.media.draw(x, y);
+            continue;
+        }
+        if (item.type === "video") {
+            const videoEntry = runtimeUiMedia[item.id];
+            if (!videoEntry) continue;
+            const video = videoEntry.media;
+            video.loop = item.loop === true;
+            video.update();
+            if (videoEntry.requested && video.ready && !videoEntry.started) {
+                video.play();
+                videoEntry.started = true;
+            }
+            if (video.ended && item.loop !== true) videoEntry.requested = false;
+            if (!videoEntry.frame && video.ready && item.opacity < 0.999) videoEntry.frame = video.frame;
+            const frame = videoEntry.frame;
+            if (frame) {
+                frame.width = width;
+                frame.height = height;
+                frame.color = editorUiColorWithOpacity(item.color, 128, item.opacity);
+                frame.draw(x, y);
+            } else {
+                video.draw(x, y, width, height);
+            }
+            continue;
+        }
         if (item.type !== "text") continue;
         const text = item.text || "";
         const lines = text.split("\n");
         const textScale = Math.max(0.15, item.fontScale || 0.55) * fontScaleFactor;
-        font.scale = textScale;
-        font.color = editorUiColor(item.color, 128);
+        const itemFont = runtimeUiFonts[item.fontAsset] || font;
+        itemFont.scale = textScale;
+        itemFont.color = editorUiColorWithOpacity(item.color, 128, item.opacity);
+        itemFont.outline = item.dropshadow > 0 ? 0.0 : Math.max(0.0, item.outline || 0.0);
+        itemFont.outline_color = editorUiColorWithOpacity(item.outlineColor, 128, item.opacity);
+        itemFont.dropshadow = itemFont.outline > 0 ? 0.0 : Math.max(0.0, item.dropshadow || 0.0);
+        itemFont.dropshadow_color = editorUiColorWithOpacity(item.dropshadowColor, 128, item.opacity);
         for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
             const line = lines[lineIndex];
-            const estimatedWidth = line.length * 14.0 * textScale;
+            const measured = typeof itemFont.getTextSize === "function" ? itemFont.getTextSize(line) : null;
+            const measuredWidth = measured && measured.width !== undefined ? measured.width : line.length * 14.0 * textScale;
             let lineX = x;
-            if (item.align === "center") lineX = x + Math.max(0.0, (width - estimatedWidth) * 0.5);
-            else if (item.align === "right") lineX = x + Math.max(0.0, width - estimatedWidth);
-            font.print(lineX, y + lineIndex * 20.0 * textScale, line);
+            if (item.align === "center") lineX = x + Math.max(0.0, (width - measuredWidth) * 0.5);
+            else if (item.align === "right") lineX = x + Math.max(0.0, width - measuredWidth);
+            itemFont.print(lineX, y + lineIndex * 20.0 * textScale, line);
         }
     }
+    font.outline = 1.0;
+    font.outline_color = Color.new(3, 8, 16, 128);
+    font.dropshadow = 0.0;
 }
 
 function drawHud() {
@@ -1202,12 +1442,26 @@ function drawHud() {
 
     drawEditorInterface();
 
+    if (EDITOR_SETTINGS.showPerformance) {
+        const stats = typeof Render.stats === "function" ? Render.stats() : { drawCalls: 0, triangles: 0 };
+        const fps = typeof Screen.getFPS === "function" ? Screen.getFPS() : 0;
+        const vram = typeof Screen.getMemoryStats === "function"
+            ? Screen.getMemoryStats(Screen.VRAM_USED_TOTAL)
+            : 0;
+        font.scale = 0.36;
+        font.color = Color.new(190, 225, 241, 128);
+        font.print(canvas.width - 186, 16, "FPS: " + fps.toFixed(1));
+        font.print(canvas.width - 186, 30, "DRAWS: " + stats.drawCalls + "  TRI: " + stats.triangles);
+        font.print(canvas.width - 186, 44, "VRAM: " + (vram / 1048576.0).toFixed(2) + " MB");
+    }
+
     Screen.setParam(Screen.DEPTH_TEST_ENABLE, true);
     Screen.setParam(Screen.DEPTH_TEST_METHOD, Screen.DEPTH_GEQUAL);
 }
 
 function renderGameFrame() {
     Screen.clear(CLEAR_COLOR);
+    if (typeof Render.resetStats === "function") Render.resetStats();
     Render.begin();
     pointLightTime += 1.0 / 60.0;
     for (let i = 0; i < sceneObjects.length; i++) {
@@ -1216,6 +1470,7 @@ function renderGameFrame() {
         applyPointLightsAt(center.x, center.y, center.z);
         if (runtimeObjectVisibility[definition.id] !== false) sceneObjects[i].render();
     }
+    renderRuntimeShadows();
     updateAndRenderParticles();
     applyPointLightsAt(playerX, playerY + PLAYER_HEIGHT * 0.5, playerZ);
     playerObject.render();

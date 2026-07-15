@@ -9,14 +9,32 @@
     "snapMode": "grid",
     "camera": {
       "position": {
-        "x": 20.37,
-        "y": 5.3523,
-        "z": 8.2209
+        "x": 2.6164,
+        "y": 17.5687,
+        "z": -3.9199
       },
       "target": {
-        "x": 1.7451,
-        "y": 2.5126,
-        "z": 7.2155
+        "x": 3.287,
+        "y": 8.6681,
+        "z": 12.775
+      }
+    },
+    "runtime": {
+      "vsync": true,
+      "showPerformance": false,
+      "legacyArenaBounds": true,
+      "player": {
+        "spawn": {
+          "x": 0,
+          "y": 0.08,
+          "z": 18
+        },
+        "radius": 0.68,
+        "height": 2.25,
+        "walkSpeed": 0.125,
+        "runSpeed": 0.19,
+        "jumpSpeed": 0.5,
+        "gravity": 0.014
       }
     }
   },
@@ -85,7 +103,15 @@
         "emissive": "#000000",
         "emissiveIntensity": 0,
         "unlit": false,
-        "doubleSided": true
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      },
+      "animation": {
+        "clip": "",
+        "autoplay": false,
+        "loop": true
       }
     },
     {
@@ -124,7 +150,15 @@
         "emissive": "#000000",
         "emissiveIntensity": 0,
         "unlit": false,
-        "doubleSided": true
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      },
+      "animation": {
+        "clip": "",
+        "autoplay": false,
+        "loop": true
       }
     },
     {
@@ -163,7 +197,15 @@
         "emissive": "#000000",
         "emissiveIntensity": 0,
         "unlit": false,
-        "doubleSided": true
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      },
+      "animation": {
+        "clip": "",
+        "autoplay": false,
+        "loop": true
       }
     },
     {
@@ -202,7 +244,15 @@
         "emissive": "#000000",
         "emissiveIntensity": 0,
         "unlit": false,
-        "doubleSided": true
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      },
+      "animation": {
+        "clip": "",
+        "autoplay": false,
+        "loop": true
       }
     },
     {
@@ -241,7 +291,15 @@
         "emissive": "#000000",
         "emissiveIntensity": 0,
         "unlit": false,
-        "doubleSided": true
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      },
+      "animation": {
+        "clip": "",
+        "autoplay": false,
+        "loop": true
       }
     },
     {
@@ -280,7 +338,15 @@
         "emissive": "#000000",
         "emissiveIntensity": 0,
         "unlit": false,
-        "doubleSided": true
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      },
+      "animation": {
+        "clip": "",
+        "autoplay": false,
+        "loop": true
       }
     },
     {
@@ -319,7 +385,15 @@
         "emissive": "#000000",
         "emissiveIntensity": 0,
         "unlit": false,
-        "doubleSided": true
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      },
+      "animation": {
+        "clip": "",
+        "autoplay": false,
+        "loop": true
       }
     },
     {
@@ -358,7 +432,15 @@
         "emissive": "#000000",
         "emissiveIntensity": 0,
         "unlit": false,
-        "doubleSided": true
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      },
+      "animation": {
+        "clip": "",
+        "autoplay": false,
+        "loop": true
       }
     },
     {
@@ -774,7 +856,10 @@
         "emissive": "#000000",
         "emissiveIntensity": 0,
         "unlit": false,
-        "doubleSided": true
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
       }
     },
     {
@@ -852,7 +937,10 @@
         "emissive": "#000000",
         "emissiveIntensity": 0,
         "unlit": false,
-        "doubleSided": true
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
       }
     },
     {
@@ -930,7 +1018,10 @@
         "emissive": "#000000",
         "emissiveIntensity": 0,
         "unlit": false,
-        "doubleSided": true
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
       }
     },
     {
@@ -969,6 +1060,129 @@
         "onEnter": [],
         "onExit": [],
         "onInteract": []
+      }
+    },
+    {
+      "id": "light-mrlgfick-2o3fmn",
+      "name": "Luz ambiente",
+      "source": {
+        "kind": "light",
+        "asset": "",
+        "light": "ambient"
+      },
+      "parentId": null,
+      "position": {
+        "x": 1.7451,
+        "y": 5.7225,
+        "z": 10.7886
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#ffc15c",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "light": {
+        "type": "ambient",
+        "color": "#ffffff",
+        "intensity": 0.45,
+        "distance": 12,
+        "castShadow": false,
+        "flicker": false,
+        "flickerAmount": 0.24,
+        "flickerSpeed": 7.5
+      }
+    },
+    {
+      "id": "shadow-mrlgjxkp-3y2jd3",
+      "name": "Projetor de sombra",
+      "source": {
+        "kind": "shadow",
+        "asset": ""
+      },
+      "parentId": null,
+      "position": {
+        "x": 0.8319,
+        "y": 0.2437,
+        "z": 2.7748
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#000000",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "shadow": {
+        "width": 2.5,
+        "height": 2.5,
+        "gridX": 6,
+        "gridZ": 6,
+        "lightDirection": {
+          "x": 0,
+          "y": 1,
+          "z": 1
+        },
+        "bias": -0.02,
+        "lightOffset": 1,
+        "color": "#000000",
+        "opacity": 0.65,
+        "blend": "darken",
+        "followPlayer": true
+      }
+    },
+    {
+      "id": "light-mrlglr2f-arxmua",
+      "name": "Luz direcional",
+      "source": {
+        "kind": "light",
+        "asset": "",
+        "light": "directional"
+      },
+      "parentId": null,
+      "position": {
+        "x": 2.8372,
+        "y": 8.03,
+        "z": 4.5654
+      },
+      "rotation": {
+        "x": 126.8699,
+        "y": -30.9638,
+        "z": 145.5501
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#ffc15c",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "light": {
+        "type": "directional",
+        "color": "#fff1cf",
+        "intensity": 2,
+        "distance": 12,
+        "castShadow": true,
+        "flicker": false,
+        "flickerAmount": 0.24,
+        "flickerSpeed": 7.5
       }
     }
   ],

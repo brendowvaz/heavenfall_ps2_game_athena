@@ -28,11 +28,15 @@ const host = "127.0.0.1";
 const port = Number(process.env.ATHENA_EDITOR_PORT || 4173);
 
 const modelExtensions = new Set([".obj", ".gltf", ".glb"]);
+const imageExtensions = new Set([".png", ".jpg", ".jpeg", ".bmp"]);
+const fontExtensions = new Set([".ttf", ".otf"]);
 const audioExtensions = new Set([".wav", ".ogg", ".adp"]);
+const videoExtensions = new Set([".m2v", ".mpg", ".mpeg"]);
 const importExtensions = new Set([
   ".obj", ".mtl", ".gltf", ".glb", ".bin",
-  ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tga",
+  ".png", ".jpg", ".jpeg", ".bmp", ".ttf", ".otf",
   ".wav", ".ogg", ".adp",
+  ".m2v", ".mpg", ".mpeg",
 ]);
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -48,11 +52,15 @@ const mimeTypes = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
-  ".webp": "image/webp",
   ".bmp": "image/bmp",
+  ".ttf": "font/ttf",
+  ".otf": "font/otf",
   ".wav": "audio/wav",
   ".ogg": "audio/ogg",
   ".adp": "application/octet-stream",
+  ".m2v": "video/mpeg",
+  ".mpg": "video/mpeg",
+  ".mpeg": "video/mpeg",
   ".svg": "image/svg+xml",
   ".woff2": "font/woff2",
 };
@@ -157,7 +165,7 @@ function safeAssetPath(value) {
 }
 
 const eventPhases = ["onEnter", "onExit", "onInteract"];
-const eventActionTypes = ["message", "visibility", "teleport", "audio", "particle"];
+const eventActionTypes = ["message", "visibility", "teleport", "audio", "particle", "video"];
 const particlePresetColors = { fire: "#ff380a", smoke: "#616b7a", sparks: "#ffb814" };
 
 function normalizeEventAction(action, index) {
@@ -184,6 +192,10 @@ function normalizeEventAction(action, index) {
       targetId: typeof action?.targetId === "string" ? action.targetId.slice(0, 96) : "",
       mode: ["start", "stop", "burst"].includes(action?.mode) ? action.mode : "burst",
     } : {}),
+    ...(type === "video" ? {
+      targetId: typeof action?.targetId === "string" ? action.targetId.slice(0, 96) : "",
+      mode: ["play", "pause", "stop"].includes(action?.mode) ? action.mode : "play",
+    } : {}),
   };
 }
 
@@ -196,21 +208,34 @@ function normalizeEvents(events) {
 }
 
 function normalizeUiElement(item, index) {
-  const type = ["panel", "text"].includes(item?.type) ? item.type : "text";
+  const type = ["panel", "text", "image", "video"].includes(item?.type) ? item.type : "text";
+  const media = type === "image" || type === "video";
+  const defaultWidth = media ? 192 : type === "panel" ? 240 : 280;
+  const defaultHeight = media ? 108 : type === "panel" ? 72 : 28;
+  const outline = Math.max(0, Math.min(8, finite(item?.outline, 0)));
+  const dropshadow = outline > 0 ? 0 : Math.max(0, Math.min(16, finite(item?.dropshadow, 0)));
   return {
     id: String(item?.id || `ui-${index}`).replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96),
-    name: String(item?.name || (type === "panel" ? "Painel" : "Texto")).slice(0, 120),
+    name: String(item?.name || ({ panel: "Painel", text: "Texto", image: "Imagem", video: "Vídeo" }[type])).slice(0, 120),
     type,
     x: Math.max(0, Math.min(640, finite(item?.x, type === "panel" ? 24 : 32))),
     y: Math.max(0, Math.min(448, finite(item?.y, type === "panel" ? 24 : 32))),
-    width: Math.max(1, Math.min(640, finite(item?.width, type === "panel" ? 240 : 280))),
-    height: Math.max(1, Math.min(448, finite(item?.height, type === "panel" ? 72 : 28))),
+    width: Math.max(1, Math.min(640, finite(item?.width, defaultWidth))),
+    height: Math.max(1, Math.min(448, finite(item?.height, defaultHeight))),
     text: String(item?.text || (type === "text" ? "Novo texto" : "")).slice(0, 240),
+    asset: safeAssetPath(item?.asset),
+    fontAsset: safeAssetPath(item?.fontAsset),
     fontScale: Math.max(0.15, Math.min(3, finite(item?.fontScale, 0.55))),
     color: /^#[0-9a-f]{6}$/i.test(item?.color || "") ? item.color : "#ffffff",
+    outline,
+    outlineColor: /^#[0-9a-f]{6}$/i.test(item?.outlineColor || "") ? item.outlineColor : "#000000",
+    dropshadow,
+    dropshadowColor: /^#[0-9a-f]{6}$/i.test(item?.dropshadowColor || "") ? item.dropshadowColor : "#000000",
     background: /^#[0-9a-f]{6}$/i.test(item?.background || "") ? item.background : "#07121b",
     opacity: Math.max(0, Math.min(1, finite(item?.opacity, type === "panel" ? 0.82 : 1))),
     align: ["left", "center", "right"].includes(item?.align) ? item.align : "left",
+    autoplay: item?.autoplay !== false,
+    loop: item?.loop === true,
     visible: item?.visible !== false,
     runtime: item?.runtime !== false,
   };
@@ -231,9 +256,23 @@ function normalizeScene(input) {
         position: vector(input?.settings?.camera?.position, { x: 24, y: 20, z: 32 }),
         target: vector(input?.settings?.camera?.target, { x: 0, y: 2, z: 0 }),
       },
+      runtime: {
+        vsync: input?.settings?.runtime?.vsync !== false,
+        showPerformance: input?.settings?.runtime?.showPerformance === true,
+        legacyArenaBounds: input?.settings?.runtime?.legacyArenaBounds !== false,
+        player: {
+          spawn: vector(input?.settings?.runtime?.player?.spawn, { x: 0, y: 0.08, z: 18 }),
+          radius: Math.max(0.1, Math.min(5, finite(input?.settings?.runtime?.player?.radius, 0.68))),
+          height: Math.max(0.2, Math.min(10, finite(input?.settings?.runtime?.player?.height, 2.25))),
+          walkSpeed: Math.max(0.01, Math.min(2, finite(input?.settings?.runtime?.player?.walkSpeed, 0.125))),
+          runSpeed: Math.max(0.01, Math.min(3, finite(input?.settings?.runtime?.player?.runSpeed, 0.19))),
+          jumpSpeed: Math.max(0, Math.min(2, finite(input?.settings?.runtime?.player?.jumpSpeed, 0.3))),
+          gravity: Math.max(0.0001, Math.min(0.25, finite(input?.settings?.runtime?.player?.gravity, 0.014))),
+        },
+      },
     },
     objects: objects.slice(0, 2000).map((item, index) => {
-      const allowedKinds = new Set(["model", "primitive", "group", "collider", "light", "camera", "audio", "particle"]);
+      const allowedKinds = new Set(["model", "primitive", "group", "collider", "light", "camera", "audio", "particle", "shadow"]);
       let kind = allowedKinds.has(item?.source?.kind) ? item.source.kind : "model";
       const asset = safeAssetPath(item?.source?.asset || item?.asset);
       const legacyName = String(item?.name || "").toLocaleLowerCase("pt-BR");
@@ -281,6 +320,14 @@ function normalizeScene(input) {
           emissiveIntensity: Math.max(0, finite(item?.material?.emissiveIntensity, 0)),
           unlit: item?.material?.unlit === true,
           doubleSided: item?.material?.doubleSided !== false,
+          textureMapping: item?.material?.textureMapping !== false,
+          smoothShading: item?.material?.smoothShading !== false,
+          accurateClipping: item?.material?.accurateClipping === true,
+        } : undefined,
+        animation: kind === "model" ? {
+          clip: String(item?.animation?.clip || "").slice(0, 120),
+          autoplay: item?.animation?.autoplay === true,
+          loop: item?.animation?.loop !== false,
         } : undefined,
         collider: kind === "collider" ? {
           trigger: item?.collider?.trigger === true,
@@ -327,6 +374,19 @@ function normalizeScene(input) {
           spread: Math.max(0, Math.min(5, finite(item?.particle?.spread, 0.65))),
           size: Math.max(0.01, Math.min(2, finite(item?.particle?.size, 0.16))),
           gravity: Math.max(-0.05, Math.min(0.05, finite(item?.particle?.gravity, -0.0004))),
+        } : undefined,
+        shadow: kind === "shadow" ? {
+          width: Math.max(0.1, Math.min(100, finite(item?.shadow?.width, 2.5))),
+          height: Math.max(0.1, Math.min(100, finite(item?.shadow?.height, 2.5))),
+          gridX: Math.round(Math.max(2, Math.min(32, finite(item?.shadow?.gridX, 6)))),
+          gridZ: Math.round(Math.max(2, Math.min(32, finite(item?.shadow?.gridZ, 6)))),
+          lightDirection: vector(item?.shadow?.lightDirection, { x: 0, y: 1, z: 1 }),
+          bias: Math.max(-1, Math.min(1, finite(item?.shadow?.bias, -0.02))),
+          lightOffset: Math.max(-100, Math.min(100, finite(item?.shadow?.lightOffset, 1))),
+          color: /^#[0-9a-f]{6}$/i.test(item?.shadow?.color || "") ? item.shadow.color : "#000000",
+          opacity: Math.max(0, Math.min(1, finite(item?.shadow?.opacity, 0.65))),
+          blend: ["darken", "alpha", "add"].includes(item?.shadow?.blend) ? item.shadow.blend : "darken",
+          followPlayer: item?.shadow?.followPlayer === true,
         } : undefined,
         prefabId: typeof item?.prefabId === "string" ? item.prefabId.slice(0, 96) : undefined,
       };
@@ -489,7 +549,12 @@ function generateAthenaScene(scene) {
         scale: transform.scale,
         boundsCenter: bounds.center,
         boundsRadius: bounds.radius,
-        material: item.material,
+        material: {
+          ...item.material,
+          color: runtimeMaterialColor(item.material.color),
+          emissive: runtimeMaterialColor(item.material.emissive),
+        },
+        animation: item.animation,
       };
     });
 
@@ -656,6 +721,19 @@ function generateAthenaScene(scene) {
     });
   }
 
+  const shadows = scene.objects
+    .filter((item) => item.runtime && item.visible && item.source.kind === "shadow"
+      && imageExtensions.has(path.extname(item.source.asset).toLowerCase()))
+    .slice(0, 4)
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      asset: item.source.asset,
+      position: transforms.get(item.id).position,
+      ...item.shadow,
+      color: runtimeMaterialColor(item.shadow.color),
+    }));
+
   const ui = scene.ui
     .filter((item) => item.runtime && item.visible)
     .map((item) => ({
@@ -667,16 +745,31 @@ function generateAthenaScene(scene) {
       width: item.width,
       height: item.height,
       text: item.text,
+      asset: item.asset,
+      fontAsset: item.fontAsset,
       fontScale: item.fontScale,
       color: runtimeUiColor(item.color),
+      outline: item.outline,
+      outlineColor: runtimeUiColor(item.outlineColor),
+      dropshadow: item.dropshadow,
+      dropshadowColor: runtimeUiColor(item.dropshadowColor),
       background: runtimeUiColor(item.background, item.opacity),
+      opacity: item.opacity,
       align: item.align,
+      autoplay: item.autoplay,
+      loop: item.loop,
     }));
+
+  const runtimeSettings = {
+    background: runtimeUiColor(scene.settings.background, 1),
+    ...scene.settings.runtime,
+  };
 
   return [
     "// Generated by Athena Visual Editor. Do not edit by hand.",
     `// Scene: ${scene.name}`,
     "globalThis.EDITOR_COLLISION_VERSION = 2;",
+    `globalThis.EDITOR_SETTINGS = ${JSON.stringify(runtimeSettings, null, 2)};`,
     `globalThis.EDITOR_SCENE = ${JSON.stringify(objects, null, 2)};`,
     `globalThis.EDITOR_COLLIDERS = ${JSON.stringify(colliders, null, 2)};`,
     `globalThis.EDITOR_EVENTS = ${JSON.stringify(events, null, 2)};`,
@@ -685,6 +778,7 @@ function generateAthenaScene(scene) {
     `globalThis.EDITOR_CAMERA = ${JSON.stringify(activeCamera, null, 2)};`,
     `globalThis.EDITOR_AUDIO = ${JSON.stringify(audio, null, 2)};`,
     `globalThis.EDITOR_PARTICLES = ${JSON.stringify(particles, null, 2)};`,
+    `globalThis.EDITOR_SHADOWS = ${JSON.stringify(shadows, null, 2)};`,
     `globalThis.EDITOR_UI = ${JSON.stringify(ui, null, 2)};`,
     "",
   ].join("\n");
@@ -1136,8 +1230,8 @@ function startBuildAndRun() {
 async function handleApi(request, response, url) {
   if (url.pathname === "/api/capabilities" && request.method === "GET") {
     sendJson(response, 200, {
-      editorSchemaVersion: 7,
-      features: ["materials", "lights", "point-light-runtime", "light-flicker", "cameras", "camera-modes", "camera-preview", "components", "trigger-events", "multiple-scenes", "ui-editor", "ui-runtime", "audio", "audio-runtime", "particles", "particle-runtime", "particle-color"],
+      editorSchemaVersion: 8,
+      features: ["materials", "material-runtime", "model-animation", "lights", "point-light-runtime", "light-flicker", "shadow-projectors", "cameras", "camera-modes", "camera-preview", "components", "trigger-events", "multiple-scenes", "runtime-settings", "ui-editor", "ui-runtime", "ui-images", "ui-video", "ui-fonts", "audio", "audio-runtime", "particles", "particle-runtime", "particle-color"],
     });
     return true;
   }

@@ -18,7 +18,7 @@ for (const preset of ["fire", "smoke", "sparks"]) {
         throw new Error(`Particle ${preset} material library must contain exactly one material; AthenaEnv renders unused material ranges as invalid DMA`);
     }
 }
-for (const marker of ["applyPointerSnap", "togglePivotEditing", "finishBoxSelection", "toggleIsolation", "setupPanelAccordions", "collapsedHierarchy", "applyRecordMaterial", "createLightObject", "applyCampfirePreset", "openCameraPreview", "renderTriggerEvents", "addTriggerAction", "renderUiPreview", "addUiElement", "switchProjectScene", "createProjectScene", "createAudioObject", "createParticleObject", "updateLegacyParticlePreview", "stepLegacyParticlePreview", "OctahedronGeometry", "addAudio", "addParticle"]) {
+for (const marker of ["applyPointerSnap", "togglePivotEditing", "finishBoxSelection", "toggleIsolation", "setupPanelAccordions", "collapsedHierarchy", "applyRecordMaterial", "createLightObject", "applyCampfirePreset", "openCameraPreview", "renderTriggerEvents", "addTriggerAction", "renderUiPreview", "addUiElement", "switchProjectScene", "createProjectScene", "createAudioObject", "createParticleObject", "createShadowObject", "applyShadowTexture", "renderRuntimeSettings", "updateLegacyParticlePreview", "stepLegacyParticlePreview", "OctahedronGeometry", "addAudio", "addParticle", "addShadow"]) {
     if (!editorSource.includes(marker)) throw new Error(`Editor tool missing: ${marker}`);
 }
 for (const marker of ["Heavenfall", "Iniciar Jogo", "CRÉDITOS", "Brendow Vaz"]) {
@@ -27,7 +27,13 @@ for (const marker of ["Heavenfall", "Iniciar Jogo", "CRÉDITOS", "Brendow Vaz"])
 for (const marker of ["MENU_AUDIO_ASSET", "updateMenuAudio", "startRuntimeAutoplayAudio"]) {
     if (!source.includes(marker)) throw new Error(`Runtime menu audio separation missing: ${marker}`);
 }
-for (const id of ["snap-mode", "pivot-button", "box-select-button", "selection-marquee", "isolate-selection-button", "material-section", "light-section", "light-flicker", "light-campfire-preset", "camera-section", "camera-mode", "camera-preview", "trigger-events-editor", "event-action-type", "event-add-button", "scene-picker", "duplicate-scene-button", "ui-mode-button", "ui-editor", "ui-canvas", "ui-inspector", "audio-tools-section", "add-audio-button", "audio-section", "audio-asset", "particle-tools-section", "particle-section", "particle-preset", "particle-color"]) {
+if (source.includes("Render.SHADE_")) {
+    throw new Error("AthenaEnv exposes shade_model as numeric Flat/Gouraud values, not Render.SHADE_* constants");
+}
+for (const marker of ["accurate_clipping", "texture_mapping", "runtimeShadows", "runtimeUiMedia", "controlRuntimeVideo"]) {
+    if (!source.includes(marker)) throw new Error(`Official Athena runtime integration missing: ${marker}`);
+}
+for (const id of ["snap-mode", "pivot-button", "box-select-button", "selection-marquee", "isolate-selection-button", "material-section", "material-texture-mapping", "material-smooth-shading", "material-accurate-clipping", "animation-section", "animation-clip", "light-section", "light-flicker", "light-campfire-preset", "camera-section", "camera-mode", "camera-preview", "trigger-events-editor", "event-action-type", "event-add-button", "scene-picker", "duplicate-scene-button", "scene-background", "runtime-vsync", "runtime-performance", "player-spawn-x", "player-walk-speed", "ui-mode-button", "ui-editor", "ui-canvas", "ui-inspector", "ui-font-asset", "ui-media-section", "ui-media-asset", "audio-tools-section", "add-audio-button", "audio-section", "audio-asset", "particle-tools-section", "particle-section", "particle-preset", "particle-color", "add-shadow-button", "shadow-section", "shadow-texture"]) {
     if (!editorHtml.includes(`id="${id}"`)) throw new Error(`Editor control missing: ${id}`);
 }
 source = source.replace(
@@ -41,6 +47,9 @@ const particleMaterialUpdates = [];
 const fontPrints = [];
 const rectCalls = [];
 const soundEvents = [];
+const videoEvents = [];
+const shadowEvents = [];
+const imageDraws = [];
 let nextLightId = 0;
 const lightSetCalls = [];
 const assetLoads = [];
@@ -49,6 +58,7 @@ let sandbox;
 
 class MockFont {
     print(x, y, text) { fontPrints.push({ x, y, text }); }
+    getTextSize(text) { return { width: String(text).length * 7 * (this.scale || 1), height: 14 * (this.scale || 1) }; }
 }
 
 class MockImage {
@@ -58,8 +68,36 @@ class MockImage {
         this.height = 448;
     }
     lock() {}
-    draw() {}
+    draw(x, y) { imageDraws.push({ path: this.path, x, y, width: this.width, height: this.height, color: this.color }); }
     ready() { return true; }
+}
+
+class MockVideo {
+    constructor(path) {
+        this.path = path;
+        this.ready = true;
+        this.ended = false;
+        this.playing = false;
+        this.loop = false;
+        this.frame = new MockImage(`${path}#frame`);
+    }
+    play() { this.playing = true; videoEvents.push({ type: "play", path: this.path }); }
+    pause() { this.playing = false; videoEvents.push({ type: "pause", path: this.path }); }
+    stop() { this.playing = false; videoEvents.push({ type: "stop", path: this.path }); }
+    update() { videoEvents.push({ type: "update", path: this.path }); return true; }
+    draw(x, y, width, height) { videoEvents.push({ type: "draw", path: this.path, x, y, width, height }); }
+}
+
+class MockShadowProjector {
+    constructor(texture) { this.texture = texture; shadowEvents.push({ type: "create", texture: texture.path }); }
+    setSize(width, height) { shadowEvents.push({ type: "size", width, height }); }
+    setGrid(x, z) { shadowEvents.push({ type: "grid", x, z }); }
+    setLightDir(x, y, z) { shadowEvents.push({ type: "light", x, y, z }); }
+    setBias(value) { shadowEvents.push({ type: "bias", value }); }
+    setLightOffset(value) { shadowEvents.push({ type: "offset", value }); }
+    setColor(r, g, b, a) { shadowEvents.push({ type: "color", r, g, b, a }); }
+    setBlend(value) { shadowEvents.push({ type: "blend", value }); }
+    render() { shadowEvents.push({ type: "render", position: this.position }); }
 }
 
 class MockRenderData {
@@ -95,6 +133,7 @@ const context = {
     Color: { new: (r, g, b, a) => ({ r, g, b, a }) },
     Font: MockFont,
     Image: MockImage,
+    Video: MockVideo,
     RenderData: MockRenderData,
     RenderObject: MockRenderObject,
     Screen: {
@@ -170,10 +209,22 @@ const context = {
                 });
                 sandbox.EDITOR_UI.push(
                     { id: "smoke-panel", type: "panel", x: 12, y: 24, width: 180, height: 40, background: { r: 10, g: 20, b: 30, a: 96 } },
-                    { id: "smoke-text", type: "text", x: 20, y: 30, width: 160, height: 20, text: "UI runtime", fontScale: 0.5, color: { r: 240, g: 230, b: 210, a: 128 }, align: "left" }
+                    { id: "smoke-text", type: "text", x: 20, y: 30, width: 160, height: 20, text: "UI runtime", fontScale: 0.5, color: { r: 240, g: 230, b: 210, a: 128 }, align: "left", outline: 1, dropshadow: 0, opacity: 1 },
+                    { id: "smoke-image", type: "image", asset: "Textures/icon.png", x: 30, y: 60, width: 32, height: 24, color: { r: 255, g: 255, b: 255, a: 128 }, opacity: 0.75 },
+                    { id: "smoke-video", type: "video", asset: "videos/intro.mpg", x: 40, y: 90, width: 160, height: 90, color: { r: 255, g: 255, b: 255, a: 128 }, opacity: 0.5, autoplay: false, loop: false }
                 );
+                sandbox.EDITOR_SHADOWS.push({
+                    id: "smoke-shadow", asset: "Textures/shadow.png", position: { x: 0, y: 0.03, z: 18 },
+                    width: 2.5, height: 2, gridX: 6, gridZ: 5, lightDirection: { x: 0, y: 1, z: 1 },
+                    bias: -0.02, lightOffset: 1, color: { r: 0, g: 0, b: 0 }, opacity: 0.65,
+                    blend: "darken", followPlayer: true
+                });
             }
         }
+    },
+    Shadows: {
+        SHADOW_BLEND_DARKEN: 0, SHADOW_BLEND_ALPHA: 1, SHADOW_BLEND_ADD: 2,
+        Projector: MockShadowProjector
     },
     Lights: {
         DIRECTION: 0, AMBIENT: 1, DIFFUSE: 2,
@@ -210,12 +261,22 @@ const context = {
 sandbox = vm.createContext(context);
 vm.runInContext(source, sandbox, { filename: sourcePath, timeout: 5000 });
 
-if (!Array.isArray(context.EDITOR_LIGHTS) || !Array.isArray(context.EDITOR_POINT_LIGHTS) || !Array.isArray(context.EDITOR_EVENTS) || !Array.isArray(context.EDITOR_UI) || !Array.isArray(context.EDITOR_AUDIO) || !Array.isArray(context.EDITOR_PARTICLES) || !("EDITOR_CAMERA" in context)) {
-    throw new Error("Generated scene must expose lights, events, interface, audio, particles and active camera contracts");
+if (!Array.isArray(context.EDITOR_LIGHTS) || !Array.isArray(context.EDITOR_POINT_LIGHTS) || !Array.isArray(context.EDITOR_EVENTS) || !Array.isArray(context.EDITOR_UI) || !Array.isArray(context.EDITOR_AUDIO) || !Array.isArray(context.EDITOR_PARTICLES) || !Array.isArray(context.EDITOR_SHADOWS) || !("EDITOR_CAMERA" in context)) {
+    throw new Error("Generated scene must expose lights, events, interface, audio, particles, shadows and active camera contracts");
 }
 if (!fontPrints.some((entry) => entry.text === "UI runtime")) throw new Error("Exported UI text must be drawn by Font in the runtime loop");
 if (!rectCalls.some((entry) => entry.x === 12 && entry.y === 24 && entry.width === 180 && entry.height === 40)) {
     throw new Error("Exported UI panels must be drawn by Draw.rect in runtime coordinates");
+}
+if (!imageDraws.some((entry) => entry.path === "Textures/icon.png" && entry.width === 32 && entry.height === 24)) {
+    throw new Error("Exported UI images must be drawn by Image in runtime coordinates");
+}
+if (!imageDraws.some((entry) => entry.path === "videos/intro.mpg#frame" && entry.color.a === 64)) {
+    throw new Error("MPEG frames must honor UI opacity through the official Video.frame image");
+}
+if (shadowEvents.filter((entry) => entry.type === "render").length < 2
+    || !shadowEvents.some((entry) => entry.type === "grid" && entry.x === 6 && entry.z === 5)) {
+    throw new Error("Official shadow projectors must be configured and rendered every frame");
 }
 
 if (manifest.sceneVertices < 1000 || manifest.sceneVertices > 30000) {
@@ -371,6 +432,26 @@ if (!Collision3D.sphereHits(capsule, 0, 1, 3.5, 0.1)) {
 }
 if (Collision3D.sphereHits(capsule, 1.0, 1, 0, 0.1)) {
     throw new Error("Capsule radial scale must be respected");
+}
+context.__levelTest.executeAction({ type: "video", targetId: "smoke-video", mode: "play" });
+context.__levelTest.executeAction({ type: "video", targetId: "smoke-video", mode: "pause" });
+context.__levelTest.executeAction({ type: "video", targetId: "smoke-video", mode: "stop" });
+if (!videoEvents.some((entry) => entry.type === "pause") || !videoEvents.some((entry) => entry.type === "stop")) {
+    throw new Error("Video trigger actions must reach the official Video controls");
+}
+if (!Collision3D.cameraBlocked([capsule], 0, 1, 3.5, 0.1)) {
+    throw new Error("Capsule broad-phase bounds must include its scaled end caps");
+}
+
+const thinMidBodyBox = Collision3D.normalize({
+    id: "thin-mid-body",
+    shape: "box",
+    position: { x: 0, y: 2.55, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 1, y: 0.05, z: 1 }
+}, 0);
+if (Collision3D.playerContacts([thinMidBodyBox], 0, 0, 0, 0.25, 5.0, false).length !== 1) {
+    throw new Error("Tall player capsules must be sampled without vertical collision gaps");
 }
 
 const trigger = Collision3D.normalize({

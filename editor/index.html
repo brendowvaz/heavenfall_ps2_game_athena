@@ -97,6 +97,36 @@
         <div id="object-list" class="object-list" role="tree"></div>
       </section>
 
+      <section class="panel-section runtime-settings-section">
+        <div class="section-heading compact">
+          <div>
+            <span class="eyebrow">PS2</span>
+            <h2>Runtime</h2>
+          </div>
+        </div>
+        <label class="property-row color-property"><span><strong>Fundo</strong><small>Screen.clear no jogo</small></span><input id="scene-background" type="color" value="#07101d"></label>
+        <label class="property-row switch-property"><span><strong>VSync</strong><small>Sincronizar ao vídeo</small></span><input id="runtime-vsync" type="checkbox" checked></label>
+        <label class="property-row switch-property"><span><strong>Diagnóstico</strong><small>FPS, draws, tris e VRAM</small></span><input id="runtime-performance" type="checkbox"></label>
+        <label class="property-row switch-property"><span><strong>Limites originais</strong><small>Restringir à arena Véu Azul</small></span><input id="runtime-arena-bounds" type="checkbox" checked></label>
+        <div class="component-heading"><strong>Jogador</strong><small>Movimento no runtime</small></div>
+        <div class="vector-row compact-vector-row">
+          <label>Spawn</label>
+          <div class="vector-inputs">
+            <label><span class="axis x">X</span><input id="player-spawn-x" type="number" step="0.1" value="0"></label>
+            <label><span class="axis y">Y</span><input id="player-spawn-y" type="number" step="0.1" value="0.08"></label>
+            <label><span class="axis z">Z</span><input id="player-spawn-z" type="number" step="0.1" value="18"></label>
+          </div>
+        </div>
+        <div class="runtime-number-grid">
+          <label><span>Raio</span><input id="player-radius" type="number" min="0.1" max="5" step="0.05" value="0.68"></label>
+          <label><span>Altura</span><input id="player-height" type="number" min="0.2" max="10" step="0.05" value="2.25"></label>
+          <label><span>Andar</span><input id="player-walk-speed" type="number" min="0.01" max="2" step="0.005" value="0.125"></label>
+          <label><span>Correr</span><input id="player-run-speed" type="number" min="0.01" max="3" step="0.005" value="0.19"></label>
+          <label><span>Pulo</span><input id="player-jump-speed" type="number" min="0" max="2" step="0.01" value="0.3"></label>
+          <label><span>Gravidade</span><input id="player-gravity" type="number" min="0.0001" max="0.25" step="0.001" value="0.014"></label>
+        </div>
+      </section>
+
       <section class="panel-section add-section">
         <div class="section-heading compact">
           <div>
@@ -154,6 +184,7 @@
           <button data-particle="fire"><span>♨</span>Fogo</button>
           <button data-particle="smoke"><span>☁</span>Fumaça</button>
           <button data-particle="sparks"><span>✣</span>Faíscas</button>
+          <button id="add-shadow-button"><span>◒</span>Sombra</button>
         </div>
       </section>
 
@@ -180,6 +211,8 @@
         <div class="interface-tool-grid">
           <button data-ui-type="panel"><span>▰</span>Painel</button>
           <button data-ui-type="text"><span>T</span>Texto</button>
+          <button data-ui-type="image"><span>▧</span>Imagem</button>
+          <button data-ui-type="video"><span>▶</span>Vídeo</button>
         </div>
         <div id="ui-element-list" class="ui-element-list"></div>
       </section>
@@ -275,7 +308,7 @@
       <div id="drop-zone" class="drop-zone" hidden>
         <div>＋</div>
         <strong>Solte os arquivos para importar</strong>
-        <span>OBJ, MTL, GLTF, GLB, BIN e texturas</span>
+        <span>Modelos, imagens, fontes, áudio e vídeo MPEG</span>
       </div>
 
       <div id="loading-indicator" class="loading-indicator" hidden>
@@ -338,6 +371,10 @@
         <section id="ui-text-section" class="inspector-section ui-inspector-section">
           <h3>Texto</h3>
           <label class="ui-text-property">Conteúdo<textarea id="ui-text" maxlength="240" rows="3"></textarea></label>
+          <label class="property-row select-property">
+            <span><strong>Fonte</strong><small>Padrão, TTF/OTF ou bitmap</small></span>
+            <select id="ui-font-asset"><option value="">Fonte padrão do Athena</option></select>
+          </label>
           <label class="property-row number-property">
             <span><strong>Escala</strong><small>Tamanho no Font do Athena</small></span>
             <input id="ui-font-scale" type="number" min="0.15" max="3" step="0.05">
@@ -347,6 +384,10 @@
             <select id="ui-align"><option value="left">Esquerda</option><option value="center">Centro</option><option value="right">Direita</option></select>
           </label>
           <label class="property-row color-property"><span><strong>Cor do texto</strong></span><input id="ui-color" type="color"></label>
+          <label class="property-row number-property"><span><strong>Contorno</strong><small>0 a 8 pixels</small></span><input id="ui-outline" type="number" min="0" max="8" step="0.25" value="0"></label>
+          <label class="property-row color-property"><span><strong>Cor do contorno</strong></span><input id="ui-outline-color" type="color" value="#000000"></label>
+          <label class="property-row number-property"><span><strong>Sombra</strong><small>Deslocamento; desativa com contorno</small></span><input id="ui-dropshadow" type="number" min="0" max="16" step="0.25" value="0"></label>
+          <label class="property-row color-property"><span><strong>Cor da sombra</strong></span><input id="ui-dropshadow-color" type="color" value="#000000"></label>
         </section>
         <section id="ui-panel-section" class="inspector-section ui-inspector-section">
           <h3>Painel</h3>
@@ -355,6 +396,14 @@
             <span><strong>Opacidade</strong><small>0 transparente · 1 sólido</small></span>
             <input id="ui-opacity" type="number" min="0" max="1" step="0.05">
           </label>
+        </section>
+        <section id="ui-media-section" class="inspector-section ui-inspector-section" hidden>
+          <h3 id="ui-media-kind">Imagem</h3>
+          <label class="property-row select-property"><span><strong>Arquivo</strong><small>PNG/JPG/BMP ou MPEG</small></span><select id="ui-media-asset"><option value="">Selecione um arquivo</option></select></label>
+          <label class="property-row number-property"><span><strong>Opacidade</strong><small>0 transparente · 1 sólido</small></span><input id="ui-media-opacity" type="number" min="0" max="1" step="0.05" value="1"></label>
+          <label id="ui-media-autoplay-row" class="property-row switch-property"><span><strong>Ao iniciar</strong><small>Reproduzir ao carregar</small></span><input id="ui-media-autoplay" type="checkbox" checked></label>
+          <label id="ui-media-loop-row" class="property-row switch-property"><span><strong>Loop</strong><small>Repetir vídeo continuamente</small></span><input id="ui-media-loop" type="checkbox" checked></label>
+          <p class="compatibility-note">PS2 · Image desenha PNG/JPG/BMP; Video decodifica MPEG-1/2 e precisa de update por quadro.</p>
         </section>
         <section class="inspector-section appearance-section">
           <h3>Saída</h3>
@@ -456,6 +505,7 @@
                 <option value="teleport">Teletransportar jogador</option>
                 <option value="audio">Controlar áudio</option>
                 <option value="particle">Controlar partículas</option>
+                <option value="video">Controlar vídeo de UI</option>
               </select>
             </label>
             <label id="event-message-row" class="property-row event-wide-property">
@@ -533,6 +583,27 @@
             <span><strong>Dupla face</strong><small>Renderizar os dois lados</small></span>
             <input id="material-double-sided" type="checkbox" checked>
           </label>
+          <label class="property-row switch-property">
+            <span><strong>Mapear textura</strong><small>RenderData.texture_mapping</small></span>
+            <input id="material-texture-mapping" type="checkbox" checked>
+          </label>
+          <label class="property-row switch-property">
+            <span><strong>Suavizar faces</strong><small>Gouraud; desligado usa Flat</small></span>
+            <input id="material-smooth-shading" type="checkbox" checked>
+          </label>
+          <label class="property-row switch-property">
+            <span><strong>Clipping preciso</strong><small>Mais correto, porém mais caro</small></span>
+            <input id="material-accurate-clipping" type="checkbox">
+          </label>
+          <p class="compatibility-note">PS2 · cor, textura, opacidade, emissão, brilho/especular, culling, shading e clipping são enviados a RenderData conforme a API oficial.</p>
+        </section>
+
+        <section id="animation-section" class="inspector-section animation-inspector" hidden>
+          <h3>Animação GLTF</h3>
+          <label class="property-row select-property"><span><strong>Clip</strong><small>Animação do modelo</small></span><select id="animation-clip"><option value="">Primeira animação</option></select></label>
+          <label class="property-row switch-property"><span><strong>Ao iniciar</strong><small>Executar no editor e no PS2</small></span><input id="animation-autoplay" type="checkbox"></label>
+          <label class="property-row switch-property"><span><strong>Loop</strong><small>Repetir continuamente</small></span><input id="animation-loop" type="checkbox" checked></label>
+          <p id="animation-runtime-note" class="compatibility-note"></p>
         </section>
 
         <section id="light-section" class="inspector-section light-inspector" hidden>
@@ -645,6 +716,29 @@
           <p class="compatibility-note">PS2 · pool global de 12 fragmentos 3D reutilizados. O limite mantém o custo previsível no emulador e no console.</p>
         </section>
 
+        <section id="shadow-section" class="inspector-section shadow-inspector" hidden>
+          <h3>Projetor de sombra</h3>
+          <label class="property-row select-property"><span><strong>Textura</strong><small>PNG/JPG/BMP com a forma da sombra</small></span><select id="shadow-texture"><option value="">Selecione uma textura</option></select></label>
+          <div class="runtime-number-grid">
+            <label><span>Largura</span><input id="shadow-width" type="number" min="0.1" max="100" step="0.1"></label>
+            <label><span>Altura</span><input id="shadow-height" type="number" min="0.1" max="100" step="0.1"></label>
+            <label><span>Grade X</span><input id="shadow-grid-x" type="number" min="2" max="32" step="1"></label>
+            <label><span>Grade Z</span><input id="shadow-grid-z" type="number" min="2" max="32" step="1"></label>
+          </div>
+          <div class="vector-row compact-vector-row"><label>Direção da luz</label><div class="vector-inputs">
+            <label><span class="axis x">X</span><input id="shadow-light-x" type="number" step="0.1"></label>
+            <label><span class="axis y">Y</span><input id="shadow-light-y" type="number" step="0.1"></label>
+            <label><span class="axis z">Z</span><input id="shadow-light-z" type="number" step="0.1"></label>
+          </div></div>
+          <label class="property-row number-property"><span><strong>Bias</strong><small>Evita z-fighting</small></span><input id="shadow-bias" type="number" min="-1" max="1" step="0.005"></label>
+          <label class="property-row number-property"><span><strong>Deslocamento</strong><small>Ao longo da direção da luz</small></span><input id="shadow-offset" type="number" min="-100" max="100" step="0.1"></label>
+          <label class="property-row color-property"><span><strong>Cor</strong></span><input id="shadow-color" type="color" value="#000000"></label>
+          <label class="property-row number-property"><span><strong>Opacidade</strong><small>0 a 1</small></span><input id="shadow-opacity" type="number" min="0" max="1" step="0.05"></label>
+          <label class="property-row select-property"><span><strong>Mistura</strong><small>Modo oficial Shadows</small></span><select id="shadow-blend"><option value="darken">Escurecer</option><option value="alpha">Alpha</option><option value="add">Aditivo</option></select></label>
+          <label class="property-row switch-property"><span><strong>Seguir jogador</strong><small>Atualizar X/Z a cada quadro</small></span><input id="shadow-follow-player" type="checkbox"></label>
+          <p class="compatibility-note">PS2 · usa Shadows.Projector com grade VU1. Raycast ODE não é ativado sem um espaço físico ODE.</p>
+        </section>
+
         <section class="inspector-section appearance-section">
           <h3>Aparência e saída</h3>
           <label id="object-color-row" class="property-row color-property">
@@ -694,7 +788,7 @@
     <div id="cursor-position">X 0.00 · Y 0.00 · Z 0.00</div>
   </footer>
 
-  <input id="import-input" type="file" multiple accept=".obj,.mtl,.gltf,.glb,.bin,.png,.jpg,.jpeg,.webp,.bmp,.tga,.wav,.ogg,.adp" hidden>
+  <input id="import-input" type="file" multiple accept=".obj,.mtl,.gltf,.glb,.bin,.png,.jpg,.jpeg,.bmp,.ttf,.otf,.wav,.ogg,.adp,.m2v,.mpg,.mpeg" hidden>
   <input id="open-scene-input" type="file" accept=".json,application/json" hidden>
 
   <dialog id="prefab-dialog" class="editor-dialog">

@@ -28,7 +28,9 @@ Na primeira execução, o launcher cria uma cópia portátil ignorada pelo Git e
 
 Para que a janela do emulador seja exibida, inicie o editor por `scripts\editor.ps1` em um PowerShell normal do Windows. Um servidor iniciado por um terminal automatizado sem desktop interativo pode executar o PCSX2 em segundo plano sem conseguir mostrar sua janela; nesse caso, o launcher agora informa o problema em vez de registrar um falso sucesso.
 
-O launcher usa `-elf` e define `build/dist` como raiz HostFS, impedindo que o PCSX2 abra outro jogo recente. No hardware real, copie todo o conteúdo de `build/dist` para o mesmo diretório no dispositivo usado pelo launcher e inicie `athena.elf`.
+O launcher passa `athena.elf` diretamente como arquivo de boot e define `build/dist` como raiz HostFS. Não usa `-elf`, porque esse parâmetro apenas substitui o executável do disco selecionado e pode reabrir outro jogo. No hardware real, copie todo o conteúdo de `build/dist` para o mesmo diretório no dispositivo usado pelo launcher e inicie `athena.elf`.
+
+O build reutiliza por padrão `build/dist/athena.elf`. Para apontar para outro runtime, use `-AthenaElf <caminho>` ou defina a variável `ATHENA_ELF`; não há mais caminho absoluto dependente da máquina do autor.
 
 ## Editor visual
 
@@ -49,18 +51,22 @@ Abra `http://127.0.0.1:4173/editor/` no navegador. O editor oferece:
 - ocultar, bloquear e isolar objetos ou grupos pela hierarquia;
 - gizmos de posição, rotação e escala;
 - inspector numérico, visibilidade, bloqueio e inclusão no runtime;
+- configurações de runtime para fundo, VSync, diagnóstico de FPS/draw calls/triângulos/VRAM, limites da arena e parâmetros completos do jogador;
 - primitivas de cubo, esfera, cilindro, cone e plano;
-- materiais por objeto com textura, opacidade, rugosidade, metal, emissão e modo sem iluminação;
+- materiais por objeto com textura efetiva no PS2, cor, opacidade, rugosidade, metal, emissão, face dupla e pipelines iluminado, especular ou sem iluminação;
+- reprodução automática de animações de modelos GLTF/GLB, com escolha de clipe e loop;
 - luzes ambiente, direcionais e pontuais com gizmos, alcance, flicker e preset de fogueira;
 - câmeras de cena com modos seguir, fixa e fixa olhando o jogador, além de preview em 640 × 448;
 - colisores visuais de caixa, esfera e cápsula, com trigger e bloqueio de câmera;
 - componentes de trigger com eventos de entrada, saída e interação executados no PS2;
-- editor de interface 2D em 640 × 448 com painéis, textos, arraste e redimensionamento;
+- projetores de sombra oficiais com textura, grade, direção da luz, bias, deslocamento, cor, blend e opção de seguir o jogador;
+- editor de interface 2D em 640 × 448 com painéis, textos, imagens e vídeos MPEG, arraste e redimensionamento;
+- fontes TTF/OTF ou bitmap na UI, medição exata, alinhamento, contorno ou sombra projetada;
 - múltiplas cenas persistentes, com seleção, duplicação, exclusão e teste da cena ativa;
 - fontes de áudio WAV/OGG e efeitos ADPCM com loop, volume, pan, pitch e alcance espacial;
 - emissores 3D de fogo, fumaça e faíscas com pool de partículas limitado para o PS2;
 - prefabs criados a partir de qualquer seleção, incluindo grupos e colisores;
-- importação múltipla de OBJ/MTL, GLTF/GLB, BIN e texturas;
+- importação múltipla de OBJ/MTL, GLTF/GLB, BIN, PNG/BMP/JPEG, TTF/OTF, WAV/OGG/ADP e M2V/MPG/MPEG;
 - biblioteca dos modelos disponíveis no projeto;
 - duplicação, exclusão, desfazer/refazer e snap por grade, superfície, vértice ou centro de objeto;
 - copiar e colar modelos, grupos, primitivas e colisores com a hierarquia preservada;
@@ -70,7 +76,7 @@ Ao importar OBJ ou GLTF com arquivos externos, selecione também o MTL, BIN e as
 
 Cada cena fica em `editor/scenes`, enquanto `editor/scene.json` continua como espelho compatível da cena ativa. A cena escolhida no seletor superior é exportada para `assets/scene.generated.js` e também mantém sua própria cópia em `assets/scenes`. Ao salvar ou testar, essa é a cena realmente executada pelo PS2.
 
-O modo **Interface** trabalha nas coordenadas nativas de 640 × 448. Painéis usam `Draw.rect` e textos usam `Font` no `main.js`; posição, tamanho, cor, opacidade, conteúdo, alinhamento e escala configurados no editor entram no runtime. Arraste um elemento para posicioná-lo e use a alça inferior para redimensionar.
+O modo **Interface** trabalha nas coordenadas nativas de 640 × 448. Painéis usam `Draw.rect`, textos usam `Font`, imagens usam `Image` e vídeos usam `Video`/`Video.frame` no `main.js`. Posição, tamanho, cor, opacidade, conteúdo, alinhamento, fonte e efeitos configurados no editor entram no runtime. Contorno e sombra de texto são mutuamente exclusivos, como exige a documentação oficial. Vídeos podem iniciar automaticamente ou ser controlados por ações de trigger. Arraste um elemento para posicioná-lo e use a alça inferior para redimensionar.
 
 As dimensões dos colisores seguem a visualização do editor: na caixa, `scale` representa as meias-extensões; na esfera e na cápsula, representa os raios locais. Posição, rotação XYZ, escala hierárquica e altura são exportadas em coordenadas mundiais. Triggers são detectados sem bloquear, e **Bloquear câmera** afeta somente a câmera.
 
@@ -86,15 +92,17 @@ Atalhos principais: `W` move, `E` rotaciona, `R` redimensiona, `B` ativa a sele�
 
 Em qualquer ferramenta, mantenha o botão direito pressionado para ativar temporariamente a Mão e arraste para percorrer a cena; ao soltar, o gizmo anterior retorna. Arraste com o botão esquerdo em uma área vazia para alterar o ângulo e use a roda para aproximar ou afastar. A área de transferência interna persiste no navegador e aceita seleções múltiplas, grupos completos e colisores.
 
-Materiais, luzes e câmeras são salvos junto com a cena. O preview de câmera usa a proporção nativa de 640 × 448 do projeto. No runtime, materiais sem iluminação selecionam o pipeline correspondente, luzes ambiente e direcionais são enviadas ao sistema `Lights` do Athena e a câmera principal executa o modo escolhido. A troca de textura é exibida no editor; no PS2, a textura efetiva ainda é resolvida pelo OBJ/MTL.
+Materiais, animações, luzes, sombras e câmeras são salvos junto com a cena. O preview de câmera usa a proporção nativa de 640 × 448 do projeto. No runtime, os materiais são aplicados por `RenderData.updateMaterial`, texturas substitutas são passadas ao `RenderData`, os pipelines oficiais são selecionados conforme o material, luzes ambiente e direcionais entram no sistema `Lights` e a câmera principal executa o modo escolhido. Modelos GLTF/GLB podem iniciar um clipe por `AnimCollection`/`RenderObject.playAnim`.
 
-Como o Athena atual não expõe uma luz pontual com alcance, o runtime a simula atualizando luzes direcionais antes de desenhar cada objeto. A intensidade usa a distância entre a luz e o centro espacial exportado de cada OBJ, com queda quadrática e flicker opcional. Isso permite fogueiras realmente locais sem clarear toda a cena. A precisão visual acompanha a divisão do cenário: blocos menores produzem bordas de luz mais suaves. O Athena oferece quatro slots de luz no total; o runtime compartilha esse orçamento entre luzes globais e pontuais, reservando até dois slots locais quando necessário. Sombras projetadas continuam exclusivas do preview.
+Como o Athena atual não expõe uma luz pontual com alcance, o runtime a simula atualizando luzes direcionais antes de desenhar cada objeto. A intensidade usa a distância entre a luz e o centro espacial exportado de cada OBJ, com queda quadrática e flicker opcional. Isso permite fogueiras realmente locais sem clarear toda a cena. A precisão visual acompanha a divisão do cenário: blocos menores produzem bordas de luz mais suaves. O Athena oferece quatro slots de luz no total; o runtime compartilha esse orçamento entre luzes globais e pontuais, reservando até dois slots locais quando necessário. A opção de sombra da própria luz continua apenas no preview; sombras exportadas usam objetos **Projetor de sombra** e a API oficial `Shadows.Projector`.
+
+A correspondência entre o editor e as APIs oficiais, além dos limites que não devem virar propriedades de cena, está registrada em [`docs/ATHENAENV-COMPATIBILITY.md`](docs/ATHENAENV-COMPATIBILITY.md).
 
 O cenário procedural original já estava consolidado em sete blocos OBJ; eles aparecem como filhos do grupo **Cenário congelado**. Todo modelo, primitiva, grupo ou colisor adicionado pelo editor permanece independente. Os sete obstáculos originais foram migrados para o grupo **Colisões** e agora são editados visualmente.
 
 Para validar runtime, colisões 3D e exportação hierárquica do editor, execute:
 
 ```powershell
-node tests/smoke.cjs
-node tests/editor-collision.mjs
+npm test
+npm run editor:check
 ```

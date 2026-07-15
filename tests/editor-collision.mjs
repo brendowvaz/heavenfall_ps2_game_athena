@@ -32,6 +32,18 @@ assert(!/^mtllib\s+/m.test(convertedQuad.source) && !/^usemtl\s+/m.test(converte
 
 const scene = normalizeScene({
   name: "Collision export test",
+  settings: {
+    background: "#112233",
+    runtime: {
+      vsync: false,
+      showPerformance: true,
+      legacyArenaBounds: false,
+      player: {
+        spawn: { x: 4, y: 0.2, z: 7 }, radius: 0.55, height: 2,
+        walkSpeed: 0.11, runSpeed: 0.22, jumpSpeed: 0.31, gravity: 0.012,
+      },
+    },
+  },
   objects: [
     {
       id: "parent",
@@ -61,6 +73,7 @@ const scene = normalizeScene({
         onInteract: [
           { id: "teleport", type: "teleport", position: { x: 3, y: 0.08, z: 9 } },
           { id: "burst", type: "particle", targetId: "fire-particles", mode: "burst" },
+          { id: "play-video", type: "video", targetId: "intro-video", mode: "play" },
         ],
       },
     },
@@ -78,6 +91,28 @@ const scene = normalizeScene({
       source: { kind: "primitive", primitive: "cube", asset: "editor_primitives/cube.obj" },
       position: { x: 2, y: 3, z: 4 },
       scale: { x: 2, y: 2, z: 2 },
+      material: {
+        color: "#804020", texture: "Textures/frost_atlas.png", opacity: 0.8,
+        roughness: 0.25, metalness: 0.7, emissive: "#102030", emissiveIntensity: 1.5,
+        unlit: false, doubleSided: false, textureMapping: false, smoothShading: false, accurateClipping: true,
+      },
+    },
+    {
+      id: "animated-model",
+      name: "Animated model",
+      source: { kind: "model", asset: "imported/animated.glb" },
+      animation: { clip: "Idle", autoplay: true, loop: false },
+    },
+    {
+      id: "player-shadow",
+      name: "Player shadow",
+      source: { kind: "shadow", asset: "Textures/shadow.png" },
+      position: { x: 2, y: 0.03, z: 4 },
+      shadow: {
+        width: 3, height: 2, gridX: 8, gridZ: 7,
+        lightDirection: { x: 0, y: 1, z: 1 }, bias: -0.03, lightOffset: 1.2,
+        color: "#102030", opacity: 0.6, blend: "alpha", followPlayer: true,
+      },
     },
     {
       id: "campfire",
@@ -133,6 +168,9 @@ const scene = normalizeScene({
   ui: [
     { id: "hud-panel", name: "HUD panel", type: "panel", x: 20, y: 360, width: 300, height: 56, background: "#102030", opacity: 0.75 },
     { id: "hud-text", name: "HUD text", type: "text", x: 32, y: 374, width: 270, height: 24, text: "Objetivo atualizado", fontScale: 0.5, color: "#f0d080", align: "center" },
+    { id: "hud-image", name: "HUD image", type: "image", x: 10, y: 10, width: 64, height: 64, asset: "Textures/icon.png", opacity: 0.5 },
+    { id: "intro-video", name: "Intro video", type: "video", x: 0, y: 0, width: 640, height: 448, asset: "videos/intro.mpg", autoplay: false, loop: false },
+    { id: "custom-font", name: "Custom font", type: "text", text: "Fonte", fontAsset: "fonts/game.ttf", outline: 2, outlineColor: "#123456", dropshadow: 3 },
     { id: "editor-only", name: "Editor only", type: "text", runtime: false, text: "Não exportar" },
   ],
 });
@@ -167,10 +205,26 @@ assert(sandbox.EDITOR_EVENTS[0].onExit[0].type === "audio" && sandbox.EDITOR_EVE
   "Audio control actions must survive export");
 assert(sandbox.EDITOR_EVENTS[0].onInteract[1].type === "particle" && sandbox.EDITOR_EVENTS[0].onInteract[1].mode === "burst",
   "Particle control actions must survive export");
+assert(sandbox.EDITOR_EVENTS[0].onInteract[2].type === "video" && sandbox.EDITOR_EVENTS[0].onInteract[2].targetId === "intro-video",
+  "Video control actions must survive export");
 
-assert(sandbox.EDITOR_SCENE.length === 1, "Runtime models must be exported independently from colliders");
+assert(sandbox.EDITOR_SETTINGS.vsync === false && sandbox.EDITOR_SETTINGS.showPerformance === true
+  && sandbox.EDITOR_SETTINGS.legacyArenaBounds === false && sandbox.EDITOR_SETTINGS.player.spawn.x === 4,
+  "Runtime and player settings must survive export");
+assert(sandbox.EDITOR_SETTINGS.background.r === 17 && sandbox.EDITOR_SETTINGS.background.g === 34,
+  "Runtime background must use Athena's color contract");
+assert(sandbox.EDITOR_SCENE.length === 2, "Runtime models must be exported independently from colliders");
 assert(sandbox.EDITOR_SCENE[0].boundsRadius > 0, "OBJ spatial bounds must be exported for local lighting");
 assert(Number.isFinite(sandbox.EDITOR_SCENE[0].boundsCenter.x), "OBJ spatial center must be finite");
+assert(approximately(sandbox.EDITOR_SCENE[0].material.color.r, 128 / 255)
+  && sandbox.EDITOR_SCENE[0].material.texture === "Textures/frost_atlas.png"
+  && sandbox.EDITOR_SCENE[0].material.doubleSided === false
+  && sandbox.EDITOR_SCENE[0].material.textureMapping === false
+  && sandbox.EDITOR_SCENE[0].material.smoothShading === false
+  && sandbox.EDITOR_SCENE[0].material.accurateClipping === true,
+  "Official material properties and texture overrides must survive export");
+assert(sandbox.EDITOR_SCENE[1].animation.clip === "Idle" && sandbox.EDITOR_SCENE[1].animation.loop === false,
+  "GLTF/GLB animation settings must survive export");
 assert(sandbox.EDITOR_POINT_LIGHTS.length === 1, "Point light must enter the simulated runtime contract");
 assert(sandbox.EDITOR_POINT_LIGHTS[0].runtimeMode === "simulated-per-object" && sandbox.EDITOR_POINT_LIGHTS[0].flicker === true,
   "Point-light simulation and flicker settings must survive export");
@@ -189,9 +243,19 @@ assert(approximately(sandbox.EDITOR_PARTICLES[0].color.r, 0.2)
   "Particle colors must survive export as Athena material values");
 assert(sandbox.EDITOR_PARTICLES.reduce((total, item) => total + item.maxParticles, 0) === 12,
   "Particle export must enforce the global PS2 budget");
-assert(sandbox.EDITOR_UI.length === 2, "Only visible runtime UI elements must enter the runtime contract");
+assert(sandbox.EDITOR_SHADOWS.length === 1 && sandbox.EDITOR_SHADOWS[0].gridX === 8
+  && sandbox.EDITOR_SHADOWS[0].blend === "alpha" && sandbox.EDITOR_SHADOWS[0].followPlayer === true,
+  "Official Shadows.Projector settings must survive export");
+assert(sandbox.EDITOR_UI.length === 5, "Only visible runtime UI elements must enter the runtime contract");
 assert(sandbox.EDITOR_UI[0].background.a === 96, "Panel opacity must become Athena's 0-128 alpha range");
 assert(sandbox.EDITOR_UI[1].text === "Objetivo atualizado" && sandbox.EDITOR_UI[1].align === "center",
   "Text content and alignment must survive UI export");
+assert(sandbox.EDITOR_UI[2].type === "image" && sandbox.EDITOR_UI[2].asset === "Textures/icon.png",
+  "UI images must survive export");
+assert(sandbox.EDITOR_UI[3].type === "video" && sandbox.EDITOR_UI[3].asset === "videos/intro.mpg",
+  "MPEG UI video settings must survive export");
+assert(sandbox.EDITOR_UI[4].fontAsset === "fonts/game.ttf" && sandbox.EDITOR_UI[4].outline === 2
+  && sandbox.EDITOR_UI[4].dropshadow === 0,
+  "Custom fonts must export and mutually exclusive font effects must be normalized");
 
 console.log("Editor collision export test passed.");
