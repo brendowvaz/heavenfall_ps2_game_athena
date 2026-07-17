@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "activeSceneId": "main",
+  "activeSceneId": "salao-saida-01",
   "startupSceneId": "main",
   "scenes": [
     {
@@ -21,8 +21,8 @@
     {
       "id": "salao-saida-01",
       "name": "Salão Saída 01",
-      "updatedAt": "2026-07-17T13:35:11.079Z",
-      "objectCount": 3,
+      "updatedAt": "2026-07-17T20:17:49.250Z",
+      "objectCount": 6,
       "uiCount": 0,
       "graphCount": 0,
       "spawnPoints": [
@@ -32,6 +32,15 @@
           "default": true
         }
       ]
+    },
+    {
+      "id": "nova-cena",
+      "name": "Nova cena",
+      "updatedAt": "2026-07-17T20:17:01.898Z",
+      "objectCount": 1,
+      "uiCount": 0,
+      "graphCount": 0,
+      "spawnPoints": []
     }
   ]
 }

@@ -104,6 +104,56 @@ globalThis.EDITOR_COLLIDERS = [
     },
     "trigger": false,
     "cameraBlocker": true
+  },
+  {
+    "id": "portal-mrp01rz6-fqmv4l",
+    "name": "Portal de cena",
+    "shape": "box",
+    "contractVersion": 2,
+    "rotationOrder": "XYZ",
+    "scaleMeaning": "halfExtents",
+    "position": {
+      "x": 0.3234,
+      "y": 3.1365,
+      "z": -2.505
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": {
+      "x": 6.0758,
+      "y": 2.9238,
+      "z": 0.3
+    },
+    "trigger": true,
+    "cameraBlocker": false
+  },
+  {
+    "id": "collider-mrpdq3qj-3m0k8e",
+    "name": "Portal de cena cópia",
+    "shape": "box",
+    "contractVersion": 2,
+    "rotationOrder": "XYZ",
+    "scaleMeaning": "halfExtents",
+    "position": {
+      "x": -7.3323,
+      "y": 3.1365,
+      "z": 2.4192
+    },
+    "rotation": {
+      "x": -3.141592653589793,
+      "y": 1.5403822192496404,
+      "z": -3.141592653589793
+    },
+    "scale": {
+      "x": 6.0758,
+      "y": 2.9238,
+      "z": 0.30000000000000004
+    },
+    "trigger": true,
+    "cameraBlocker": false
   }
 ];
 globalThis.EDITOR_SPAWN_POINTS = [
@@ -124,7 +174,22 @@ globalThis.EDITOR_SPAWN_POINTS = [
     "yaw": 0
   }
 ];
-globalThis.EDITOR_PORTALS = [];
+globalThis.EDITOR_PORTALS = [
+  {
+    "triggerId": "portal-mrp01rz6-fqmv4l",
+    "targetSceneId": "main",
+    "targetSpawnId": "ruinas-entrada-principal",
+    "activation": "onEnter",
+    "fadeFrames": 30
+  },
+  {
+    "triggerId": "collider-mrpdq3qj-3m0k8e",
+    "targetSceneId": "nova-cena",
+    "targetSpawnId": "",
+    "activation": "onEnter",
+    "fadeFrames": 30
+  }
+];
 globalThis.EDITOR_EVENTS = [];
 globalThis.EDITOR_LOGIC = {
   "version": 1,
@@ -134,7 +199,26 @@ globalThis.EDITOR_LOGIC = {
 globalThis.EDITOR_LIGHTS = [];
 globalThis.EDITOR_POINT_LIGHTS = [];
 globalThis.EDITOR_CAMERA = null;
-globalThis.EDITOR_AUDIO = [];
+globalThis.EDITOR_AUDIO = [
+  {
+    "id": "audio-mrp00loe-4bbzbg",
+    "name": "Nova fonte de áudio",
+    "asset": "sounds/4pfmg-m8432.wav",
+    "position": {
+      "x": 0.1134,
+      "y": 1.2,
+      "z": 2.9027
+    },
+    "mode": "stream",
+    "autoplay": true,
+    "loop": true,
+    "volume": 80,
+    "spatial": false,
+    "distance": 14,
+    "pan": 0,
+    "pitch": 0
+  }
+];
 globalThis.EDITOR_PARTICLES = [];
 globalThis.EDITOR_SHADOWS = [];
 globalThis.EDITOR_UI = [];

@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "name": "Nova cena",
+  "settings": {
+    "background": "#07101d",
+    "gridSize": 120,
+    "snap": 0.25,
+    "snapEnabled": false,
+    "snapMode": "grid",
+    "camera": {
+      "position": {
+        "x": 6.0291,
+        "y": 5.5218,
+        "z": 8.0387
+      },
+      "target": {
+        "x": 0,
+        "y": 1,
+        "z": 0
+      }
+    },
+    "runtime": {
+      "vsync": true,
+      "showPerformance": false,
+      "legacyArenaBounds": true,
+      "player": {
+        "spawn": {
+          "x": 0,
+          "y": 0.08,
+          "z": 18
+        },
+        "radius": 0.68,
+        "height": 2.25,
+        "walkSpeed": 0.125,
+        "runSpeed": 0.19,
+        "jumpSpeed": 0.3,
+        "gravity": 0.014
+      }
+    }
+  },
+  "objects": [
+    {
+      "id": "cone-mrpdpdi0-7wq45l",
+      "name": "Cone",
+      "source": {
+        "kind": "primitive",
+        "asset": "editor_primitives/cone.obj",
+        "primitive": "cone"
+      },
+      "parentId": null,
+      "position": {
+        "x": 0,
+        "y": 1,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 3.1047,
+        "y": 2.9321,
+        "z": 3.0793
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "material": {
+        "color": "#8bd5f7",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      }
+    }
+  ],
+  "ui": [],
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "graphs": []
+  }
+}

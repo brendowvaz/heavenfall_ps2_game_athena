@@ -26,6 +26,12 @@ globalThis.EDITOR_SCENE_PROJECT = {
           "default": true
         }
       ]
+    },
+    {
+      "id": "nova-cena",
+      "name": "Nova cena",
+      "file": "scenes/nova-cena.generated.js",
+      "spawnPoints": []
     }
   ]
 };
