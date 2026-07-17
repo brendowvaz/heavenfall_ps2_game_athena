@@ -30,7 +30,7 @@ for (const marker of ["MENU_AUDIO_ASSET", "updateMenuAudio", "startRuntimeAutopl
 if (source.includes("Render.SHADE_")) {
     throw new Error("AthenaEnv exposes shade_model as numeric Flat/Gouraud values, not Render.SHADE_* constants");
 }
-for (const marker of ["accurate_clipping", "texture_mapping", "runtimeShadows", "runtimeUiMedia", "controlRuntimeVideo", "EDITOR_LOGIC", "runtimeVisualScripts", "EDITOR_SCENE_PROJECT", "EDITOR_SCENE_META", "EDITOR_SPAWN_POINTS", "EDITOR_PORTALS", "requestSceneTransition", "freeRuntimeSceneResources", "retireRenderObject", "retainBorrowedNativeView", "retiredNativeViews", "releaseRenderData", "reapRetiredActiveSfx", "runAthenaGame", "runtimeNextSceneTransition"]) {
+for (const marker of ["accurate_clipping", "texture_mapping", "runtimeShadows", "runtimeUiMedia", "controlRuntimeVideo", "EDITOR_LOGIC", "runtimeVisualScripts", "EDITOR_SCENE_PROJECT", "EDITOR_SCENE_META", "EDITOR_SPAWN_POINTS", "EDITOR_PORTALS", "requestSceneTransition", "freeRuntimeSceneResources", "retireRenderObject", "retainBorrowedNativeView", "retiredNativeViews", "releaseRenderData", "reapRetiredActiveSfx", "persistentRuntimeStream", "suspendRuntimeStream", "runAthenaGame", "runtimeNextSceneTransition"]) {
     if (!source.includes(marker)) throw new Error(`Official Athena runtime integration missing: ${marker}`);
 }
 const runtimeLoopStart = source.indexOf("while (runtimeLoopRunning) {");
@@ -62,6 +62,8 @@ let renderObjectFrees = 0;
 let fontCreations = 0;
 let imageFrees = 0;
 let imageDoubleFrees = 0;
+let streamCreations = 0;
+let streamFrees = 0;
 const particleMaterialUpdates = [];
 const fontPrints = [];
 const rectCalls = [];
@@ -281,12 +283,14 @@ const context = {
     Sound: {
         setVolume(volume) { soundEvents.push({ type: "master-volume", volume }); },
         Stream(asset) {
+            streamCreations++;
             return {
                 asset, loop: false, position: 0, length: 1000, active: false, playAttempts: 0,
                 play() { this.playAttempts++; this.active = this.playAttempts > 1; soundEvents.push({ type: "stream-play", asset }); },
                 pause() { this.active = false; soundEvents.push({ type: "stream-pause", asset }); },
                 rewind() { this.position = 0; soundEvents.push({ type: "stream-rewind", asset }); },
-                playing() { return this.active; }, free() {}
+                playing() { return this.active; },
+                free() { streamFrees++; soundEvents.push({ type: "stream-free", asset }); }
             };
         },
         Sfx(asset) {
@@ -645,6 +649,9 @@ if (!assetLoads.slice(returnSceneLoadStart).includes("scene_0.obj")) {
 }
 if (fontCreations !== 1 || nextLightId !== 4) {
     throw new Error(`Engine-native singletons must also survive the return trip (fonts=${fontCreations}, lights=${nextLightId})`);
+}
+if (streamCreations !== 3 || streamFrees !== 0) {
+    throw new Error(`Native streams must be cached and never freed between scenes (created=${streamCreations}, freed=${streamFrees})`);
 }
 context.__levelTest.freeResources();
 if (context.__levelTest.getRetiredNativeViewCount() !== renderObjectFrees + 3) {

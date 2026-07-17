@@ -8,6 +8,7 @@ const runtimeEngineState = {
     canvas: null,
     font: null,
     fonts: {},
+    audioStreams: {},
     pad: null,
     lightSlots: [],
     // Some Matrix4/Vector4 wrappers exposed by AthenaEnv point into their
@@ -47,6 +48,14 @@ function persistentRuntimeFont(asset) {
         runtimeEngineState.fonts[key] = null;
     }
     return runtimeEngineState.fonts[key];
+}
+
+function persistentRuntimeStream(asset) {
+    const key = asset || "";
+    if (runtimeEngineState.audioStreams[key] !== undefined) return runtimeEngineState.audioStreams[key];
+    const stream = Sound.Stream(key);
+    runtimeEngineState.audioStreams[key] = stream;
+    return stream;
 }
 
 function drawRuntimeLoading(message) {
@@ -577,7 +586,7 @@ Sound.setVolume(100);
 let menuAudio = null;
 if (!BOOT_SKIP_MENU && std.exists(MENU_AUDIO_ASSET)) {
     try {
-        menuAudio = Sound.Stream(MENU_AUDIO_ASSET);
+        menuAudio = persistentRuntimeStream(MENU_AUDIO_ASSET);
         menuAudio.loop = true;
         console.log("[Heavenfall] Musica do menu pronta: " + MENU_AUDIO_ASSET + " (" + menuAudio.length + " ms)");
     } catch (menuAudioError) {
@@ -590,7 +599,7 @@ const runtimeAudio = [];
 for (let audioIndex = 0; audioIndex < EDITOR_AUDIO.length; audioIndex++) {
     const definition = EDITOR_AUDIO[audioIndex];
     try {
-        const sound = definition.mode === "sfx" ? Sound.Sfx(definition.asset) : Sound.Stream(definition.asset);
+        const sound = definition.mode === "sfx" ? Sound.Sfx(definition.asset) : persistentRuntimeStream(definition.asset);
         if (definition.mode === "sfx") {
             sound.volume = definition.volume;
             sound.pan = definition.pan || 0;
@@ -1702,6 +1711,19 @@ function reapRetiredActiveSfx() {
     pending.length = retainedCount;
 }
 
+function suspendRuntimeStream(resource) {
+    if (!resource) return;
+    try {
+        resource.loop = false;
+        if (resource.playing()) {
+            resource.pause();
+            resource.rewind();
+        }
+    } catch (streamError) {
+        console.log("[VeuAzul] Falha ao suspender stream persistente: " + streamError);
+    }
+}
+
 function retainBorrowedNativeView(view) {
     if (view === undefined || view === null) return;
     const retired = runtimeEngineState.retiredNativeViews;
@@ -1745,6 +1767,7 @@ function releaseRenderData(resource) {
 }
 
 function freeRuntimeSceneResources() {
+    console.log("[VeuAzul] Descarregando midia e audio");
     for (const id in runtimeUiMedia) {
         const entry = runtimeUiMedia[id];
         if (entry.type === "video") {
@@ -1758,9 +1781,12 @@ function freeRuntimeSceneResources() {
     for (let i = 0; i < runtimeAudio.length; i++) {
         const entry = runtimeAudio[i];
         if (entry.definition.mode === "stream") {
-            safelyCall(entry.sound, "pause");
-            safelyCall(entry.sound, "rewind");
-            safelyCall(entry.sound, "free");
+            // AthenaEnv keeps the active stream in a native global used by the
+            // audsrv fill callback. sound_free() closes and frees the stream
+            // without clearing that global, so collecting/freeing it between
+            // scenes can leave the audio callback pointing at released memory.
+            // Streams are cached for the runtime lifetime and only suspended.
+            suspendRuntimeStream(entry.sound);
             continue;
         }
         entry.sound.loop = false;
@@ -1774,9 +1800,8 @@ function freeRuntimeSceneResources() {
         if (stillPlaying) runtimeEngineState.retiredActiveSfx.push({ sound: entry.sound, channel: entry.channel });
         else safelyCall(entry.sound, "free");
     }
-    safelyCall(menuAudio, "pause");
-    safelyCall(menuAudio, "rewind");
-    safelyCall(menuAudio, "free");
+    suspendRuntimeStream(menuAudio);
+    console.log("[VeuAzul] Descarregando objetos 3D");
     for (let i = 0; i < sceneObjects.length; i++) retireRenderObject(sceneObjects[i]);
     retireRenderObject(playerObject);
     for (let i = 0; i < runtimeParticleEmitters.length; i++) {
@@ -1793,6 +1818,7 @@ function freeRuntimeSceneResources() {
     }
     for (let i = 0; i < runtimeMaterialTextures.length; i++) safelyCall(runtimeMaterialTextures[i], "free");
     safelyCall(menuBackground, "free");
+    console.log("[VeuAzul] Recursos da cena liberados");
 }
 
 function drawSceneTransitionFade() {
