@@ -38,6 +38,7 @@ const state = {
   selectedIds: new Set(),
   primaryId: null,
   dirty: false,
+  documentRevision: 0,
   loading: 0,
   loadGeneration: 0,
   undo: [],
@@ -68,6 +69,7 @@ const state = {
   scenes: [],
   activeSceneId: null,
   startupSceneId: null,
+  sceneProjectBusy: false,
   uiMode: false,
   logicMode: false,
   selectedUiId: null,
@@ -77,6 +79,8 @@ const state = {
   serverSchemaVersion: 0,
   serverOutdated: false,
 };
+
+let saveQueue = Promise.resolve();
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color("#07101d");
@@ -199,7 +203,7 @@ function fileName(asset) {
 }
 
 const eventPhases = ["onEnter", "onExit", "onInteract"];
-const eventActionTypes = ["message", "visibility", "teleport", "audio", "particle", "video"];
+const eventActionTypes = ["message", "visibility", "teleport", "audio", "particle", "video", "scene"];
 
 function normalizeEventAction(action = {}) {
   const type = eventActionTypes.includes(action.type) ? action.type : "message";
@@ -232,6 +236,11 @@ function normalizeEventAction(action = {}) {
     ...(type === "video" ? {
       targetId: typeof action.targetId === "string" ? action.targetId : "",
       mode: ["play", "pause", "stop"].includes(action.mode) ? action.mode : "play",
+    } : {}),
+    ...(type === "scene" ? {
+      sceneId: String(action.sceneId || "").replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96),
+      spawnId: String(action.spawnId || "").replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96),
+      fadeFrames: Math.round(THREE.MathUtils.clamp(clampNumber(action.fadeFrames, 30), 1, 300)),
     } : {}),
   };
 }
@@ -278,7 +287,7 @@ function normalizeUiElement(item = {}, index = 0) {
 }
 
 function normalizeRecord(record = {}) {
-  let kind = ["model", "primitive", "group", "collider", "light", "camera", "audio", "particle", "shadow"].includes(record.source?.kind)
+  let kind = ["model", "primitive", "group", "collider", "light", "camera", "audio", "particle", "shadow", "spawn"].includes(record.source?.kind)
     ? record.source.kind
     : "model";
   const legacyName = String(record.name || "").toLocaleLowerCase("pt-BR");
@@ -297,7 +306,7 @@ function normalizeRecord(record = {}) {
   const cameraFar = Math.max(cameraNear + 0.1, clampNumber(record.camera?.far, 500));
   return {
     id: record.id || uid(kind),
-    name: record.name || ({ primitive: "Primitiva", group: "Grupo", collider: "Colisor", light: "Luz", camera: "Câmera", audio: "Áudio", particle: "Partículas", shadow: "Projetor de sombra" }[kind] || fileName(record.source?.asset)),
+    name: record.name || ({ primitive: "Primitiva", group: "Grupo", collider: "Colisor", light: "Luz", camera: "Câmera", audio: "Áudio", particle: "Partículas", shadow: "Projetor de sombra", spawn: "Ponto de entrada" }[kind] || fileName(record.source?.asset)),
     source: {
       kind,
       asset: record.source?.asset || "",
@@ -348,6 +357,16 @@ function normalizeRecord(record = {}) {
         cameraBlocker: record.collider?.cameraBlocker !== false,
       },
       events: normalizeRecordEvents(record.events || record.collider?.events),
+      portal: {
+        enabled: record.portal?.enabled === true,
+        targetSceneId: String(record.portal?.targetSceneId || "").replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96),
+        targetSpawnId: String(record.portal?.targetSpawnId || "").replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96),
+        activation: ["onEnter", "onInteract"].includes(record.portal?.activation) ? record.portal.activation : "onEnter",
+        fadeFrames: Math.round(THREE.MathUtils.clamp(clampNumber(record.portal?.fadeFrames, 30), 1, 300)),
+      },
+    } : {}),
+    ...(kind === "spawn" ? {
+      spawn: { default: record.spawn?.default === true },
     } : {}),
     ...(kind === "light" ? {
       light: {
@@ -442,6 +461,7 @@ function setLoading(delta, label = "Carregando modelos…") {
 }
 
 function markDirty(value = true) {
+  if (value) state.documentRevision += 1;
   state.dirty = value;
   $("save-dot").classList.toggle("dirty", value);
   $("save-dot").title = value ? "Alterações ainda não salvas" : "Cena salva";
@@ -930,6 +950,28 @@ function createParticleObject(record) {
   return root;
 }
 
+function createSpawnPointObject(record) {
+  const root = new THREE.Group();
+  const color = record.spawn?.default ? 0xffc15c : 0x57cef5;
+  const material = new THREE.MeshBasicMaterial({ color, wireframe: true, toneMapped: false });
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.055, 8, 28), material);
+  ring.rotation.x = Math.PI / 2;
+  const stem = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 1.35, 0)]),
+    new THREE.LineBasicMaterial({ color, toneMapped: false }),
+  );
+  const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.55, 12), material);
+  arrow.rotation.x = -Math.PI / 2;
+  arrow.position.set(0, 0.28, -0.72);
+  const direction = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0.28, 0), new THREE.Vector3(0, 0.28, -0.72)]),
+    new THREE.LineBasicMaterial({ color, toneMapped: false }),
+  );
+  root.add(ring, stem, arrow, direction);
+  markEditorVisual(root);
+  return root;
+}
+
 function normalizeRuntimeSettings(runtime = {}) {
   return {
     vsync: runtime.vsync !== false,
@@ -1253,7 +1295,7 @@ async function createEditorObject(record, generation = state.loadGeneration) {
     return group;
   }
 
-  if (["light", "camera", "audio", "particle", "shadow"].includes(record.source.kind)) {
+  if (["light", "camera", "audio", "particle", "shadow", "spawn"].includes(record.source.kind)) {
     const content = record.source.kind === "light"
       ? createLightObject(record)
       : record.source.kind === "camera"
@@ -1262,7 +1304,9 @@ async function createEditorObject(record, generation = state.loadGeneration) {
           ? createAudioObject(record)
           : record.source.kind === "particle"
             ? createParticleObject(record)
-            : createShadowObject(record);
+            : record.source.kind === "shadow"
+              ? createShadowObject(record)
+              : createSpawnPointObject(record);
     content.userData.editorContent = true;
     group.add(content);
     group.userData.stats = { vertices: 0, triangles: 0 };
@@ -1569,7 +1613,7 @@ function renderHierarchy() {
     visit(null, 0);
   }
 
-  const icons = { group: "▱", collider: "▣", primitive: "◆", model: "◇", light: "✦", camera: "▣", audio: "♪", particle: "⁙", shadow: "◒" };
+  const icons = { group: "▱", collider: "▣", primitive: "◆", model: "◇", light: "✦", camera: "▣", audio: "♪", particle: "⁙", shadow: "◒", spawn: "⌖" };
   for (const { record, depth } of ordered) {
     if (query && !record.name.toLocaleLowerCase("pt-BR").includes(query)) continue;
     const hasChildren = (children.get(record.id) || []).length > 0;
@@ -1975,9 +2019,59 @@ function eventPhaseLabel(phase) {
   return { onEnter: "Entrar", onExit: "Sair", onInteract: "Interagir" }[phase] || phase;
 }
 
+function projectSpawnPoints(sceneId) {
+  if (sceneId === state.activeSceneId) {
+    return (state.document?.objects || [])
+      .filter((record) => record.source.kind === "spawn" && record.runtime && record.visible)
+      .map((record) => ({ id: record.id, name: record.name, default: record.spawn?.default === true }));
+  }
+  return state.scenes.find((entry) => entry.id === sceneId)?.spawnPoints || [];
+}
+
+function fillProjectSceneSelect(select, value, emptyLabel = "Selecione uma cena") {
+  select.replaceChildren(new Option(emptyLabel, ""));
+  for (const entry of state.scenes) select.append(new Option(entry.name, entry.id));
+  if (value && !state.scenes.some((entry) => entry.id === value)) select.append(new Option(`${value} · ausente`, value));
+  select.value = value || "";
+}
+
+function fillProjectSpawnSelect(select, sceneId, value) {
+  const points = projectSpawnPoints(sceneId);
+  select.replaceChildren(new Option(points.length ? "Entrada padrão da cena" : "Cena sem pontos de entrada", ""));
+  for (const point of points) select.append(new Option(`${point.default ? "★ " : ""}${point.name}`, point.id));
+  if (value && !points.some((point) => point.id === value)) select.append(new Option(`${value} · ausente`, value));
+  select.value = value || "";
+  select.disabled = !sceneId || points.length === 0;
+}
+
+function renderPortalEditor(record) {
+  const container = $("portal-editor");
+  container.hidden = record.source.kind !== "collider";
+  if (container.hidden) return;
+  record.portal ||= normalizeRecord({ source: { kind: "collider", collider: record.source.collider } }).portal;
+  $("portal-enabled").checked = record.portal.enabled;
+  fillProjectSceneSelect($("portal-scene"), record.portal.targetSceneId);
+  fillProjectSpawnSelect($("portal-spawn"), record.portal.targetSceneId, record.portal.targetSpawnId);
+  $("portal-activation").value = record.portal.activation;
+  $("portal-fade").value = record.portal.fadeFrames;
+  const target = state.scenes.find((entry) => entry.id === record.portal.targetSceneId);
+  $("portal-note").textContent = !record.portal.enabled
+    ? "Ative o portal para carregar outra cena por este trigger."
+    : !target
+      ? "Escolha uma cena de destino existente."
+      : projectSpawnPoints(target.id).length
+        ? "Somente a cena de destino ficará carregada após o fade."
+        : "A cena não possui entrada; será usado o spawn configurado no Runtime.";
+}
+
 function eventActionSummary(action) {
   if (action.type === "message") return action.text;
   if (action.type === "teleport") return `Jogador → ${action.position.x}, ${action.position.y}, ${action.position.z}`;
+  if (action.type === "scene") {
+    const sceneName = state.scenes.find((entry) => entry.id === action.sceneId)?.name || action.sceneId || "Sem cena";
+    const spawnName = projectSpawnPoints(action.sceneId).find((entry) => entry.id === action.spawnId)?.name;
+    return `${sceneName}${spawnName ? ` → ${spawnName}` : ""} · fade ${action.fadeFrames}`;
+  }
   const target = recordById(action.targetId)?.name || uiElementById(action.targetId)?.name || action.targetId || "Sem alvo";
   if (action.type === "audio") return `${action.mode === "stop" ? "Parar" : "Tocar"}: ${target}`;
   if (action.type === "particle") return `${{ start: "Iniciar", stop: "Parar", burst: "Explodir" }[action.mode] || action.mode}: ${target}`;
@@ -1995,6 +2089,15 @@ function updateEventDraftUi() {
   $("event-visibility-row").hidden = type !== "visibility";
   $("event-effect-mode-row").hidden = !targetKind;
   $("event-teleport-row").hidden = type !== "teleport";
+  $("event-scene-row").hidden = type !== "scene";
+  $("event-spawn-row").hidden = type !== "scene";
+  $("event-fade-row").hidden = type !== "scene";
+  if (type === "scene") {
+    const previousScene = $("event-scene").value;
+    const previousSpawn = $("event-spawn").value;
+    fillProjectSceneSelect($("event-scene"), previousScene);
+    fillProjectSpawnSelect($("event-spawn"), previousScene, previousSpawn);
+  }
   const targetSelect = $("event-target");
   const previousTarget = targetSelect.value;
   targetSelect.replaceChildren(new Option(targetKind ? "Selecione um componente" : "Selecione um objeto", ""));
@@ -2098,6 +2201,18 @@ function addTriggerAction() {
         z: clampNumber($("event-teleport-z").value, 18),
       },
     };
+  } else if (type === "scene") {
+    const sceneId = $("event-scene").value;
+    if (!sceneId) {
+      toast("Selecione a cena de destino.", "error");
+      return;
+    }
+    action = {
+      type,
+      sceneId,
+      spawnId: $("event-spawn").value,
+      fadeFrames: clampNumber($("event-fade").value, 30),
+    };
   } else {
     action = {
       type: "message",
@@ -2152,6 +2267,11 @@ function logicNodeSummary(node) {
   if (node.type === "actionVisibility") return `${config.mode} · ${logicTargetName(config.targetId)}`;
   if (node.type === "actionTeleport") return `${config.position.x}, ${config.position.y}, ${config.position.z}`;
   if (["actionAudio", "actionParticle", "actionVideo"].includes(node.type)) return `${config.mode} · ${logicTargetName(config.targetId)}`;
+  if (node.type === "actionScene") {
+    const scene = state.scenes.find((entry) => entry.id === config.sceneId);
+    const spawn = projectSpawnPoints(config.sceneId).find((entry) => entry.id === config.spawnId);
+    return `${scene?.name || config.sceneId || "Sem cena"}${spawn ? ` → ${spawn.name}` : ""} · fade ${config.fadeFrames}`;
+  }
   if (node.type === "actionSetVariable") {
     const variable = state.document.logic.variables.find((item) => item.id === config.variableId);
     return `${variable?.name || "Variável"} · ${config.operation}`;
@@ -2530,6 +2650,20 @@ function renderLogicNodeProperties(container, graph, node) {
     const videos = [{ label: "Selecione um vídeo", value: "" }, ...state.document.ui.filter((item) => item.type === "video").map((item) => ({ label: item.name, value: item.id }))];
     appendLogicSelect(container, "Vídeo de UI", videos, config.targetId, (value) => { config.targetId = value; });
     appendLogicSelect(container, "Comando", [{ label: "Tocar", value: "play" }, { label: "Pausar", value: "pause" }, { label: "Parar", value: "stop" }], config.mode, (value) => { config.mode = value; });
+  } else if (node.type === "actionScene") {
+    const scenes = [{ label: "Selecione uma cena", value: "" }, ...state.scenes.map((entry) => ({ label: entry.name, value: entry.id }))];
+    appendLogicSelect(container, "Cena de destino", scenes, config.sceneId, (value) => {
+      config.sceneId = value;
+      const points = projectSpawnPoints(value);
+      config.spawnId = (points.find((point) => point.default) || points[0])?.id || "";
+    });
+    const points = projectSpawnPoints(config.sceneId);
+    const spawns = [
+      { label: points.length ? "Entrada padrão da cena" : "Cena sem pontos de entrada", value: "" },
+      ...points.map((point) => ({ label: `${point.default ? "★ " : ""}${point.name}`, value: point.id })),
+    ];
+    appendLogicSelect(container, "Ponto de entrada", spawns, config.spawnId, (value) => { config.spawnId = value; });
+    appendLogicNumber(container, "Fade em quadros", config.fadeFrames, (value) => { config.fadeFrames = value; }, 1, 300);
   } else if (node.type === "actionSetVariable") {
     const variables = [{ label: "Selecione uma variável", value: "" }, ...state.document.logic.variables.map((variable) => ({ label: variable.name, value: variable.id }))];
     appendLogicSelect(container, "Variável", variables, config.variableId, (value) => {
@@ -2733,6 +2867,19 @@ function deleteLogicVariable(variableId) {
 
 function validateVisualScripting() {
   const issues = validateLogic(state.document.logic);
+  for (const graph of state.document.logic.graphs) {
+    for (const node of graph.nodes) {
+      if (node.type !== "actionScene") continue;
+      const scene = state.scenes.find((entry) => entry.id === node.config.sceneId);
+      if (!scene) {
+        issues.push(`${graph.name}: a troca de cena aponta para uma cena inexistente`);
+        continue;
+      }
+      if (node.config.spawnId && !projectSpawnPoints(scene.id).some((point) => point.id === node.config.spawnId)) {
+        issues.push(`${graph.name}: o ponto de entrada ${node.config.spawnId} não existe em ${scene.name}`);
+      }
+    }
+  }
   if (!issues.length) {
     toast("Visual scripting válido e pronto para exportar.", "success");
     setStatus("Nenhum problema encontrado nos grafos");
@@ -2764,7 +2911,7 @@ function convertTriggerActionsToLogic() {
       const action = actions[index];
       const type = {
         message: "actionMessage", visibility: "actionVisibility", teleport: "actionTeleport",
-        audio: "actionAudio", particle: "actionParticle", video: "actionVideo",
+        audio: "actionAudio", particle: "actionParticle", video: "actionVideo", scene: "actionScene",
       }[action.type];
       if (!type) continue;
       const node = createLogicNode(type, uid, { x: 330 + index * 230, y: 80 + row * 150 });
@@ -2853,7 +3000,7 @@ function renderInspector() {
   if (!record) return;
 
   $("object-name").value = record.name;
-  $("object-type-icon").textContent = ({ group: "▱", collider: "▣", primitive: "◆", model: "◇", light: "✦", camera: "▣", audio: "♪", particle: "⁙", shadow: "◒" })[record.source.kind] || "◇";
+  $("object-type-icon").textContent = ({ group: "▱", collider: "▣", primitive: "◆", model: "◇", light: "✦", camera: "▣", audio: "♪", particle: "⁙", shadow: "◒", spawn: "⌖" })[record.source.kind] || "◇";
   setVectorInputs("position", record.position);
   setVectorInputs("rotation", record.rotation);
   setVectorInputs("scale", record.scale);
@@ -2875,7 +3022,9 @@ function renderInspector() {
               ? `Partículas · ${{ fire: "fogo", smoke: "fumaça", sparks: "faíscas" }[record.particle.preset]}`
               : record.source.kind === "shadow"
                 ? "Projetor de sombra"
-                : record.source.kind === "group" ? "Grupo" : "Modelo 3D";
+                : record.source.kind === "spawn"
+                  ? "Ponto de entrada"
+                  : record.source.kind === "group" ? "Grupo" : "Modelo 3D";
   $("source-asset").textContent = record.source.asset || "—";
   $("source-id").textContent = record.id;
   const stats = object?.userData.stats;
@@ -2897,6 +3046,7 @@ function renderInspector() {
   const particleMode = record.source.kind === "particle";
   const animationMode = record.source.kind === "model";
   const shadowMode = record.source.kind === "shadow";
+  const spawnMode = record.source.kind === "spawn";
   $("collider-section").hidden = !colliderMode;
   $("material-section").hidden = !materialMode;
   $("light-section").hidden = !lightMode;
@@ -2905,13 +3055,16 @@ function renderInspector() {
   $("particle-section").hidden = !particleMode;
   $("animation-section").hidden = !animationMode;
   $("shadow-section").hidden = !shadowMode;
+  $("spawn-section").hidden = !spawnMode;
   $("object-color-row").hidden = !colliderMode;
   if (colliderMode) {
     $("collider-shape").value = record.source.collider;
     $("collider-trigger").checked = record.collider?.trigger === true;
     $("collider-camera").checked = record.collider?.cameraBlocker !== false;
+    renderPortalEditor(record);
     renderTriggerEvents(record);
   }
+  if (spawnMode) $("spawn-default").checked = record.spawn?.default === true;
   if (materialMode) {
     renderMaterialTextureOptions(record);
     $("material-color").value = record.material.color;
@@ -3211,6 +3364,7 @@ function setParent(id, parentId) {
 
 async function loadDocument(documentData, { preserveHistory = false, dirty = false } = {}) {
   state.loadGeneration += 1;
+  state.documentRevision += 1;
   const generation = state.loadGeneration;
   closeCameraPreview();
   transform.detach();
@@ -3405,6 +3559,44 @@ async function addCamera() {
   });
   openCameraPreview(record.id);
   setStatus("Câmera adicionada a partir da visão atual");
+}
+
+async function addSpawnPoint() {
+  const isDefault = !state.document.objects.some((record) => record.source.kind === "spawn" && record.spawn?.default);
+  await addRecord({
+    id: uid("spawn"),
+    name: isDefault ? "Entrada principal" : "Novo ponto de entrada",
+    source: { kind: "spawn", asset: "" },
+    position: { x: orbit.target.x, y: 0.08, z: orbit.target.z },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 1, y: 1, z: 1 },
+    color: isDefault ? "#ffc15c" : "#57cef5",
+    spawn: { default: isDefault },
+  });
+  setStatus(isDefault ? "Entrada principal adicionada" : "Ponto de entrada adicionado");
+}
+
+async function addScenePortal() {
+  const targetScene = state.scenes.find((entry) => entry.id !== state.activeSceneId);
+  const targetSpawn = targetScene?.spawnPoints?.find((entry) => entry.default) || targetScene?.spawnPoints?.[0];
+  await addRecord({
+    id: uid("portal"),
+    name: "Portal de cena",
+    source: { kind: "collider", collider: "box", asset: "" },
+    position: { x: orbit.target.x, y: 1.5, z: orbit.target.z },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 0.9, y: 1.5, z: 0.3 },
+    color: "#ffad66",
+    collider: { trigger: true, cameraBlocker: false },
+    portal: {
+      enabled: Boolean(targetScene),
+      targetSceneId: targetScene?.id || "",
+      targetSpawnId: targetSpawn?.id || "",
+      activation: "onEnter",
+      fadeFrames: 30,
+    },
+  });
+  setStatus(targetScene ? "Portal adicionado · escolha a cena e a entrada no inspector" : "Portal adicionado · crie outra cena para definir o destino");
 }
 
 async function addAudio() {
@@ -3857,6 +4049,45 @@ function rebuildColliderVisual(record) {
   refreshSelectionVisuals();
 }
 
+function rebuildSpawnPointVisual(record) {
+  const object = state.objects.get(record.id);
+  if (!object || record.source.kind !== "spawn") return;
+  for (const child of [...object.children]) {
+    if (!child.userData.editorContent) continue;
+    object.remove(child);
+    disposeObject(child);
+  }
+  const content = createSpawnPointObject(record);
+  content.userData.editorContent = true;
+  object.add(content);
+  refreshSelectionVisuals();
+}
+
+function updatePortalFromInspector({ resetSpawn = false } = {}) {
+  const record = currentRecord();
+  if (!record || record.source.kind !== "collider") return;
+  stageFieldHistory();
+  record.portal ||= {};
+  record.portal.enabled = $("portal-enabled").checked;
+  record.portal.targetSceneId = $("portal-scene").value;
+  if (resetSpawn) {
+    const points = projectSpawnPoints(record.portal.targetSceneId);
+    record.portal.targetSpawnId = (points.find((point) => point.default) || points[0])?.id || "";
+  } else {
+    record.portal.targetSpawnId = $("portal-spawn").value;
+  }
+  record.portal.activation = $("portal-activation").value;
+  record.portal.fadeFrames = Math.round(THREE.MathUtils.clamp(clampNumber($("portal-fade").value, 30), 1, 300));
+  if (record.portal.enabled && !record.collider.trigger) {
+    record.collider.trigger = true;
+    record.color = "#ffad66";
+    rebuildColliderVisual(record);
+  }
+  finishFieldHistory();
+  markDirty();
+  renderInspector();
+}
+
 function updateTransformFromInspector() {
   const record = currentRecord();
   const object = currentObject();
@@ -4296,6 +4527,7 @@ function renderSceneProject(project = null) {
     picker.append(new Option(`${entry.id === state.startupSceneId ? "★ " : ""}${entry.name}`, entry.id));
   }
   picker.value = state.activeSceneId || "";
+  picker.disabled = state.sceneProjectBusy;
   const startupEntry = state.scenes.find((entry) => entry.id === state.startupSceneId);
   picker.title = startupEntry?.name
     ? `Cena inicial: ${startupEntry.name}`
@@ -4303,8 +4535,11 @@ function renderSceneProject(project = null) {
   $("run-button").title = startupEntry?.name
     ? `Empacotar e testar a cena inicial: ${startupEntry.name}`
     : "Empacotar e testar no PS2";
-  $("delete-scene-button").disabled = state.scenes.length <= 1;
-  $("duplicate-scene-button").disabled = !state.activeSceneId;
+  $("new-scene-button").disabled = state.sceneProjectBusy;
+  $("save-button").disabled = state.sceneProjectBusy;
+  $("delete-scene-button").disabled = state.sceneProjectBusy || state.scenes.length <= 1;
+  $("duplicate-scene-button").disabled = state.sceneProjectBusy || !state.activeSceneId;
+  $("scene-manager-export-button").disabled = state.sceneProjectBusy;
   renderSceneManager();
 }
 
@@ -4333,13 +4568,13 @@ function renderSceneManager() {
     up.type = "button";
     up.textContent = "↑";
     up.title = "Mover para cima";
-    up.disabled = index === 0;
+    up.disabled = state.sceneProjectBusy || index === 0;
     up.addEventListener("click", () => moveProjectScene(entry.id, -1));
     const down = document.createElement("button");
     down.type = "button";
     down.textContent = "↓";
     down.title = "Mover para baixo";
-    down.disabled = index === state.scenes.length - 1;
+    down.disabled = state.sceneProjectBusy || index === state.scenes.length - 1;
     down.addEventListener("click", () => moveProjectScene(entry.id, 1));
     order.append(up, down);
 
@@ -4351,6 +4586,7 @@ function renderSceneManager() {
     name.className = "scene-manager-name";
     name.value = entry.name;
     name.maxLength = 120;
+    name.disabled = state.sceneProjectBusy;
     name.setAttribute("aria-label", `Nome da cena ${entry.name}`);
     name.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
@@ -4386,7 +4622,7 @@ function renderSceneManager() {
     startupButton.className = "scene-startup-button";
     startupButton.classList.toggle("is-startup", entry.id === state.startupSceneId);
     startupButton.textContent = entry.id === state.startupSceneId ? "★ Inicial" : "Definir inicial";
-    startupButton.disabled = entry.id === state.startupSceneId;
+    startupButton.disabled = state.sceneProjectBusy || entry.id === state.startupSceneId;
     startupButton.addEventListener("click", () => setStartupProjectScene(entry.id));
 
     const actions = document.createElement("div");
@@ -4394,19 +4630,20 @@ function renderSceneManager() {
     const open = document.createElement("button");
     open.type = "button";
     open.textContent = entry.id === state.activeSceneId ? "Aberta" : "Editar";
-    open.disabled = entry.id === state.activeSceneId;
+    open.disabled = state.sceneProjectBusy || entry.id === state.activeSceneId;
     open.addEventListener("click", async () => {
       if (await switchProjectScene(entry.id)) $("scene-manager-dialog").close();
     });
     const duplicate = document.createElement("button");
     duplicate.type = "button";
     duplicate.textContent = "Duplicar";
+    duplicate.disabled = state.sceneProjectBusy;
     duplicate.addEventListener("click", () => createProjectScene({ duplicate: true, duplicateFrom: entry.id }));
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "danger";
     remove.textContent = "Excluir";
-    remove.disabled = state.scenes.length <= 1;
+    remove.disabled = state.sceneProjectBusy || state.scenes.length <= 1;
     remove.addEventListener("click", () => deleteProjectScene(entry.id));
     actions.append(open, duplicate, remove);
 
@@ -4417,166 +4654,186 @@ function renderSceneManager() {
 
 async function saveDirtySceneBeforeNavigation() {
   if (!state.dirty) return true;
-  const saved = await saveScene({ quiet: true });
+  const saved = await saveScene({ quiet: true, allowProjectOperation: true });
   if (saved) toast("Alterações salvas antes de trocar de cena.", "success", 2200);
   return saved;
 }
 
-async function switchProjectScene(sceneId) {
-  if (!sceneId || sceneId === state.activeSceneId) return true;
-  if (!await saveDirtySceneBeforeNavigation()) {
-    renderSceneProject();
-    return false;
-  }
-  setLoading(1, "Trocando de cena…");
+async function withSceneProjectUiLock(label, operation) {
+  if (state.sceneProjectBusy) return null;
+  state.sceneProjectBusy = true;
+  setLoading(1, label);
+  renderSceneProject();
   try {
-    const response = await fetch(`/api/scenes/${encodeURIComponent(sceneId)}/activate`, { method: "POST" });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "Falha ao trocar de cena");
-    renderSceneProject(result.project);
-    await loadDocument(result.scene);
-    toast(`${result.scene.name} aberta para edição.`, "success");
-    return true;
-  } catch (error) {
-    toast(error.message, "error");
-    renderSceneProject();
-    return false;
+    return await operation();
   } finally {
+    state.sceneProjectBusy = false;
     setLoading(-1);
+    renderSceneProject();
   }
 }
 
+async function switchProjectScene(sceneId) {
+  if (!sceneId || sceneId === state.activeSceneId) return true;
+  return (await withSceneProjectUiLock("Trocando de cena…", async () => {
+    if (!await saveDirtySceneBeforeNavigation()) return false;
+    try {
+      const response = await fetch(`/api/scenes/${encodeURIComponent(sceneId)}/activate`, { method: "POST" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Falha ao trocar de cena");
+      renderSceneProject(result.project);
+      await loadDocument(result.scene);
+      toast(`${result.scene.name} aberta para edição.`, "success");
+      return true;
+    } catch (error) {
+      toast(error.message, "error");
+      return false;
+    }
+  })) === true;
+}
+
 async function createProjectScene({ duplicate = false, duplicateFrom = null } = {}) {
-  if (!await saveDirtySceneBeforeNavigation()) return;
+  if (state.sceneProjectBusy) return;
   const currentName = state.document?.name || "Cena";
   const sourceEntry = state.scenes.find((entry) => entry.id === (duplicateFrom || state.activeSceneId));
   const suggested = duplicate ? `${sourceEntry?.name || currentName} — cópia` : "Nova cena";
   const name = window.prompt("Nome da cena:", suggested)?.trim();
   if (!name) return;
-  setLoading(1, duplicate ? "Duplicando cena…" : "Criando cena…");
-  try {
-    const response = await fetch("/api/scenes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, ...(duplicate ? { duplicateFrom: duplicateFrom || state.activeSceneId } : {}) }),
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "Falha ao criar a cena");
-    renderSceneProject(result.project);
-    await loadDocument(result.scene);
-    toast(duplicate ? "Cena duplicada e ativada." : "Cena criada e ativada.", "success");
-  } catch (error) {
-    toast(error.message, "error");
-  } finally {
-    setLoading(-1);
-  }
+  await withSceneProjectUiLock(duplicate ? "Duplicando cena…" : "Criando cena…", async () => {
+    if (!await saveDirtySceneBeforeNavigation()) return;
+    try {
+      const response = await fetch("/api/scenes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, ...(duplicate ? { duplicateFrom: duplicateFrom || state.activeSceneId } : {}) }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Falha ao criar a cena");
+      renderSceneProject(result.project);
+      await loadDocument(result.scene);
+      toast(duplicate ? "Cena duplicada e ativada." : "Cena criada e ativada.", "success");
+    } catch (error) {
+      toast(error.message, "error");
+    }
+  });
 }
 
 async function deleteProjectScene(sceneId = state.activeSceneId) {
+  if (state.sceneProjectBusy) return;
   const id = typeof sceneId === "string" ? sceneId : state.activeSceneId;
   const entry = state.scenes.find((item) => item.id === id);
   if (!entry || state.scenes.length <= 1) return;
-  if (!window.confirm(`Excluir permanentemente a cena “${entry.name}”?`)) return;
-  setLoading(1, "Excluindo cena…");
-  try {
-    const deletingActiveScene = entry.id === state.activeSceneId;
-    const response = await fetch(`/api/scenes/${encodeURIComponent(entry.id)}`, { method: "DELETE" });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "Falha ao excluir a cena");
-    renderSceneProject(result.project);
-    if (deletingActiveScene) await loadDocument(result.scene);
-    toast("Cena excluída.", "success");
-  } catch (error) {
-    toast(error.message, "error");
-  } finally {
-    setLoading(-1);
-  }
+  if (!window.confirm(`Excluir a cena “${entry.name}”? Uma cópia de segurança será arquivada.`)) return;
+  await withSceneProjectUiLock("Excluindo cena…", async () => {
+    try {
+      const deletingActiveScene = entry.id === state.activeSceneId;
+      if (deletingActiveScene) await saveQueue;
+      const response = await fetch(`/api/scenes/${encodeURIComponent(entry.id)}`, { method: "DELETE" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Falha ao excluir a cena");
+      renderSceneProject(result.project);
+      if (deletingActiveScene) await loadDocument(result.scene);
+      toast("Cena excluída e cópia de segurança arquivada.", "success");
+    } catch (error) {
+      toast(error.message, "error");
+    }
+  });
 }
 
 async function setStartupProjectScene(sceneId) {
-  if (sceneId === state.startupSceneId) return;
-  if (sceneId === state.activeSceneId && !await saveDirtySceneBeforeNavigation()) return;
-  try {
-    const response = await fetch(`/api/scenes/${encodeURIComponent(sceneId)}/startup`, { method: "POST" });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "Falha ao definir a cena inicial");
-    renderSceneProject(result.project);
-    const entry = state.scenes.find((item) => item.id === sceneId);
-    toast(`${entry?.name || "Cena"} será aberta ao iniciar o jogo.`, "success");
-  } catch (error) {
-    toast(error.message, "error");
-  }
+  if (sceneId === state.startupSceneId || state.sceneProjectBusy) return;
+  await withSceneProjectUiLock("Atualizando cena inicial...", async () => {
+    try {
+      if (!await saveDirtySceneBeforeNavigation()) return;
+      const response = await fetch(`/api/scenes/${encodeURIComponent(sceneId)}/startup`, { method: "POST" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Falha ao definir a cena inicial");
+      renderSceneProject(result.project);
+      const entry = state.scenes.find((item) => item.id === sceneId);
+      toast(`${entry?.name || "Cena"} será aberta ao iniciar o jogo.`, "success");
+    } catch (error) {
+      toast(error.message, "error");
+    }
+  });
 }
 
 async function renameProjectScene(sceneId, requestedName) {
+  if (state.sceneProjectBusy) return;
   const entry = state.scenes.find((item) => item.id === sceneId);
   const name = String(requestedName || "").trim().slice(0, 120);
   if (!entry || !name || name === entry.name) {
     renderSceneManager();
     return;
   }
-  try {
-    if (sceneId === state.activeSceneId) {
-      state.document.name = name;
-      $("scene-name").value = name;
-      markDirty();
-      if (!await saveScene({ quiet: true })) throw new Error("Não foi possível salvar o novo nome");
-    } else {
-      const response = await fetch(`/api/scenes/${encodeURIComponent(sceneId)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Falha ao renomear a cena");
-      renderSceneProject(result.project);
+  await withSceneProjectUiLock("Renomeando cena…", async () => {
+    try {
+      if (sceneId === state.activeSceneId) {
+        state.document.name = name;
+        $("scene-name").value = name;
+        markDirty();
+        if (!await saveScene({ quiet: true, allowProjectOperation: true })) throw new Error("Não foi possível salvar o novo nome");
+      } else {
+        const response = await fetch(`/api/scenes/${encodeURIComponent(sceneId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Falha ao renomear a cena");
+        renderSceneProject(result.project);
+      }
+      toast("Cena renomeada.", "success", 2200);
+    } catch (error) {
+      toast(error.message, "error");
     }
-    toast("Cena renomeada.", "success", 2200);
-  } catch (error) {
-    toast(error.message, "error");
-    renderSceneManager();
-  }
+  });
 }
 
 async function moveProjectScene(sceneId, direction) {
+  if (state.sceneProjectBusy) return;
   const index = state.scenes.findIndex((entry) => entry.id === sceneId);
   const target = index + direction;
   if (index < 0 || target < 0 || target >= state.scenes.length) return;
   const order = state.scenes.map((entry) => entry.id);
   [order[index], order[target]] = [order[target], order[index]];
-  try {
-    const response = await fetch("/api/scenes", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ order }),
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "Falha ao reordenar as cenas");
-    renderSceneProject(result.project);
-  } catch (error) {
-    toast(error.message, "error");
-  }
+  await withSceneProjectUiLock("Reordenando cenas…", async () => {
+    try {
+      const response = await fetch("/api/scenes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Falha ao reordenar as cenas");
+      renderSceneProject(result.project);
+    } catch (error) {
+      toast(error.message, "error");
+    }
+  });
 }
 
 async function exportSceneProjectFile() {
-  if (!await saveDirtySceneBeforeNavigation()) return;
-  try {
-    const response = await fetch("/api/project/export", { cache: "no-store" });
-    const project = await response.json();
-    if (!response.ok) throw new Error(project.error || "Falha ao exportar o projeto");
-    const blob = new Blob([`${JSON.stringify(project, null, 2)}\n`], { type: "application/json" });
-    const anchor = document.createElement("a");
-    anchor.href = URL.createObjectURL(blob);
-    anchor.download = "athena-project.json";
-    anchor.click();
-    URL.revokeObjectURL(anchor.href);
-    toast("Projeto completo exportado.", "success");
-  } catch (error) {
-    toast(error.message, "error");
-  }
+  if (state.sceneProjectBusy) return;
+  await withSceneProjectUiLock("Exportando projeto…", async () => {
+    if (!await saveDirtySceneBeforeNavigation()) return;
+    try {
+      const response = await fetch("/api/project/export", { cache: "no-store" });
+      const project = await response.json();
+      if (!response.ok) throw new Error(project.error || "Falha ao exportar o projeto");
+      const blob = new Blob([`${JSON.stringify(project, null, 2)}\n`], { type: "application/json" });
+      const anchor = document.createElement("a");
+      anchor.href = URL.createObjectURL(blob);
+      anchor.download = "athena-project.json";
+      anchor.click();
+      URL.revokeObjectURL(anchor.href);
+      toast("Projeto completo exportado.", "success");
+    } catch (error) {
+      toast(error.message, "error");
+    }
+  });
 }
 
-async function saveScene({ quiet = false } = {}) {
+async function performSceneSave({ quiet = false } = {}) {
   if (state.serverOutdated) {
     const message = "Servidor do editor desatualizado. Reinicie scripts/editor.ps1 antes de salvar as novas ferramentas.";
     toast(message, "error", 10000);
@@ -4584,27 +4841,59 @@ async function saveScene({ quiet = false } = {}) {
     return false;
   }
   try {
-    syncAllRecords();
-    saveCameraToDocument();
-    state.document.name = $("scene-name").value.trim() || "Cena Athena";
-    const response = await fetch(`/api/scene?sceneId=${encodeURIComponent(state.activeSceneId || "")}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(state.document),
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "Falha ao salvar a cena");
-    state.document = result.scene;
-    renderSceneProject(result.project);
-    markDirty(false);
-    setStatus("Cena salva e exportada para Athena");
-    if (!quiet) toast("Cena salva. O runtime do PS2 foi atualizado.", "success");
-    return true;
+    if (!state.dirty) return true;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      syncAllRecords();
+      saveCameraToDocument();
+      state.document.name = $("scene-name").value.trim() || "Cena Athena";
+      const revision = state.documentRevision;
+      const loadGeneration = state.loadGeneration;
+      const sceneId = state.activeSceneId || "";
+      const payload = JSON.stringify(state.document);
+      const response = await fetch(`/api/scene?sceneId=${encodeURIComponent(sceneId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Falha ao salvar a cena");
+
+      if (state.activeSceneId !== sceneId || state.loadGeneration !== loadGeneration) {
+        throw new Error("A cena ativa mudou durante o salvamento; a resposta antiga foi descartada");
+      }
+      if (state.documentRevision !== revision) {
+        setStatus("Novas alterações detectadas; salvando a versão mais recente...");
+        continue;
+      }
+
+      renderSceneProject(result.project);
+      state.document = result.scene;
+      markDirty(false);
+      setStatus("Cena salva e exportada para Athena");
+      if (!quiet) toast("Cena salva. O runtime do PS2 foi atualizado.", "success");
+      return true;
+    }
+    setStatus("A cena continuou mudando durante o salvamento");
+    if (!quiet) toast("Ainda há alterações novas. Pare de editar por um instante e salve novamente.", "error", 5000);
+    return false;
   } catch (error) {
     toast(error.message, "error", 5000);
     setStatus("Falha ao salvar");
     return false;
   }
+}
+
+function saveScene(options = {}) {
+  if (state.sceneProjectBusy && options.allowProjectOperation !== true) {
+    if (!options.quiet) toast("Aguarde a operação de cenas terminar antes de salvar.", "info", 2600);
+    return Promise.resolve(false);
+  }
+  const queued = saveQueue.then(
+    () => performSceneSave(options),
+    () => performSceneSave(options),
+  );
+  saveQueue = queued.catch(() => false);
+  return queued;
 }
 
 function exportSceneFile() {
@@ -5068,6 +5357,7 @@ function bindInspector() {
     if (!record || record.source.kind !== "collider") return;
     stageFieldHistory();
     record.collider.trigger = event.target.checked;
+    if (!record.collider.trigger && record.portal?.enabled) record.portal.enabled = false;
     record.color = record.collider.trigger ? "#ffad66" : "#68e0b2";
     rebuildColliderVisual(record);
     finishFieldHistory();
@@ -5082,7 +5372,33 @@ function bindInspector() {
     finishFieldHistory();
     markDirty();
   });
+  $("portal-enabled").addEventListener("change", () => updatePortalFromInspector());
+  $("portal-scene").addEventListener("change", () => updatePortalFromInspector({ resetSpawn: true }));
+  for (const id of ["portal-spawn", "portal-activation", "portal-fade"]) {
+    $(id).addEventListener("change", () => updatePortalFromInspector());
+  }
+  $("spawn-default").addEventListener("change", (event) => {
+    const record = currentRecord();
+    if (!record || record.source.kind !== "spawn") return;
+    const before = serializeScene();
+    if (event.target.checked) {
+      for (const candidate of state.document.objects) {
+        if (candidate.source.kind !== "spawn") continue;
+        candidate.spawn.default = candidate.id === record.id;
+        candidate.color = candidate.spawn.default ? "#ffc15c" : "#57cef5";
+        rebuildSpawnPointVisual(candidate);
+      }
+    } else {
+      record.spawn.default = false;
+      record.color = "#57cef5";
+      rebuildSpawnPointVisual(record);
+    }
+    pushHistorySnapshot(before);
+    markDirty();
+    renderInspector();
+  });
   $("event-action-type").addEventListener("change", updateEventDraftUi);
+  $("event-scene").addEventListener("change", () => fillProjectSpawnSelect($("event-spawn"), $("event-scene").value, ""));
   $("event-add-button").addEventListener("click", addTriggerAction);
   $("event-convert-logic-button").addEventListener("click", convertTriggerActionsToLogic);
 
@@ -5212,6 +5528,8 @@ function bindUi() {
   document.querySelectorAll("[data-light]").forEach((button) => button.addEventListener("click", () => addLight(button.dataset.light)));
   document.querySelectorAll("[data-particle]").forEach((button) => button.addEventListener("click", () => addParticle(button.dataset.particle)));
   $("add-shadow-button").addEventListener("click", addShadow);
+  $("add-spawn-button").addEventListener("click", addSpawnPoint);
+  $("add-portal-button").addEventListener("click", addScenePortal);
   document.querySelectorAll("[data-ui-type]").forEach((button) => button.addEventListener("click", () => addUiElement(button.dataset.uiType)));
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
   document.querySelectorAll("[data-axis-view]").forEach((button) => button.addEventListener("click", () => setAxisView(button.dataset.axisView)));
@@ -5523,7 +5841,7 @@ async function boot() {
       const capabilities = await capabilitiesResponse.json();
       state.serverSchemaVersion = Number(capabilities.editorSchemaVersion) || 0;
     }
-    state.serverOutdated = state.serverSchemaVersion < 10;
+    state.serverOutdated = state.serverSchemaVersion < 13;
     const data = await sceneResponse.json();
     if (!sceneResponse.ok) throw new Error(data.error || "Falha ao abrir a cena");
     await loadDocument(data);

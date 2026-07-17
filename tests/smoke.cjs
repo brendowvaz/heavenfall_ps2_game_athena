@@ -18,7 +18,7 @@ for (const preset of ["fire", "smoke", "sparks"]) {
         throw new Error(`Particle ${preset} material library must contain exactly one material; AthenaEnv renders unused material ranges as invalid DMA`);
     }
 }
-for (const marker of ["applyPointerSnap", "togglePivotEditing", "finishBoxSelection", "toggleIsolation", "setupPanelAccordions", "collapsedHierarchy", "applyRecordMaterial", "createLightObject", "applyCampfirePreset", "openCameraPreview", "renderTriggerEvents", "addTriggerAction", "renderUiPreview", "addUiElement", "switchProjectScene", "createProjectScene", "renderSceneManager", "setStartupProjectScene", "moveProjectScene", "exportSceneProjectFile", "createAudioObject", "createParticleObject", "createShadowObject", "applyShadowTexture", "renderRuntimeSettings", "updateLegacyParticlePreview", "stepLegacyParticlePreview", "OctahedronGeometry", "addAudio", "addParticle", "addShadow", "renderLogicEditor", "convertTriggerActionsToLogic", "validateVisualScripting"]) {
+for (const marker of ["applyPointerSnap", "togglePivotEditing", "finishBoxSelection", "toggleIsolation", "setupPanelAccordions", "collapsedHierarchy", "applyRecordMaterial", "createLightObject", "applyCampfirePreset", "openCameraPreview", "renderTriggerEvents", "addTriggerAction", "renderUiPreview", "addUiElement", "switchProjectScene", "createProjectScene", "renderSceneManager", "setStartupProjectScene", "moveProjectScene", "exportSceneProjectFile", "withSceneProjectUiLock", "performSceneSave", "documentRevision", "saveQueue", "createAudioObject", "createParticleObject", "createShadowObject", "createSpawnPointObject", "addSpawnPoint", "addScenePortal", "renderPortalEditor", "applyShadowTexture", "renderRuntimeSettings", "updateLegacyParticlePreview", "stepLegacyParticlePreview", "OctahedronGeometry", "addAudio", "addParticle", "addShadow", "renderLogicEditor", "convertTriggerActionsToLogic", "validateVisualScripting"]) {
     if (!editorSource.includes(marker)) throw new Error(`Editor tool missing: ${marker}`);
 }
 for (const marker of ["Heavenfall", "Iniciar Jogo", "CRÉDITOS", "Brendow Vaz"]) {
@@ -30,19 +30,38 @@ for (const marker of ["MENU_AUDIO_ASSET", "updateMenuAudio", "startRuntimeAutopl
 if (source.includes("Render.SHADE_")) {
     throw new Error("AthenaEnv exposes shade_model as numeric Flat/Gouraud values, not Render.SHADE_* constants");
 }
-for (const marker of ["accurate_clipping", "texture_mapping", "runtimeShadows", "runtimeUiMedia", "controlRuntimeVideo", "EDITOR_LOGIC", "runtimeVisualScripts", "EDITOR_SCENE_PROJECT", "EDITOR_SCENE_META"]) {
+for (const marker of ["accurate_clipping", "texture_mapping", "runtimeShadows", "runtimeUiMedia", "controlRuntimeVideo", "EDITOR_LOGIC", "runtimeVisualScripts", "EDITOR_SCENE_PROJECT", "EDITOR_SCENE_META", "EDITOR_SPAWN_POINTS", "EDITOR_PORTALS", "requestSceneTransition", "freeRuntimeSceneResources", "retireRenderObject", "retainBorrowedNativeView", "retiredNativeViews", "releaseRenderData", "reapRetiredActiveSfx", "runAthenaGame", "runtimeNextSceneTransition"]) {
     if (!source.includes(marker)) throw new Error(`Official Athena runtime integration missing: ${marker}`);
 }
-for (const id of ["snap-mode", "pivot-button", "box-select-button", "selection-marquee", "isolate-selection-button", "material-section", "material-texture-mapping", "material-smooth-shading", "material-accurate-clipping", "animation-section", "animation-clip", "light-section", "light-flicker", "light-campfire-preset", "camera-section", "camera-mode", "camera-preview", "trigger-events-editor", "event-action-type", "event-add-button", "event-convert-logic-button", "scene-picker", "scene-manager-button", "scene-manager-dialog", "scene-manager-list", "scene-manager-export-button", "duplicate-scene-button", "scene-background", "runtime-vsync", "runtime-performance", "player-spawn-x", "player-walk-speed", "ui-mode-button", "ui-editor", "ui-canvas", "ui-inspector", "ui-font-asset", "ui-media-section", "ui-media-asset", "logic-mode-button", "logic-editor", "logic-node-palette", "logic-properties", "audio-tools-section", "add-audio-button", "audio-section", "audio-asset", "particle-tools-section", "particle-section", "particle-preset", "particle-color", "add-shadow-button", "shadow-section", "shadow-texture"]) {
+const runtimeLoopStart = source.indexOf("while (runtimeLoopRunning) {");
+const lifecycleLoop = source.lastIndexOf("while (runtimeNextSceneTransition) {");
+if (runtimeLoopStart < 0 || lifecycleLoop < runtimeLoopStart || source.includes("std.reload") || /\bstd\.gc\s*\(/.test(source)) {
+    throw new Error("Scene transitions must use the in-process lifecycle without destroying the QuickJS runtime");
+}
+if (!source.includes("runAthenaGame(completedSceneTransition)")) {
+    throw new Error("The target scene must be passed directly to the next lifecycle instead of relying only on mutable globals");
+}
+if (/globalThis\.ATHENA_BOOT_[A-Z_]+\s*=/.test(source.slice(lifecycleLoop))) {
+    throw new Error("The post-cleanup lifecycle must not add or mutate boot properties on QuickJS globalThis");
+}
+if (!source.includes("os.getcwd()") || !source.includes('os.chdir(runtimePreviousDirectory)') || !source.includes('os.chdir("..")')) {
+    throw new Error("Every transition must restore the directory above assets, including a checked fallback");
+}
+for (const id of ["snap-mode", "pivot-button", "box-select-button", "selection-marquee", "isolate-selection-button", "material-section", "material-texture-mapping", "material-smooth-shading", "material-accurate-clipping", "animation-section", "animation-clip", "light-section", "light-flicker", "light-campfire-preset", "camera-section", "camera-mode", "camera-preview", "add-spawn-button", "add-portal-button", "spawn-section", "spawn-default", "portal-editor", "portal-enabled", "portal-scene", "portal-spawn", "trigger-events-editor", "event-action-type", "event-scene", "event-spawn", "event-add-button", "event-convert-logic-button", "scene-picker", "scene-manager-button", "scene-manager-dialog", "scene-manager-list", "scene-manager-export-button", "duplicate-scene-button", "scene-background", "runtime-vsync", "runtime-performance", "player-spawn-x", "player-walk-speed", "ui-mode-button", "ui-editor", "ui-canvas", "ui-inspector", "ui-font-asset", "ui-media-section", "ui-media-asset", "logic-mode-button", "logic-editor", "logic-node-palette", "logic-properties", "audio-tools-section", "add-audio-button", "audio-section", "audio-asset", "particle-tools-section", "particle-section", "particle-preset", "particle-color", "add-shadow-button", "shadow-section", "shadow-texture"]) {
     if (!editorHtml.includes(`id="${id}"`)) throw new Error(`Editor control missing: ${id}`);
 }
 source = source.replace(
-    "while (true) {",
-    "globalThis.__levelTest = { baseWalkable, isPlayerValid, applyMovement, colliderHits, updateVerticalMovement, executeAction: executeRuntimeAction, getRuntimeMessage: () => runtimeMessageText, getVisibility: (id) => runtimeObjectVisibility[id], getColliders: () => collisionShapes, getAudio: (id) => runtimeAudioById(id), getParticleEmitter: (id) => particleEmitterById(id), setPlayer: (state) => { playerX = state.x; playerY = state.y; playerZ = state.z; playerVelocityY = state.velocityY; playerGrounded = state.grounded; }, getPlayer: () => ({ x: playerX, y: playerY, z: playerZ, velocityY: playerVelocityY, grounded: playerGrounded }) }; gameState = GAME_STATE_GAME; for (let __smokeFrame = 0; __smokeFrame < 2; __smokeFrame++) {"
+    "while (runtimeLoopRunning) {",
+    "globalThis.__levelTest = { baseWalkable, isPlayerValid, applyMovement, colliderHits, updateVerticalMovement, executeAction: executeRuntimeAction, requestSceneTransition, freeResources: freeRuntimeSceneResources, releaseRenderData, getRetiredNativeViewCount: () => runtimeEngineState.retiredNativeViews.length, getSceneTransition: () => runtimeSceneTransition, getRuntimeMessage: () => runtimeMessageText, getVisibility: (id) => runtimeObjectVisibility[id], getColliders: () => collisionShapes, getAudio: (id) => runtimeAudioById(id), getParticleEmitter: (id) => particleEmitterById(id), setPlayer: (state) => { playerX = state.x; playerY = state.y; playerZ = state.z; playerVelocityY = state.velocityY; playerGrounded = state.grounded; }, getPlayer: () => ({ x: playerX, y: playerY, z: playerZ, velocityY: playerVelocityY, grounded: playerGrounded }) }; gameState = GAME_STATE_GAME; for (let __smokeFrame = 0; __smokeFrame < 2; __smokeFrame++) {"
 );
 
 let vertexCount = 0;
 let drawCalls = 0;
+let renderDataFrees = 0;
+let renderObjectFrees = 0;
+let fontCreations = 0;
+let imageFrees = 0;
+let imageDoubleFrees = 0;
 const particleMaterialUpdates = [];
 const fontPrints = [];
 const rectCalls = [];
@@ -57,6 +76,7 @@ const manifest = require(path.join(__dirname, "..", "assets", "manifest.json"));
 let sandbox;
 
 class MockFont {
+    constructor() { fontCreations++; }
     print(x, y, text) { fontPrints.push({ x, y, text }); }
     getTextSize(text) { return { width: String(text).length * 7 * (this.scale || 1), height: 14 * (this.scale || 1) }; }
 }
@@ -70,6 +90,13 @@ class MockImage {
     lock() {}
     draw(x, y) { imageDraws.push({ path: this.path, x, y, width: this.width, height: this.height, color: this.color }); }
     ready() { return true; }
+    free() {
+        if (this.freed) imageDoubleFrees++;
+        else {
+            this.freed = true;
+            imageFrees++;
+        }
+    }
 }
 
 class MockVideo {
@@ -86,6 +113,7 @@ class MockVideo {
     stop() { this.playing = false; videoEvents.push({ type: "stop", path: this.path }); }
     update() { videoEvents.push({ type: "update", path: this.path }); return true; }
     draw(x, y, width, height) { videoEvents.push({ type: "draw", path: this.path, x, y, width, height }); }
+    free() {}
 }
 
 class MockShadowProjector {
@@ -98,6 +126,7 @@ class MockShadowProjector {
     setColor(r, g, b, a) { shadowEvents.push({ type: "color", r, g, b, a }); }
     setBlend(value) { shadowEvents.push({ type: "blend", value }); }
     render() { shadowEvents.push({ type: "render", position: this.position }); }
+    free() {}
 }
 
 class MockRenderData {
@@ -106,17 +135,20 @@ class MockRenderData {
         if (typeof vertices === "string") assetLoads.push(vertices);
     }
     updateMaterial(index, material) { particleMaterialUpdates.push({ index, material }); }
+    free() { renderDataFrees++; }
 }
 
 class MockRenderObject {
     constructor(data) {
         this.data = data;
+        this.transform = { borrowed: true };
         this.position = { x: 0, y: 0, z: 0 };
         this.rotation = { x: 0, y: 0, z: 0 };
     }
     render() {
         drawCalls++;
     }
+    free() { renderObjectFrees++; }
 }
 
 const neutralPad = {
@@ -130,6 +162,13 @@ const context = {
     console,
     Math,
     Float32Array,
+    // Keep this fixture independent from whichever scene the user selects as
+    // the project's startup scene. The collision assertions below exercise
+    // the Ruinas scene explicitly, then load Salao in the same VM.
+    ATHENA_BOOT_SCENE_ID: "main",
+    ATHENA_BOOT_SPAWN_ID: "ruinas-entrada-principal",
+    ATHENA_BOOT_FADE_FRAMES: 1,
+    ATHENA_SKIP_MENU: false,
     Color: { new: (r, g, b, a) => ({ r, g, b, a }) },
     Font: MockFont,
     Image: MockImage,
@@ -158,7 +197,7 @@ const context = {
         loadScript(filename) {
             const script = fs.readFileSync(path.join(__dirname, "..", "assets", filename), "utf8");
             vm.runInContext(script, sandbox, { filename });
-            if (filename === "scene.generated.js") {
+            if (filename === "scene.generated.js" || filename === "scenes/main.generated.js") {
                 sandbox.EDITOR_COLLIDERS.push({
                     id: "smoke-trigger",
                     name: "Smoke trigger",
@@ -174,6 +213,13 @@ const context = {
                     onEnter: [{ id: "smoke-message", type: "message", text: "Evento executado no runtime", duration: 120 }],
                     onExit: [],
                     onInteract: []
+                });
+                sandbox.EDITOR_PORTALS.push({
+                    triggerId: "smoke-trigger",
+                    targetSceneId: "main",
+                    targetSpawnId: "",
+                    activation: "onEnter",
+                    fadeFrames: 30
                 });
                 for (let index = 0; index < 4; index++) {
                     sandbox.EDITOR_LIGHTS.push({
@@ -220,7 +266,8 @@ const context = {
                     blend: "darken", followPlayer: true
                 });
             }
-        }
+        },
+        gc() { throw new Error("Runtime must not force QuickJS collection between scenes"); }
     },
     Shadows: {
         SHADOW_BLEND_DARKEN: 0, SHADOW_BLEND_ALPHA: 1, SHADOW_BLEND_ADD: 2,
@@ -246,7 +293,8 @@ const context = {
             return {
                 asset, volume: 100, pan: 0, pitch: 0, active: false,
                 play() { this.active = true; soundEvents.push({ type: "sfx-play", asset, volume: this.volume, pan: this.pan }); return 1; },
-                playing() { const result = this.active; this.active = false; return result; }, free() {}
+                playing() { const result = this.active; this.active = false; return result; },
+                free() { soundEvents.push({ type: "sfx-free", asset }); }
             };
         }
     },
@@ -261,8 +309,8 @@ const context = {
 sandbox = vm.createContext(context);
 vm.runInContext(source, sandbox, { filename: sourcePath, timeout: 5000 });
 
-if (!Array.isArray(context.EDITOR_LIGHTS) || !Array.isArray(context.EDITOR_POINT_LIGHTS) || !Array.isArray(context.EDITOR_EVENTS) || !Array.isArray(context.EDITOR_UI) || !Array.isArray(context.EDITOR_AUDIO) || !Array.isArray(context.EDITOR_PARTICLES) || !Array.isArray(context.EDITOR_SHADOWS) || !("EDITOR_CAMERA" in context)) {
-    throw new Error("Generated scene must expose lights, events, interface, audio, particles, shadows and active camera contracts");
+if (!Array.isArray(context.EDITOR_LIGHTS) || !Array.isArray(context.EDITOR_POINT_LIGHTS) || !Array.isArray(context.EDITOR_EVENTS) || !Array.isArray(context.EDITOR_SPAWN_POINTS) || !Array.isArray(context.EDITOR_PORTALS) || !Array.isArray(context.EDITOR_UI) || !Array.isArray(context.EDITOR_AUDIO) || !Array.isArray(context.EDITOR_PARTICLES) || !Array.isArray(context.EDITOR_SHADOWS) || !("EDITOR_CAMERA" in context)) {
+    throw new Error("Generated scene must expose lights, events, portals, spawn points, interface, audio, particles, shadows and active camera contracts");
 }
 if (!fontPrints.some((entry) => entry.text === "UI runtime")) throw new Error("Exported UI text must be drawn by Font in the runtime loop");
 if (!rectCalls.some((entry) => entry.x === 12 && entry.y === 24 && entry.width === 180 && entry.height === 40)) {
@@ -335,6 +383,10 @@ if (Math.max(...diffuseUpdates.values()) <= expectedRuntimeObjects) {
 }
 if (context.__levelTest.getRuntimeMessage() !== "Evento executado no runtime") {
     throw new Error("Trigger onEnter message must execute in the runtime loop");
+}
+const smokeTransition = context.__levelTest.getSceneTransition();
+if (!smokeTransition || smokeTransition.sceneId !== "main" || smokeTransition.fadeFrames !== 30) {
+    throw new Error("Scene portals must request a catalog-backed dynamic transition");
 }
 if (!soundEvents.some((entry) => entry.type === "stream-play") || !soundEvents.some((entry) => entry.type === "sfx-play")) {
     throw new Error("Autoplay streams and SFX must reach Athena's Sound runtime");
@@ -518,5 +570,88 @@ if (context.__levelTest.getPlayer().y >= edgeHeight) {
     throw new Error("Player must fall after walking off a collider");
 }
 runtimeColliders.pop();
+
+const expectedRenderObjectFrees = expectedRuntimeObjects + runtimeParticlePool.length;
+const expectedRenderDataFrees = expectedRuntimeObjects + context.EDITOR_PARTICLES.length;
+context.__levelTest.freeResources();
+if (renderObjectFrees < expectedRenderObjectFrees || renderDataFrees < expectedRenderDataFrees) {
+    throw new Error(`Scene cleanup must free native render resources before loading the next scene (${renderObjectFrees}/${expectedRenderObjectFrees} objects, ${renderDataFrees}/${expectedRenderDataFrees} data)`);
+}
+if (context.__levelTest.getRetiredNativeViewCount() !== renderObjectFrees + 1) {
+    throw new Error("RenderObject matrices and the borrowed MPEG frame must remain protected");
+}
+const skinnedData = new MockRenderData("synthetic-skinned.gltf");
+skinnedData.bones = [{}];
+skinnedData.textures = [new MockImage("synthetic-skin.png")];
+const freesBeforeSkinnedRelease = renderDataFrees;
+const imageFreesBeforeSkinnedRelease = imageFrees;
+context.__levelTest.releaseRenderData(skinnedData);
+if (renderDataFrees !== freesBeforeSkinnedRelease + 1
+    || imageFrees !== imageFreesBeforeSkinnedRelease + 1
+    || context.__levelTest.getRetiredNativeViewCount() !== renderObjectFrees + 2) {
+    throw new Error("Skinned RenderData must release textures and native mesh data while retaining borrowed bone views");
+}
+const plainData = new MockRenderData("synthetic-plain.obj");
+context.__levelTest.releaseRenderData(plainData);
+if (context.__levelTest.getRetiredNativeViewCount() !== renderObjectFrees + 2) {
+    throw new Error("Plain RenderData must not add a borrowed-view guard");
+}
+
+const secondSceneLoadStart = assetLoads.length;
+// Keep deliberately stale globals: an internal transition must prefer its
+// direct payload even if QuickJS still exposes values from the previous scene.
+context.ATHENA_BOOT_SCENE_ID = "main";
+context.ATHENA_BOOT_SPAWN_ID = "ruinas-entrada-principal";
+context.ATHENA_BOOT_FADE_FRAMES = 30;
+context.ATHENA_SKIP_MENU = true;
+context.ATHENA_RUNTIME_READY = true;
+const secondSceneResult = context.runAthenaGame({
+    sceneId: "salao-saida-01",
+    spawnId: "salao-saida-entrada-principal",
+    fadeFrames: 1
+});
+if (secondSceneResult !== null || context.EDITOR_SCENE_META.id !== "salao-saida-01") {
+    throw new Error("The next generated scene must load in the existing QuickJS runtime");
+}
+if (!assetLoads.slice(secondSceneLoadStart).includes("editor_primitives/cube.obj")) {
+    throw new Error("The in-process scene lifecycle must load the target scene assets");
+}
+if (!soundEvents.some((entry) => entry.type === "sfx-free")) {
+    throw new Error("A retired SFX buffer must be released once its active channel finishes");
+}
+if (fontCreations !== 1 || nextLightId !== 4) {
+    throw new Error(`Engine-native singletons must survive scene changes (fonts=${fontCreations}, lights=${nextLightId})`);
+}
+context.__levelTest.freeResources();
+if (context.__levelTest.getRetiredNativeViewCount() !== renderObjectFrees + 2) {
+    throw new Error("Target-scene RenderObject views must also remain protected after cleanup");
+}
+
+const returnSceneLoadStart = assetLoads.length;
+context.ATHENA_BOOT_SCENE_ID = "salao-saida-01";
+context.ATHENA_BOOT_SPAWN_ID = "salao-saida-entrada-principal";
+context.ATHENA_BOOT_FADE_FRAMES = 30;
+context.ATHENA_SKIP_MENU = true;
+const returnSceneResult = context.runAthenaGame({
+    sceneId: "main",
+    spawnId: "ruinas-entrada-principal",
+    fadeFrames: 1
+});
+if (returnSceneResult !== null || context.EDITOR_SCENE_META.id !== "main") {
+    throw new Error("A scene lifecycle must support returning to a previously unloaded scene");
+}
+if (!assetLoads.slice(returnSceneLoadStart).includes("scene_0.obj")) {
+    throw new Error("Returning to a scene must recreate its released render assets");
+}
+if (fontCreations !== 1 || nextLightId !== 4) {
+    throw new Error(`Engine-native singletons must also survive the return trip (fonts=${fontCreations}, lights=${nextLightId})`);
+}
+context.__levelTest.freeResources();
+if (context.__levelTest.getRetiredNativeViewCount() !== renderObjectFrees + 3) {
+    throw new Error("Repeated scene transitions must retain every borrowed native view safely, including each MPEG frame");
+}
+if (imageDoubleFrees !== 0) {
+    throw new Error(`Scene cleanup must not free an Image wrapper twice (${imageDoubleFrees} duplicate calls)`);
+}
 
 console.log(`Smoke test passed: ${manifest.sceneVertices + manifest.playerVertices} OBJ vertices, ${drawCalls / 2} draw calls/frame.`);

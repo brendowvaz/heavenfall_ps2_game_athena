@@ -6,7 +6,26 @@ globalThis.EDITOR_SCENE_PROJECT = {
     {
       "id": "main",
       "name": "Ruínas do Véu Azul",
-      "file": "scenes/main.generated.js"
+      "file": "scenes/main.generated.js",
+      "spawnPoints": [
+        {
+          "id": "ruinas-entrada-principal",
+          "name": "Entrada principal",
+          "default": true
+        }
+      ]
+    },
+    {
+      "id": "salao-saida-01",
+      "name": "Salão Saída 01",
+      "file": "scenes/salao-saida-01.generated.js",
+      "spawnPoints": [
+        {
+          "id": "spawn-mrozcqvq-becjqz",
+          "name": "Entrada principal",
+          "default": true
+        }
+      ]
     }
   ]
 };

@@ -1,5 +1,9 @@
 node_modules/
 *.log
 build/pcsx2-portable/
+build/.build.lock
+build/.athena-stage-*/
+editor/scenes/.project.lock/
+editor/scenes/.project-lock-claim-*.tmp
 docs/*
 !docs/ATHENAENV-COMPATIBILITY.md

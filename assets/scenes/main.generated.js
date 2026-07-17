@@ -746,6 +746,58 @@ globalThis.EDITOR_COLLIDERS = [
     },
     "trigger": false,
     "cameraBlocker": true
+  },
+  {
+    "id": "portal-mrozd8ea-jo3nzk",
+    "name": "Portal de cena",
+    "shape": "box",
+    "contractVersion": 2,
+    "rotationOrder": "XYZ",
+    "scaleMeaning": "halfExtents",
+    "position": {
+      "x": -0.1359,
+      "y": 1.5,
+      "z": 1.9653
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": {
+      "x": 8.1462,
+      "y": 1.8753,
+      "z": 0.3
+    },
+    "trigger": true,
+    "cameraBlocker": false
+  }
+];
+globalThis.EDITOR_SPAWN_POINTS = [
+  {
+    "id": "ruinas-entrada-principal",
+    "name": "Entrada principal",
+    "default": true,
+    "position": {
+      "x": 0,
+      "y": 0.08,
+      "z": 18
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "yaw": 0
+  }
+];
+globalThis.EDITOR_PORTALS = [
+  {
+    "triggerId": "portal-mrozd8ea-jo3nzk",
+    "targetSceneId": "salao-saida-01",
+    "targetSpawnId": "spawn-mrozcqvq-becjqz",
+    "activation": "onEnter",
+    "fadeFrames": 30
   }
 ];
 globalThis.EDITOR_EVENTS = [];

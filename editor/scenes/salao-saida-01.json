@@ -1,0 +1,168 @@
+{
+  "version": 1,
+  "name": "Salão Saída 01",
+  "settings": {
+    "background": "#07101d",
+    "gridSize": 120,
+    "snap": 0.25,
+    "snapEnabled": false,
+    "snapMode": "grid",
+    "camera": {
+      "position": {
+        "x": -2.8838,
+        "y": 8.8632,
+        "z": 14.5979
+      },
+      "target": {
+        "x": 0.1134,
+        "y": 0.7275,
+        "z": 2.9027
+      }
+    },
+    "runtime": {
+      "vsync": true,
+      "showPerformance": false,
+      "legacyArenaBounds": true,
+      "player": {
+        "spawn": {
+          "x": 0,
+          "y": 0.08,
+          "z": 18
+        },
+        "radius": 0.68,
+        "height": 2.25,
+        "walkSpeed": 0.125,
+        "runSpeed": 0.19,
+        "jumpSpeed": 0.3,
+        "gravity": 0.014
+      }
+    }
+  },
+  "objects": [
+    {
+      "id": "cube-mrma4n0n-86qbzb",
+      "name": "Cubo",
+      "source": {
+        "kind": "primitive",
+        "asset": "editor_primitives/cube.obj",
+        "primitive": "cube"
+      },
+      "parentId": null,
+      "position": {
+        "x": 0,
+        "y": 0.038,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 8.1708,
+        "y": 0.0244,
+        "z": 7.3448
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "material": {
+        "color": "#8bd5f7",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      }
+    },
+    {
+      "id": "collider-mrma5rac-rh1ftg",
+      "name": "Colisor caixa",
+      "source": {
+        "kind": "collider",
+        "asset": "",
+        "collider": "box"
+      },
+      "parentId": null,
+      "position": {
+        "x": 0.7446,
+        "y": -0.0077,
+        "z": -0.0545
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 8.8,
+        "y": 0.0216,
+        "z": 7.989
+      },
+      "color": "#68e0b2",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "collider": {
+        "trigger": false,
+        "cameraBlocker": true
+      },
+      "events": {
+        "onEnter": [],
+        "onExit": [],
+        "onInteract": []
+      },
+      "portal": {
+        "enabled": false,
+        "targetSceneId": "",
+        "targetSpawnId": "",
+        "activation": "onEnter",
+        "fadeFrames": 30
+      }
+    },
+    {
+      "id": "spawn-mrozcqvq-becjqz",
+      "name": "Entrada principal",
+      "source": {
+        "kind": "spawn",
+        "asset": ""
+      },
+      "parentId": null,
+      "position": {
+        "x": 0.1134,
+        "y": 0.08,
+        "z": 8.2951
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#ffc15c",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "spawn": {
+        "default": true
+      }
+    }
+  ],
+  "ui": [],
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "graphs": []
+  }
+}

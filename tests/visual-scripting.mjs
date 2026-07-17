@@ -25,18 +25,21 @@ const delay = createLogicNode("flowDelay", id, { x: 970, y: 20 });
 delay.config = { frames: 2 };
 const secondMessage = createLogicNode("actionMessage", id, { x: 1210, y: 20 });
 secondMessage.config = { text: "Depois", duration: 30 };
-graph.nodes.push(start, setVariable, condition, message, delay, secondMessage);
+const changeScene = createLogicNode("actionScene", id, { x: 1450, y: 20 });
+changeScene.config = { sceneId: "temple", spawnId: "temple-gate", fadeFrames: 24 };
+graph.nodes.push(start, setVariable, condition, message, delay, secondMessage, changeScene);
 graph.links.push(
   { id: id("link"), from: start.id, fromPort: "next", to: setVariable.id },
   { id: id("link"), from: setVariable.id, fromPort: "next", to: condition.id },
   { id: id("link"), from: condition.id, fromPort: "true", to: message.id },
   { id: id("link"), from: message.id, fromPort: "next", to: delay.id },
   { id: id("link"), from: delay.id, fromPort: "next", to: secondMessage.id },
+  { id: id("link"), from: secondMessage.id, fromPort: "next", to: changeScene.id },
 );
 
 const normalized = normalizeLogic({ variables: [variable], graphs: [graph] }, id);
 assert.equal(validateLogic(normalized).length, 0, "valid graph should not report issues");
-assert.equal(normalized.graphs[0].nodes.length, 6);
+assert.equal(normalized.graphs[0].nodes.length, 7);
 
 const sandbox = { console, globalThis: null };
 sandbox.globalThis = sandbox;
@@ -49,11 +52,14 @@ const runtime = sandbox.VisualScriptingRuntime.create(normalized, {
 });
 runtime.start();
 assert.equal(runtime.getVariable(variable.id), true);
-assert.deepEqual(actions.map((entry) => entry.config.text), ["Porta aberta"]);
+assert.deepEqual(actions.filter((entry) => entry.type === "actionMessage").map((entry) => entry.config.text), ["Porta aberta"]);
 runtime.step();
 assert.equal(actions.length, 1, "delay must wait for the configured frame count");
 runtime.step();
-assert.deepEqual(actions.map((entry) => entry.config.text), ["Porta aberta", "Depois"]);
+assert.deepEqual(actions.filter((entry) => entry.type === "actionMessage").map((entry) => entry.config.text), ["Porta aberta", "Depois"]);
+assert.deepEqual(actions.find((entry) => entry.type === "actionScene")?.config, {
+  sceneId: "temple", spawnId: "temple-gate", fadeFrames: 24,
+});
 
 const scene = normalizeScene({
   name: "Logic export",

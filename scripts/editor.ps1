@@ -9,16 +9,28 @@ $ProjectRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $NodeCommand = Get-Command node.exe -ErrorAction SilentlyContinue
 $EditorUrl = "http://127.0.0.1:$Port/editor/"
 $CapabilitiesUrl = "http://127.0.0.1:$Port/api/capabilities"
+$ServerSource = Get-Content -Raw -LiteralPath (Join-Path $ProjectRoot "editor\server.mjs")
+$SchemaMatch = [regex]::Match($ServerSource, 'editorSchemaVersion:\s*(\d+)')
+if (!$SchemaMatch.Success) {
+    throw "Nao foi possivel identificar a versao do servidor do editor."
+}
+$ExpectedEditorSchemaVersion = [int]$SchemaMatch.Groups[1].Value
 
+$Capabilities = $null
 try {
     $Capabilities = Invoke-RestMethod -Uri $CapabilitiesUrl -TimeoutSec 1
-    if ($Capabilities.editorSchemaVersion) {
-        Write-Host "Athena Visual Editor ja esta aberto."
-        Write-Host "Acesse no navegador: $EditorUrl"
-        return
-    }
 } catch {
     # A porta livre ou ocupada por outro processo e tratada abaixo.
+}
+
+if ($Capabilities -and $Capabilities.editorSchemaVersion) {
+    $RunningEditorSchemaVersion = [int]$Capabilities.editorSchemaVersion
+    if ($RunningEditorSchemaVersion -ne $ExpectedEditorSchemaVersion) {
+        throw "Ha um editor antigo aberto na porta $Port (versao $RunningEditorSchemaVersion; necessaria $ExpectedEditorSchemaVersion). Encerre o terminal antigo com Ctrl+C e execute este script novamente."
+    }
+    Write-Host "Athena Visual Editor ja esta aberto."
+    Write-Host "Acesse no navegador: $EditorUrl"
+    return
 }
 
 $PortInUse = $false

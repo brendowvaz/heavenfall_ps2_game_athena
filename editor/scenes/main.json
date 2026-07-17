@@ -9,14 +9,14 @@
     "snapMode": "grid",
     "camera": {
       "position": {
-        "x": 4.8808,
-        "y": 11.8638,
-        "z": 15.4283
+        "x": 13.018,
+        "y": 25.7425,
+        "z": 26.2875
       },
       "target": {
-        "x": 4.2619,
-        "y": 9.7608,
-        "z": 13.3184
+        "x": 5.8836,
+        "y": 1.5,
+        "z": 1.9653
       }
     },
     "runtime": {
@@ -507,6 +507,13 @@
         "onEnter": [],
         "onExit": [],
         "onInteract": []
+      },
+      "portal": {
+        "enabled": false,
+        "targetSceneId": "",
+        "targetSpawnId": "",
+        "activation": "onEnter",
+        "fadeFrames": 30
       }
     },
     {
@@ -545,6 +552,13 @@
         "onEnter": [],
         "onExit": [],
         "onInteract": []
+      },
+      "portal": {
+        "enabled": false,
+        "targetSceneId": "",
+        "targetSpawnId": "",
+        "activation": "onEnter",
+        "fadeFrames": 30
       }
     },
     {
@@ -583,6 +597,13 @@
         "onEnter": [],
         "onExit": [],
         "onInteract": []
+      },
+      "portal": {
+        "enabled": false,
+        "targetSceneId": "",
+        "targetSpawnId": "",
+        "activation": "onEnter",
+        "fadeFrames": 30
       }
     },
     {
@@ -621,6 +642,13 @@
         "onEnter": [],
         "onExit": [],
         "onInteract": []
+      },
+      "portal": {
+        "enabled": false,
+        "targetSceneId": "",
+        "targetSpawnId": "",
+        "activation": "onEnter",
+        "fadeFrames": 30
       }
     },
     {
@@ -659,6 +687,13 @@
         "onEnter": [],
         "onExit": [],
         "onInteract": []
+      },
+      "portal": {
+        "enabled": false,
+        "targetSceneId": "",
+        "targetSpawnId": "",
+        "activation": "onEnter",
+        "fadeFrames": 30
       }
     },
     {
@@ -898,6 +933,13 @@
         "onEnter": [],
         "onExit": [],
         "onInteract": []
+      },
+      "portal": {
+        "enabled": false,
+        "targetSceneId": "",
+        "targetSpawnId": "",
+        "activation": "onEnter",
+        "fadeFrames": 30
       }
     },
     {
@@ -979,6 +1021,13 @@
         "onEnter": [],
         "onExit": [],
         "onInteract": []
+      },
+      "portal": {
+        "enabled": false,
+        "targetSceneId": "",
+        "targetSpawnId": "",
+        "activation": "onEnter",
+        "fadeFrames": 30
       }
     },
     {
@@ -1060,6 +1109,13 @@
         "onEnter": [],
         "onExit": [],
         "onInteract": []
+      },
+      "portal": {
+        "enabled": false,
+        "targetSceneId": "",
+        "targetSpawnId": "",
+        "activation": "onEnter",
+        "fadeFrames": 30
       }
     },
     {
@@ -1183,6 +1239,82 @@
         "flicker": false,
         "flickerAmount": 0.24,
         "flickerSpeed": 7.5
+      }
+    },
+    {
+      "id": "ruinas-entrada-principal",
+      "name": "Entrada principal",
+      "source": {
+        "kind": "spawn",
+        "asset": ""
+      },
+      "parentId": null,
+      "position": {
+        "x": 0,
+        "y": 0.08,
+        "z": 18
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#ffc15c",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "spawn": {
+        "default": true
+      }
+    },
+    {
+      "id": "portal-mrozd8ea-jo3nzk",
+      "name": "Portal de cena",
+      "source": {
+        "kind": "collider",
+        "asset": "",
+        "collider": "box"
+      },
+      "parentId": null,
+      "position": {
+        "x": -0.1359,
+        "y": 1.5,
+        "z": 1.9653
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 8.1462,
+        "y": 1.8753,
+        "z": 0.3
+      },
+      "color": "#ffad66",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "collider": {
+        "trigger": true,
+        "cameraBlocker": false
+      },
+      "events": {
+        "onEnter": [],
+        "onExit": [],
+        "onInteract": []
+      },
+      "portal": {
+        "enabled": true,
+        "targetSceneId": "salao-saida-01",
+        "targetSpawnId": "spawn-mrozcqvq-becjqz",
+        "activation": "onEnter",
+        "fadeFrames": 30
       }
     }
   ],

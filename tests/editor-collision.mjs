@@ -62,6 +62,7 @@ const scene = normalizeScene({
       rotation: { x: 0, y: 0, z: 0 },
       scale: { x: 0.5, y: 2, z: 1 },
       collider: { trigger: true, cameraBlocker: false },
+      portal: { enabled: true, targetSceneId: "temple", targetSpawnId: "temple-gate", activation: "onInteract", fadeFrames: 24 },
       events: {
         onEnter: [
           { id: "welcome", type: "message", text: "Bem-vindo às ruínas", duration: 150 },
@@ -74,8 +75,17 @@ const scene = normalizeScene({
           { id: "teleport", type: "teleport", position: { x: 3, y: 0.08, z: 9 } },
           { id: "burst", type: "particle", targetId: "fire-particles", mode: "burst" },
           { id: "play-video", type: "video", targetId: "intro-video", mode: "play" },
+          { id: "enter-temple", type: "scene", sceneId: "temple", spawnId: "temple-gate", fadeFrames: 24 },
         ],
       },
+    },
+    {
+      id: "main-entry",
+      name: "Entrada principal",
+      source: { kind: "spawn" },
+      position: { x: 3, y: 0.2, z: 7 },
+      rotation: { x: 0, y: 180, z: 0 },
+      spawn: { default: true },
     },
     {
       id: "disabled",
@@ -207,6 +217,19 @@ assert(sandbox.EDITOR_EVENTS[0].onInteract[1].type === "particle" && sandbox.EDI
   "Particle control actions must survive export");
 assert(sandbox.EDITOR_EVENTS[0].onInteract[2].type === "video" && sandbox.EDITOR_EVENTS[0].onInteract[2].targetId === "intro-video",
   "Video control actions must survive export");
+assert(sandbox.EDITOR_EVENTS[0].onInteract[3].type === "scene"
+  && sandbox.EDITOR_EVENTS[0].onInteract[3].sceneId === "temple"
+  && sandbox.EDITOR_EVENTS[0].onInteract[3].spawnId === "temple-gate",
+"Scene actions must preserve their destination and spawn point");
+assert(sandbox.EDITOR_SPAWN_POINTS.length === 1
+  && sandbox.EDITOR_SPAWN_POINTS[0].id === "main-entry"
+  && approximately(Math.abs(sandbox.EDITOR_SPAWN_POINTS[0].yaw), Math.PI),
+"Spawn points must export world position, rotation and default state");
+assert(sandbox.EDITOR_PORTALS.length === 1
+  && sandbox.EDITOR_PORTALS[0].triggerId === "child-box"
+  && sandbox.EDITOR_PORTALS[0].targetSceneId === "temple"
+  && sandbox.EDITOR_PORTALS[0].activation === "onInteract",
+"Enabled portals must export as trigger-linked scene transitions");
 
 assert(sandbox.EDITOR_SETTINGS.vsync === false && sandbox.EDITOR_SETTINGS.showPerformance === true
   && sandbox.EDITOR_SETTINGS.legacyArenaBounds === false && sandbox.EDITOR_SETTINGS.player.spawn.x === 4,

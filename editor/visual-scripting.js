@@ -19,6 +19,7 @@ export const LOGIC_NODE_DEFINITIONS = Object.freeze({
   actionAudio: { category: "action", label: "Controlar áudio", inputs: ["in"], outputs: ["next"] },
   actionParticle: { category: "action", label: "Controlar partículas", inputs: ["in"], outputs: ["next"] },
   actionVideo: { category: "action", label: "Controlar vídeo", inputs: ["in"], outputs: ["next"] },
+  actionScene: { category: "action", label: "Trocar de cena", inputs: ["in"], outputs: [] },
   actionSetVariable: { category: "variable", label: "Alterar variável", inputs: ["in"], outputs: ["next"] },
   flowDelay: { category: "flow", label: "Esperar", inputs: ["in"], outputs: ["next"] },
 });
@@ -101,6 +102,12 @@ function normalizeNodeConfig(type, config = {}) {
       return {
         targetId: safeId(config.targetId, ""),
         mode: ["play", "pause", "stop"].includes(config.mode) ? config.mode : "play",
+      };
+    case "actionScene":
+      return {
+        sceneId: safeId(config.sceneId, ""),
+        spawnId: safeId(config.spawnId, ""),
+        fadeFrames: Math.round(Math.max(1, Math.min(300, finite(config.fadeFrames, 30)))),
       };
     case "actionSetVariable":
       return {
@@ -261,6 +268,9 @@ export function validateLogic(logic = {}) {
       if (node.type === "eventTrigger" && !config.triggerId) issues.push(`${graph.name}: um evento de trigger está sem alvo.`);
       if (["actionVisibility", "actionAudio", "actionParticle", "actionVideo"].includes(node.type) && !config.targetId) {
         issues.push(`${graph.name}: “${LOGIC_NODE_DEFINITIONS[node.type].label}” está sem alvo.`);
+      }
+      if (node.type === "actionScene" && !config.sceneId) {
+        issues.push(`${graph.name}: “${LOGIC_NODE_DEFINITIONS[node.type].label}” está sem cena de destino.`);
       }
     }
   }

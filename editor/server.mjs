@@ -13,6 +13,7 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as THREE from "three";
+import { withSceneProjectFileLock } from "./scene-project-lock.mjs";
 import { normalizeLogic } from "./visual-scripting.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -29,6 +30,16 @@ const generatedSceneProjectFile = path.join(generatedScenesRoot, "project.genera
 const host = "127.0.0.1";
 const port = Number(process.env.ATHENA_EDITOR_PORT || 4173);
 const maxProjectScenes = 64;
+let atomicWriteSequence = 0;
+const atomicDestinationQueues = new Map();
+let sceneProjectQueue = Promise.resolve();
+
+function withSceneProjectLock(operation) {
+  const runLocked = () => withSceneProjectFileLock(scenesRoot, operation);
+  const pending = sceneProjectQueue.then(runLocked, runLocked);
+  sceneProjectQueue = pending.catch(() => {});
+  return pending;
+}
 
 const modelExtensions = new Set([".obj", ".gltf", ".glb"]);
 const imageExtensions = new Set([".png", ".jpg", ".jpeg", ".bmp"]);
@@ -168,7 +179,7 @@ function safeAssetPath(value) {
 }
 
 const eventPhases = ["onEnter", "onExit", "onInteract"];
-const eventActionTypes = ["message", "visibility", "teleport", "audio", "particle", "video"];
+const eventActionTypes = ["message", "visibility", "teleport", "audio", "particle", "video", "scene"];
 const particlePresetColors = { fire: "#ff380a", smoke: "#616b7a", sparks: "#ffb814" };
 
 function normalizeEventAction(action, index) {
@@ -199,6 +210,21 @@ function normalizeEventAction(action, index) {
       targetId: typeof action?.targetId === "string" ? action.targetId.slice(0, 96) : "",
       mode: ["play", "pause", "stop"].includes(action?.mode) ? action.mode : "play",
     } : {}),
+    ...(type === "scene" ? {
+      sceneId: String(action?.sceneId || "").replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96),
+      spawnId: String(action?.spawnId || "").replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96),
+      fadeFrames: Math.round(Math.max(1, Math.min(300, finite(action?.fadeFrames, 30)))),
+    } : {}),
+  };
+}
+
+function normalizePortal(portal) {
+  return {
+    enabled: portal?.enabled === true,
+    targetSceneId: String(portal?.targetSceneId || "").replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96),
+    targetSpawnId: String(portal?.targetSpawnId || "").replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96),
+    activation: ["onEnter", "onInteract"].includes(portal?.activation) ? portal.activation : "onEnter",
+    fadeFrames: Math.round(Math.max(1, Math.min(300, finite(portal?.fadeFrames, 30)))),
   };
 }
 
@@ -275,7 +301,7 @@ function normalizeScene(input) {
       },
     },
     objects: objects.slice(0, 2000).map((item, index) => {
-      const allowedKinds = new Set(["model", "primitive", "group", "collider", "light", "camera", "audio", "particle", "shadow"]);
+      const allowedKinds = new Set(["model", "primitive", "group", "collider", "light", "camera", "audio", "particle", "shadow", "spawn"]);
       let kind = allowedKinds.has(item?.source?.kind) ? item.source.kind : "model";
       const asset = safeAssetPath(item?.source?.asset || item?.asset);
       const legacyName = String(item?.name || "").toLocaleLowerCase("pt-BR");
@@ -337,6 +363,10 @@ function normalizeScene(input) {
           cameraBlocker: item?.collider?.cameraBlocker !== false,
         } : undefined,
         events: kind === "collider" ? normalizeEvents(item?.events || item?.collider?.events) : undefined,
+        portal: kind === "collider" ? normalizePortal(item?.portal || item?.collider?.portal) : undefined,
+        spawn: kind === "spawn" ? {
+          default: item?.spawn?.default === true,
+        } : undefined,
         light: kind === "light" ? {
           type: lightType,
           color: /^#[0-9a-f]{6}$/i.test(item?.light?.color || "") ? item.light.color : "#ffffff",
@@ -585,6 +615,37 @@ function generateAthenaScene(scene, metadata = {}) {
       };
     });
 
+  const spawnPoints = scene.objects
+    .filter((item) => item.runtime && item.visible && item.source.kind === "spawn")
+    .map((item) => {
+      const transform = transforms.get(item.id);
+      const forward = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(
+        transform.rotation.x,
+        transform.rotation.y,
+        transform.rotation.z,
+        "XYZ",
+      ));
+      return {
+        id: item.id,
+        name: item.name,
+        default: item.spawn?.default === true,
+        position: transform.position,
+        rotation: transform.rotation,
+        yaw: Math.atan2(forward.x, -forward.z),
+      };
+    });
+
+  const portals = scene.objects
+    .filter((item) => item.runtime && item.visible && item.source.kind === "collider"
+      && item.collider?.trigger && item.portal?.enabled)
+    .map((item) => ({
+      triggerId: item.id,
+      targetSceneId: item.portal.targetSceneId,
+      targetSpawnId: item.portal.targetSpawnId,
+      activation: item.portal.activation,
+      fadeFrames: item.portal.fadeFrames,
+    }));
+
   const recordById = new Map(scene.objects.map((item) => [item.id, item]));
   function isRuntimeDescendant(item, ancestorId) {
     let current = item;
@@ -791,6 +852,8 @@ function generateAthenaScene(scene, metadata = {}) {
     `globalThis.EDITOR_SETTINGS = ${JSON.stringify(runtimeSettings, null, 2)};`,
     `globalThis.EDITOR_SCENE = ${JSON.stringify(objects, null, 2)};`,
     `globalThis.EDITOR_COLLIDERS = ${JSON.stringify(colliders, null, 2)};`,
+    `globalThis.EDITOR_SPAWN_POINTS = ${JSON.stringify(spawnPoints, null, 2)};`,
+    `globalThis.EDITOR_PORTALS = ${JSON.stringify(portals, null, 2)};`,
     `globalThis.EDITOR_EVENTS = ${JSON.stringify(events, null, 2)};`,
     `globalThis.EDITOR_LOGIC = ${JSON.stringify(logic, null, 2)};`,
     `globalThis.EDITOR_LIGHTS = ${JSON.stringify(lights, null, 2)};`,
@@ -845,10 +908,40 @@ function sceneIdFromName(name, existingIds = new Set()) {
   return id;
 }
 
+async function writeTextAtomic(destination, content) {
+  const destinationKey = path.resolve(destination);
+  const previous = atomicDestinationQueues.get(destinationKey) || Promise.resolve();
+  const pending = previous.catch(() => {}).then(async () => {
+    const temporary = `${destination}.${process.pid}.${Date.now()}.${++atomicWriteSequence}.tmp`;
+    try {
+      await writeFile(temporary, content, "utf8");
+      await rename(temporary, destination);
+    } finally {
+      await unlink(temporary).catch(() => {});
+    }
+  });
+  atomicDestinationQueues.set(destinationKey, pending);
+  try {
+    await pending;
+  } finally {
+    if (atomicDestinationQueues.get(destinationKey) === pending) {
+      atomicDestinationQueues.delete(destinationKey);
+    }
+  }
+}
+
 async function writeJsonAtomic(destination, value) {
-  const temporary = `${destination}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-  await rename(temporary, destination);
+  await writeTextAtomic(destination, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+async function writeTextIfChangedAtomic(destination, content) {
+  try {
+    if (await readFile(destination, "utf8") === content) return false;
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  await writeTextAtomic(destination, content);
+  return true;
 }
 
 function sceneSummary(scene) {
@@ -856,6 +949,10 @@ function sceneSummary(scene) {
     objectCount: Array.isArray(scene?.objects) ? scene.objects.length : 0,
     uiCount: Array.isArray(scene?.ui) ? scene.ui.length : 0,
     graphCount: Array.isArray(scene?.logic?.graphs) ? scene.logic.graphs.length : 0,
+    spawnPoints: (Array.isArray(scene?.objects) ? scene.objects : [])
+      .filter((item) => item?.source?.kind === "spawn" && item.runtime !== false && item.visible !== false)
+      .slice(0, 64)
+      .map((item) => ({ id: item.id, name: item.name, default: item.spawn?.default === true })),
   };
 }
 
@@ -877,6 +974,11 @@ function normalizeSceneProject(input = {}) {
       objectCount: Math.max(0, Math.trunc(Number(source.objectCount) || 0)),
       uiCount: Math.max(0, Math.trunc(Number(source.uiCount) || 0)),
       graphCount: Math.max(0, Math.trunc(Number(source.graphCount) || 0)),
+      spawnPoints: (Array.isArray(source.spawnPoints) ? source.spawnPoints : []).slice(0, 64).map((spawn, spawnIndex) => ({
+        id: String(spawn?.id || `spawn-${spawnIndex + 1}`).replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96),
+        name: String(spawn?.name || `Entrada ${spawnIndex + 1}`).slice(0, 120),
+        default: spawn?.default === true,
+      })),
     });
   }
   if (scenes.length === 0) throw new Error("Empty scene project");
@@ -897,6 +999,7 @@ function generateSceneProjectManifest(project) {
       id: entry.id,
       name: entry.name,
       file: `scenes/${entry.id}.generated.js`,
+      spawnPoints: entry.spawnPoints || [],
     })),
   };
   return [
@@ -910,53 +1013,163 @@ async function writeSceneProjectFiles(project) {
   await mkdir(scenesRoot, { recursive: true });
   await mkdir(generatedScenesRoot, { recursive: true });
   await writeJsonAtomic(sceneProjectFile, project);
-  await writeFile(generatedSceneProjectFile, generateSceneProjectManifest(project), "utf8");
+  await writeTextIfChangedAtomic(generatedSceneProjectFile, generateSceneProjectManifest(project));
 }
 
 async function writeStartupScene(project) {
   const startup = await readProjectScene(project.startupSceneId, project);
   await mkdir(assetsRoot, { recursive: true });
-  await writeFile(generatedSceneFile, generateAthenaScene(startup, { id: project.startupSceneId }), "utf8");
+  await writeTextIfChangedAtomic(generatedSceneFile, generateAthenaScene(startup, { id: project.startupSceneId }));
   return startup;
+}
+
+async function readCanonicalScene(id) {
+  const destination = path.join(scenesRoot, `${id}.json`);
+  if (!isInside(scenesRoot, destination)) throw new Error(`Invalid scene identifier: ${id}`);
+  let source;
+  try {
+    source = await readFile(destination, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") throw new Error(`Scene file ${id} is missing; the catalog was preserved`);
+    throw error;
+  }
+  try {
+    return normalizeScene(JSON.parse(source));
+  } catch (error) {
+    throw new Error(`Scene file ${id} is invalid; no data was overwritten: ${error.message}`);
+  }
+}
+
+async function canonicalSceneIds() {
+  let entries;
+  try {
+    entries = await readdir(scenesRoot, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+  return entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".json") && entry.name !== "index.json")
+    .map((entry) => entry.name.slice(0, -5))
+    .filter((id) => sanitizeSegment(id).replace(/\.[^.]+$/, "").toLowerCase() === id)
+    .sort((left, right) => left === "main" ? -1 : right === "main" ? 1 : left.localeCompare(right));
+}
+
+async function refreshGeneratedSceneWhenNeeded(id, scene) {
+  const generatedFile = path.join(generatedScenesRoot, `${id}.generated.js`);
+  await writeTextIfChangedAtomic(generatedFile, generateAthenaScene(scene, { id }));
+}
+
+function updateProjectEntryFromScene(entry, scene, updatedAt = entry.updatedAt) {
+  const next = { name: scene.name, updatedAt, ...sceneSummary(scene) };
+  const changed = entry.name !== next.name
+    || entry.updatedAt !== next.updatedAt
+    || entry.objectCount !== next.objectCount
+    || entry.uiCount !== next.uiCount
+    || entry.graphCount !== next.graphCount
+    || JSON.stringify(entry.spawnPoints || []) !== JSON.stringify(next.spawnPoints || []);
+  Object.assign(entry, next);
+  return changed;
+}
+
+async function reconcileSceneProject(project) {
+  let changed = false;
+  const knownIds = new Set(project.scenes.map((entry) => entry.id));
+  for (const entry of project.scenes) {
+    const scene = await readCanonicalScene(entry.id);
+    changed = updateProjectEntryFromScene(entry, scene) || changed;
+    await refreshGeneratedSceneWhenNeeded(entry.id, scene);
+  }
+  for (const id of await canonicalSceneIds()) {
+    if (knownIds.has(id)) continue;
+    const scene = await readCanonicalScene(id);
+    const info = await stat(path.join(scenesRoot, `${id}.json`));
+    project.scenes.push({ id, name: scene.name, updatedAt: info.mtime.toISOString(), ...sceneSummary(scene) });
+    await refreshGeneratedSceneWhenNeeded(id, scene);
+    knownIds.add(id);
+    changed = true;
+  }
+  return changed;
+}
+
+async function recoverSceneProject() {
+  const ids = await canonicalSceneIds();
+  if (ids.length > 0) {
+    const scenes = [];
+    const loadedScenes = new Map();
+    for (const id of ids) {
+      const scene = await readCanonicalScene(id);
+      loadedScenes.set(id, scene);
+      const info = await stat(path.join(scenesRoot, `${id}.json`));
+      scenes.push({ id, name: scene.name, updatedAt: info.mtime.toISOString(), ...sceneSummary(scene) });
+      await writeTextIfChangedAtomic(path.join(generatedScenesRoot, `${id}.generated.js`), generateAthenaScene(scene, { id }));
+    }
+    let activeSceneId = scenes.some((entry) => entry.id === "main") ? "main" : scenes[0].id;
+    try {
+      const legacyMirror = normalizeScene(JSON.parse(await readFile(sceneFile, "utf8")));
+      const matching = scenes.find((entry) => JSON.stringify(loadedScenes.get(entry.id)) === JSON.stringify(legacyMirror))
+        || scenes.find((entry) => entry.name === legacyMirror.name);
+      if (matching) activeSceneId = matching.id;
+    } catch {
+      // The canonical scene files remain sufficient for recovery.
+    }
+    let startupSceneId = activeSceneId;
+    try {
+      const generatedStartup = await readFile(generatedSceneFile, "utf8");
+      const match = generatedStartup.match(/globalThis\.EDITOR_SCENE_META\s*=\s*\{\s*"id"\s*:\s*"([a-z0-9_-]+)"/);
+      if (match && loadedScenes.has(match[1])) startupSceneId = match[1];
+    } catch {
+      // Use the recovered active scene when no startup derivative exists.
+    }
+    const project = { version: 2, activeSceneId, startupSceneId, scenes };
+    await writeSceneProjectFiles(project);
+    await writeStartupScene(project);
+    return project;
+  }
+
+  let legacy;
+  try {
+    legacy = normalizeScene(JSON.parse(await readFile(sceneFile, "utf8")));
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw new Error(`Legacy scene is invalid; no data was overwritten: ${error.message}`);
+    legacy = normalizeScene({ name: "Cena principal", objects: [], ui: [] });
+  }
+  const id = "main";
+  const project = {
+    version: 2,
+    activeSceneId: id,
+    startupSceneId: id,
+    scenes: [{ id, name: legacy.name, updatedAt: new Date().toISOString(), ...sceneSummary(legacy) }],
+  };
+  await writeJsonAtomic(path.join(scenesRoot, `${id}.json`), legacy);
+  await writeTextIfChangedAtomic(path.join(generatedScenesRoot, `${id}.generated.js`), generateAthenaScene(legacy, { id }));
+  await writeJsonAtomic(sceneFile, legacy);
+  await writeSceneProjectFiles(project);
+  await writeStartupScene(project);
+  return project;
 }
 
 async function ensureSceneProject() {
   await mkdir(scenesRoot, { recursive: true });
   await mkdir(generatedScenesRoot, { recursive: true });
+  let source;
   try {
-    const project = normalizeSceneProject(JSON.parse(await readFile(sceneProjectFile, "utf8")));
-    for (const entry of project.scenes) {
-      try {
-        const stored = normalizeScene(JSON.parse(await readFile(path.join(scenesRoot, `${entry.id}.json`), "utf8")));
-        entry.name = stored.name;
-        Object.assign(entry, sceneSummary(stored));
-      } catch {
-        // Keep the entry visible so a missing or invalid scene can be diagnosed.
-      }
-    }
-    await writeSceneProjectFiles(project);
-    if (!existsSync(generatedSceneFile)) await writeStartupScene(project);
-    return project;
-  } catch {
-    let legacy;
-    try {
-      legacy = normalizeScene(JSON.parse(await readFile(sceneFile, "utf8")));
-    } catch {
-      legacy = normalizeScene({ name: "Cena principal", objects: [], ui: [] });
-    }
-    const id = "main";
-    const project = {
-      version: 2,
-      activeSceneId: id,
-      startupSceneId: id,
-      scenes: [{ id, name: legacy.name, updatedAt: new Date().toISOString(), ...sceneSummary(legacy) }],
-    };
-    await writeJsonAtomic(path.join(scenesRoot, `${id}.json`), legacy);
-    await writeSceneProjectFiles(project);
-    await writeFile(path.join(generatedScenesRoot, `${id}.generated.js`), generateAthenaScene(legacy, { id }), "utf8");
-    await writeFile(generatedSceneFile, generateAthenaScene(legacy, { id }), "utf8");
-    return project;
+    source = await readFile(sceneProjectFile, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return recoverSceneProject();
+    throw error;
   }
+  let project;
+  try {
+    project = normalizeSceneProject(JSON.parse(source));
+  } catch (error) {
+    throw new Error(`Scene catalog is invalid; all files were preserved: ${error.message}`);
+  }
+  const changed = await reconcileSceneProject(project);
+  if (changed) await writeJsonAtomic(sceneProjectFile, project);
+  await writeTextIfChangedAtomic(generatedSceneProjectFile, generateSceneProjectManifest(project));
+  await writeStartupScene(project);
+  return project;
 }
 
 async function readProjectScene(sceneId, project = null) {
@@ -965,7 +1178,7 @@ async function readProjectScene(sceneId, project = null) {
   if (!currentProject.scenes.some((entry) => entry.id === id)) throw new Error("Cena não encontrada");
   const destination = path.join(scenesRoot, `${id}.json`);
   if (!isInside(scenesRoot, destination)) throw new Error("Identificador de cena inválido");
-  return normalizeScene(JSON.parse(await readFile(destination, "utf8")));
+  return readCanonicalScene(id);
 }
 
 async function activateProjectScene(sceneId) {
@@ -999,7 +1212,7 @@ async function writeScene(scene, sceneId) {
   await mkdir(generatedScenesRoot, { recursive: true });
   await writeJsonAtomic(path.join(scenesRoot, `${id}.json`), scene);
   await writeJsonAtomic(sceneFile, scene);
-  await writeFile(path.join(generatedScenesRoot, `${id}.generated.js`), generateAthenaScene(scene, { id }), "utf8");
+  await writeTextIfChangedAtomic(path.join(generatedScenesRoot, `${id}.generated.js`), generateAthenaScene(scene, { id }));
   await writeSceneProjectFiles(project);
   if (project.startupSceneId === id) await writeStartupScene(project);
   return project;
@@ -1020,9 +1233,9 @@ async function createProjectScene(payload) {
   project.scenes.push({ id, name: source.name, updatedAt: new Date().toISOString(), ...sceneSummary(source) });
   project.activeSceneId = id;
   await writeJsonAtomic(path.join(scenesRoot, `${id}.json`), source);
+  await writeTextIfChangedAtomic(path.join(generatedScenesRoot, `${id}.generated.js`), generateAthenaScene(source, { id }));
   await writeSceneProjectFiles(project);
   await writeJsonAtomic(sceneFile, source);
-  await writeFile(path.join(generatedScenesRoot, `${id}.generated.js`), generateAthenaScene(source, { id }), "utf8");
   return { project, scene: source, sceneId: id };
 }
 
@@ -1033,14 +1246,29 @@ async function deleteProjectScene(sceneId) {
   const index = project.scenes.findIndex((entry) => entry.id === id);
   if (index < 0) throw new Error("Cena não encontrada");
   project.scenes.splice(index, 1);
-  await unlink(path.join(scenesRoot, `${id}.json`)).catch(() => {});
-  await unlink(path.join(generatedScenesRoot, `${id}.generated.js`)).catch(() => {});
   if (project.activeSceneId === id) project.activeSceneId = project.scenes[Math.max(0, index - 1)].id;
   if (project.startupSceneId === id) project.startupSceneId = project.scenes[Math.max(0, index - 1)].id;
   const scene = await readProjectScene(project.activeSceneId, project);
   await writeSceneProjectFiles(project);
-  await writeJsonAtomic(sceneFile, scene);
   await writeStartupScene(project);
+  await writeJsonAtomic(sceneFile, scene);
+
+  // Archive only after committing the new catalog. If the process stops before
+  // this rename, reconciliation safely restores the scene instead of losing it.
+  const trashRoot = path.join(scenesRoot, ".trash");
+  await mkdir(trashRoot, { recursive: true });
+  const deletedAt = new Date().toISOString().replace(/[:.]/g, "-");
+  await rename(
+    path.join(scenesRoot, `${id}.json`),
+    path.join(trashRoot, `${id}.${deletedAt}.json`),
+  );
+  try {
+    await unlink(path.join(generatedScenesRoot, `${id}.generated.js`));
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      console.warn(`[Athena Editor] Cena ${id} foi excluída, mas o derivado antigo não pôde ser removido: ${error.message}`);
+    }
+  }
   return { project, scene, sceneId: project.activeSceneId };
 }
 
@@ -1053,7 +1281,7 @@ async function renameProjectScene(sceneId, name) {
   scene.name = String(name || "").trim().slice(0, 120) || scene.name;
   Object.assign(entry, { name: scene.name, updatedAt: new Date().toISOString(), ...sceneSummary(scene) });
   await writeJsonAtomic(path.join(scenesRoot, `${id}.json`), scene);
-  await writeFile(path.join(generatedScenesRoot, `${id}.generated.js`), generateAthenaScene(scene, { id }), "utf8");
+  await writeTextIfChangedAtomic(path.join(generatedScenesRoot, `${id}.generated.js`), generateAthenaScene(scene, { id }));
   if (project.activeSceneId === id) await writeJsonAtomic(sceneFile, scene);
   await writeSceneProjectFiles(project);
   if (project.startupSceneId === id) await writeStartupScene(project);
@@ -1376,14 +1604,14 @@ function startBuildAndRun() {
 async function handleApi(request, response, url) {
   if (url.pathname === "/api/capabilities" && request.method === "GET") {
     sendJson(response, 200, {
-      editorSchemaVersion: 10,
-      features: ["materials", "material-runtime", "model-animation", "lights", "point-light-runtime", "light-flicker", "shadow-projectors", "cameras", "camera-modes", "camera-preview", "components", "trigger-events", "visual-scripting", "logic-variables", "multiple-scenes", "scene-manager", "startup-scene", "scene-order", "project-export", "runtime-settings", "ui-editor", "ui-runtime", "ui-images", "ui-video", "ui-fonts", "audio", "audio-runtime", "particles", "particle-runtime", "particle-color"],
+      editorSchemaVersion: 13,
+      features: ["materials", "material-runtime", "model-animation", "lights", "point-light-runtime", "light-flicker", "shadow-projectors", "cameras", "camera-modes", "camera-preview", "components", "trigger-events", "visual-scripting", "logic-variables", "multiple-scenes", "scene-manager", "startup-scene", "scene-order", "project-export", "dynamic-scene-loading", "scene-portals", "spawn-points", "runtime-settings", "ui-editor", "ui-runtime", "ui-images", "ui-video", "ui-fonts", "audio", "audio-runtime", "particles", "particle-runtime", "particle-color"],
     });
     return true;
   }
   if (url.pathname === "/api/project/export" && request.method === "GET") {
     try {
-      sendJson(response, 200, await exportSceneProject());
+      sendJson(response, 200, await withSceneProjectLock(() => exportSceneProject()));
     } catch (error) {
       sendJson(response, 500, { error: error.message });
     }
@@ -1391,7 +1619,7 @@ async function handleApi(request, response, url) {
   }
   if (url.pathname === "/api/scenes" && request.method === "GET") {
     try {
-      sendJson(response, 200, await ensureSceneProject());
+      sendJson(response, 200, await withSceneProjectLock(() => ensureSceneProject()));
     } catch (error) {
       sendJson(response, 500, { error: error.message });
     }
@@ -1399,7 +1627,8 @@ async function handleApi(request, response, url) {
   }
   if (url.pathname === "/api/scenes" && request.method === "POST") {
     try {
-      sendJson(response, 201, { ok: true, ...await createProjectScene(await readJsonBody(request)) });
+      const payload = await readJsonBody(request);
+      sendJson(response, 201, { ok: true, ...await withSceneProjectLock(() => createProjectScene(payload)) });
     } catch (error) {
       sendJson(response, 400, { error: error.message });
     }
@@ -1408,7 +1637,7 @@ async function handleApi(request, response, url) {
   if (url.pathname === "/api/scenes" && request.method === "PATCH") {
     try {
       const payload = await readJsonBody(request);
-      sendJson(response, 200, { ok: true, project: await reorderProjectScenes(payload?.order) });
+      sendJson(response, 200, { ok: true, project: await withSceneProjectLock(() => reorderProjectScenes(payload?.order)) });
     } catch (error) {
       sendJson(response, 400, { error: error.message });
     }
@@ -1417,7 +1646,7 @@ async function handleApi(request, response, url) {
   const activateMatch = url.pathname.match(/^\/api\/scenes\/([^/]+)\/activate$/);
   if (activateMatch && request.method === "POST") {
     try {
-      sendJson(response, 200, { ok: true, ...await activateProjectScene(decodeURIComponent(activateMatch[1])) });
+      sendJson(response, 200, { ok: true, ...await withSceneProjectLock(() => activateProjectScene(decodeURIComponent(activateMatch[1]))) });
     } catch (error) {
       sendJson(response, 400, { error: error.message });
     }
@@ -1426,7 +1655,7 @@ async function handleApi(request, response, url) {
   const startupMatch = url.pathname.match(/^\/api\/scenes\/([^/]+)\/startup$/);
   if (startupMatch && request.method === "POST") {
     try {
-      sendJson(response, 200, { ok: true, ...await setStartupProjectScene(decodeURIComponent(startupMatch[1])) });
+      sendJson(response, 200, { ok: true, ...await withSceneProjectLock(() => setStartupProjectScene(decodeURIComponent(startupMatch[1]))) });
     } catch (error) {
       sendJson(response, 400, { error: error.message });
     }
@@ -1436,7 +1665,7 @@ async function handleApi(request, response, url) {
   if (sceneDeleteMatch && request.method === "PATCH") {
     try {
       const payload = await readJsonBody(request);
-      sendJson(response, 200, { ok: true, ...await renameProjectScene(decodeURIComponent(sceneDeleteMatch[1]), payload?.name) });
+      sendJson(response, 200, { ok: true, ...await withSceneProjectLock(() => renameProjectScene(decodeURIComponent(sceneDeleteMatch[1]), payload?.name)) });
     } catch (error) {
       sendJson(response, 400, { error: error.message });
     }
@@ -1444,7 +1673,7 @@ async function handleApi(request, response, url) {
   }
   if (sceneDeleteMatch && request.method === "DELETE") {
     try {
-      sendJson(response, 200, { ok: true, ...await deleteProjectScene(decodeURIComponent(sceneDeleteMatch[1])) });
+      sendJson(response, 200, { ok: true, ...await withSceneProjectLock(() => deleteProjectScene(decodeURIComponent(sceneDeleteMatch[1]))) });
     } catch (error) {
       sendJson(response, 400, { error: error.message });
     }
@@ -1452,9 +1681,12 @@ async function handleApi(request, response, url) {
   }
   if (url.pathname === "/api/scene" && request.method === "GET") {
     try {
-      const project = await ensureSceneProject();
-      const sceneId = url.searchParams.get("sceneId") || project.activeSceneId;
-      const scene = await readProjectScene(sceneId, project);
+      const { project, sceneId, scene } = await withSceneProjectLock(async () => {
+        const project = await ensureSceneProject();
+        const sceneId = url.searchParams.get("sceneId") || project.activeSceneId;
+        const scene = await readProjectScene(sceneId, project);
+        return { project, sceneId, scene };
+      });
       sendJson(response, 200, { ...scene, sceneId });
     } catch (error) {
       sendJson(response, 500, { error: `Não foi possível abrir a cena: ${error.message}` });
@@ -1465,7 +1697,7 @@ async function handleApi(request, response, url) {
   if (url.pathname === "/api/scene" && request.method === "PUT") {
     try {
       const scene = normalizeScene(await readJsonBody(request, 16 * 1024 * 1024));
-      const project = await writeScene(scene, url.searchParams.get("sceneId"));
+      const project = await withSceneProjectLock(() => writeScene(scene, url.searchParams.get("sceneId")));
       sendJson(response, 200, { ok: true, scene, sceneId: project.activeSceneId, project, generated: "assets/scene.generated.js" });
     } catch (error) {
       sendJson(response, 400, { error: error.message });
@@ -1520,7 +1752,8 @@ async function handleApi(request, response, url) {
 
   if (url.pathname === "/api/import" && request.method === "POST") {
     try {
-      const result = await importFiles(await readJsonBody(request));
+      const payload = await readJsonBody(request);
+      const result = await withSceneProjectLock(() => importFiles(payload));
       sendJson(response, 201, result);
     } catch (error) {
       sendJson(response, 400, { error: error.message });
@@ -1594,4 +1827,7 @@ export {
   generateAthenaScene,
   generateSceneProjectManifest,
   convertObjToRuntimeObj,
+  writeTextAtomic,
+  writeTextIfChangedAtomic,
+  writeJsonAtomic,
 };

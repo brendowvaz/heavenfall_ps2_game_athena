@@ -701,6 +701,11 @@ h2, h3, p { margin: 0; }
 }
 .collider-inspector { background: rgba(43,105,82,.045); }
 .collider-inspector h3 { color: #68aa91; }
+.portal-editor { margin-top: 12px; padding: 10px 9px 2px; border: 1px solid rgba(255,173,102,.18); border-radius: 4px; background: rgba(255,135,72,.035); }
+.portal-editor .component-heading strong { color: #e8a26c; }
+.portal-editor .component-heading small { color: #8f654a; }
+.spawn-inspector { background: rgba(87,206,245,.035); }
+.spawn-inspector h3 { color: #68c8e9; }
 .trigger-events-editor { margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(104,224,178,.16); }
 .component-heading { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
 .component-heading strong { color: #86baa5; font-size: 10px; font-weight: 600; }

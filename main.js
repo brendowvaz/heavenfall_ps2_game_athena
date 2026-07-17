@@ -3,40 +3,117 @@
 // AthenaEnv/PS2 runtime. Static geometry is stored as OBJ chunks to avoid the
 // Render.vertexList incompatibility present in some AthenaEnv builds.
 
-const canvas = Screen.getMode();
-canvas.zbuffering = true;
-canvas.double_buffering = true;
-canvas.psm = Screen.CT32;
-canvas.psmz = Screen.Z16S;
-Screen.setMode(canvas);
-Screen.setFrameCounter(true);
+const MAX_RUNTIME_LIGHTS = 4;
+const runtimeEngineState = {
+    canvas: null,
+    font: null,
+    fonts: {},
+    pad: null,
+    lightSlots: [],
+    // Some Matrix4/Vector4 wrappers exposed by AthenaEnv point into their
+    // owner's native allocation. Retain only these borrowed views so QuickJS
+    // never finalizes them between scenes; model/texture wrappers stay free to
+    // be collected after their native data is released.
+    retiredNativeViews: [],
+    retiredActiveSfx: []
+};
+
+function initializeRuntimeEngine() {
+    const canvas = Screen.getMode();
+    canvas.zbuffering = true;
+    canvas.double_buffering = true;
+    canvas.psm = Screen.CT32;
+    canvas.psmz = Screen.Z16S;
+    Screen.setMode(canvas);
+    Screen.setFrameCounter(true);
+    Render.init();
+
+    runtimeEngineState.canvas = Screen.getMode();
+    runtimeEngineState.font = new Font("default");
+    runtimeEngineState.fonts.default = runtimeEngineState.font;
+    runtimeEngineState.pad = Pads.get(0);
+    for (let lightIndex = 0; lightIndex < MAX_RUNTIME_LIGHTS; lightIndex++) {
+        runtimeEngineState.lightSlots.push(Lights.new());
+    }
+}
+
+function persistentRuntimeFont(asset) {
+    const key = asset || "default";
+    if (runtimeEngineState.fonts[key] !== undefined) return runtimeEngineState.fonts[key];
+    try {
+        runtimeEngineState.fonts[key] = new Font(key);
+    } catch (fontError) {
+        console.log("[VeuAzul] Fonte persistente nao carregada: " + key + " - " + fontError);
+        runtimeEngineState.fonts[key] = null;
+    }
+    return runtimeEngineState.fonts[key];
+}
+
+function drawRuntimeLoading(message) {
+    const font = runtimeEngineState.font;
+    const canvas = runtimeEngineState.canvas;
+    Screen.clear(Color.new(0, 0, 0, 128));
+    Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+    font.scale = 0.45;
+    font.color = Color.new(210, 231, 246, 128);
+    font.outline = 1.0;
+    font.outline_color = Color.new(3, 8, 16, 128);
+    font.dropshadow = 0.0;
+    font.print(18, Math.max(18, canvas.height * 0.5 - 10), message);
+    Screen.setParam(Screen.DEPTH_TEST_ENABLE, true);
+    Screen.setParam(Screen.DEPTH_TEST_METHOD, Screen.DEPTH_GEQUAL);
+    Screen.flip();
+}
+
+initializeRuntimeEngine();
+
+function runAthenaGame(sceneBoot) {
+const hasSceneBoot = sceneBoot && typeof sceneBoot.sceneId === "string" && sceneBoot.sceneId.length > 0;
+const BOOT_SCENE_ID = hasSceneBoot
+    ? sceneBoot.sceneId
+    : (typeof globalThis.ATHENA_BOOT_SCENE_ID === "string" ? globalThis.ATHENA_BOOT_SCENE_ID : "");
+const BOOT_SPAWN_ID = hasSceneBoot
+    ? (typeof sceneBoot.spawnId === "string" ? sceneBoot.spawnId : "")
+    : (typeof globalThis.ATHENA_BOOT_SPAWN_ID === "string" ? globalThis.ATHENA_BOOT_SPAWN_ID : "");
+const BOOT_SKIP_MENU = hasSceneBoot || globalThis.ATHENA_SKIP_MENU === true;
+const requestedFadeFrames = hasSceneBoot ? sceneBoot.fadeFrames : globalThis.ATHENA_BOOT_FADE_FRAMES;
+const BOOT_FADE_FRAMES = Math.max(1, Math.min(300, Number(requestedFadeFrames) || 30));
+
+const canvas = runtimeEngineState.canvas;
 
 let CLEAR_COLOR = Color.new(7, 15, 28, 128);
 const HUD_WHITE = Color.new(210, 231, 246, 128);
 const HUD_BLUE = Color.new(76, 184, 235, 128);
 
-const font = new Font("default");
+const font = runtimeEngineState.font;
 font.scale = 0.45;
 font.color = HUD_WHITE;
 font.outline = 1.0;
 font.outline_color = Color.new(3, 8, 16, 128);
 
-Screen.clear(CLEAR_COLOR);
-Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
-font.print(18, 18, "CARREGANDO RUINAS DO VEU AZUL...");
-Screen.flip();
+drawRuntimeLoading("CARREGANDO CENA...");
+reapRetiredActiveSfx();
 
-Render.init();
 Render.setView(64.0, 0.5, 180.0);
 console.log("[VeuAzul] Render inicializado em modo OBJ");
 
 // AthenaEnv resolves OBJ materials and their textures from the current folder.
-os.chdir("assets");
-std.loadScript("collision.js");
-if (std.exists("visual-scripting-runtime.js")) std.loadScript("visual-scripting-runtime.js");
+let runtimePreviousDirectory = "..";
+if (typeof os.getcwd === "function") {
+    const currentDirectoryResult = os.getcwd();
+    if (currentDirectoryResult && currentDirectoryResult[1] === 0) runtimePreviousDirectory = currentDirectoryResult[0];
+}
+const enterAssetsResult = os.chdir("assets");
+if (typeof enterAssetsResult === "number" && enterAssetsResult !== 0) {
+    throw new Error("Nao foi possivel acessar a pasta assets: " + enterAssetsResult);
+}
+if (typeof globalThis.Collision3D === "undefined") std.loadScript("collision.js");
+if (typeof globalThis.VisualScriptingRuntime === "undefined" && std.exists("visual-scripting-runtime.js")) {
+    std.loadScript("visual-scripting-runtime.js");
+}
 
 let menuBackground = null;
-if (std.exists("menu_background.png")) {
+if (!BOOT_SKIP_MENU && std.exists("menu_background.png")) {
     try {
         menuBackground = new Image("menu_background.png");
         menuBackground.width = canvas.width;
@@ -91,12 +168,18 @@ function configureData(data, material) {
 
 function createRenderData(asset, material) {
     if (material && material.texture && std.exists(material.texture)) {
+        let texture = null;
+        let texturedData = null;
         try {
-            const texture = new Image(material.texture);
+            texture = new Image(material.texture);
             texture.lock();
+            texturedData = new RenderData(asset, texture);
+            const configuredData = configureData(texturedData, material);
             runtimeMaterialTextures.push(texture);
-            return configureData(new RenderData(asset, texture), material);
+            return configuredData;
         } catch (textureError) {
+            releaseRenderData(texturedData);
+            safelyCall(texture, "free");
             console.log("[VeuAzul] Textura substituta nao carregada: " + material.texture + " - " + textureError);
         }
     }
@@ -109,8 +192,11 @@ function createRenderData(asset, material) {
 globalThis.EDITOR_SCENE = [];
 globalThis.EDITOR_SCENE_META = { id: "", name: "" };
 globalThis.EDITOR_SCENE_PROJECT = { version: 1, startupSceneId: "", scenes: [] };
+globalThis.EDITOR_COLLISION_VERSION = 0;
 globalThis.EDITOR_SETTINGS = {};
 globalThis.EDITOR_COLLIDERS = [];
+globalThis.EDITOR_SPAWN_POINTS = [];
+globalThis.EDITOR_PORTALS = [];
 globalThis.EDITOR_EVENTS = [];
 globalThis.EDITOR_LOGIC = { version: 1, variables: [], graphs: [] };
 globalThis.EDITOR_LIGHTS = [];
@@ -121,10 +207,36 @@ globalThis.EDITOR_AUDIO = [];
 globalThis.EDITOR_PARTICLES = [];
 globalThis.EDITOR_SHADOWS = [];
 if (std.exists("scenes/project.generated.js")) {
+    console.log("[VeuAzul] Lendo catalogo de cenas");
     std.loadScript("scenes/project.generated.js");
 }
-if (std.exists("scene.generated.js")) {
-    std.loadScript("scene.generated.js");
+let runtimeSceneFile = "scene.generated.js";
+let runtimeSceneEntry = null;
+if (BOOT_SCENE_ID) {
+    for (let sceneIndex = 0; sceneIndex < EDITOR_SCENE_PROJECT.scenes.length; sceneIndex++) {
+        const entry = EDITOR_SCENE_PROJECT.scenes[sceneIndex];
+        if (entry.id === BOOT_SCENE_ID) {
+            runtimeSceneEntry = entry;
+            runtimeSceneFile = entry.file;
+            break;
+        }
+    }
+}
+if (BOOT_SCENE_ID && !runtimeSceneEntry) {
+    throw new Error("Cena solicitada ausente no catalogo: " + BOOT_SCENE_ID);
+}
+if (std.exists(runtimeSceneFile)) {
+    console.log("[VeuAzul] Lendo dados da cena " + runtimeSceneFile + (BOOT_SCENE_ID ? " (solicitada: " + BOOT_SCENE_ID + ")" : ""));
+    std.loadScript(runtimeSceneFile);
+    if (BOOT_SCENE_ID && (!EDITOR_SCENE_META || EDITOR_SCENE_META.id !== BOOT_SCENE_ID)) {
+        throw new Error("Arquivo de cena divergente; esperado " + BOOT_SCENE_ID + ", recebido " + (EDITOR_SCENE_META && EDITOR_SCENE_META.id ? EDITOR_SCENE_META.id : "sem id"));
+    }
+    console.log("[VeuAzul] Dados da cena prontos: " + (EDITOR_SCENE_META.id || runtimeSceneFile));
+} else if (runtimeSceneFile !== "scene.generated.js" && std.exists("scene.generated.js")) {
+    console.log("[VeuAzul] Cena solicitada nao encontrada: " + runtimeSceneFile + "; usando a inicial");
+    runtimeSceneFile = "scene.generated.js";
+    std.loadScript(runtimeSceneFile);
+    console.log("[VeuAzul] Dados da cena inicial prontos: " + (EDITOR_SCENE_META.id || runtimeSceneFile));
 }
 
 const runtimeBackground = EDITOR_SETTINGS.background || { r: 7, g: 15, b: 28, a: 128 };
@@ -135,9 +247,10 @@ if (EDITOR_CAMERA) {
     Render.setView(EDITOR_CAMERA.fov || 64.0, EDITOR_CAMERA.near || 0.5, EDITOR_CAMERA.far || 180.0);
 }
 
-const usingEditorColliders = EDITOR_COLLIDERS.length > 0;
+const usingGeneratedScene = Boolean(EDITOR_SCENE_META && EDITOR_SCENE_META.id);
+const usingEditorColliders = usingGeneratedScene || EDITOR_COLLIDERS.length > 0;
 
-if (EDITOR_COLLIDERS.length === 0) {
+if (EDITOR_COLLIDERS.length === 0 && !usingGeneratedScene) {
     const legacyColliders = [
         [-2.8, -1.5, 1.52], [3.5, -5.0, 1.32], [1.0, 5.0, 1.0],
         [-8.2, 5.2, 0.92], [8.0, -0.3, 0.86],
@@ -158,7 +271,7 @@ if (EDITOR_COLLIDERS.length === 0) {
 }
 
 // Backward-compatible fallback for builds made before the editor existed.
-if (EDITOR_SCENE.length === 0) {
+if (EDITOR_SCENE.length === 0 && !usingGeneratedScene) {
     for (let i = 0; i < 7; i++) {
         EDITOR_SCENE.push({
             name: "Cenario bloco " + i,
@@ -171,16 +284,48 @@ if (EDITOR_SCENE.length === 0) {
 }
 
 const sceneObjects = [];
+const sceneRenderData = [];
 const runtimeObjectVisibility = {};
+
+function createRenderPair(asset, material) {
+    let data = null;
+    try {
+        data = createRenderData(asset, material);
+        return { data: data, object: new RenderObject(data) };
+    } catch (renderPairError) {
+        releaseRenderData(data);
+        throw renderPairError;
+    }
+}
+
+function createSceneRenderPair(definition) {
+    try {
+        return createRenderPair(definition.asset, definition.material);
+    } catch (assetError) {
+        console.log("[VeuAzul] Modelo nao carregado: " + definition.asset + " - " + assetError);
+    }
+    const fallbackAsset = "editor_primitives/cube.obj";
+    if (definition.asset === fallbackAsset || !std.exists(fallbackAsset)) return null;
+    try {
+        console.log("[VeuAzul] Usando cubo de seguranca para " + definition.name);
+        return createRenderPair(fallbackAsset, definition.material);
+    } catch (fallbackError) {
+        console.log("[VeuAzul] Cubo de seguranca nao carregado: " + fallbackError);
+        return null;
+    }
+}
+
 for (let i = 0; i < EDITOR_SCENE.length; i++) {
     const definition = EDITOR_SCENE[i];
     console.log("[VeuAzul] Carregando objeto " + definition.name + " (" + definition.asset + ")");
-    const sceneData = createRenderData(definition.asset, definition.material);
-    const sceneObject = new RenderObject(sceneData);
-    sceneObject.position = definition.position;
-    sceneObject.rotation = definition.rotation;
-    sceneObject.scale = definition.scale;
-    sceneObjects.push(sceneObject);
+    const pair = createSceneRenderPair(definition);
+    if (pair) {
+        pair.object.position = definition.position;
+        pair.object.rotation = definition.rotation;
+        pair.object.scale = definition.scale;
+    }
+    sceneObjects.push(pair ? pair.object : null);
+    sceneRenderData.push(pair ? pair.data : null);
     runtimeObjectVisibility[definition.id] = true;
 }
 
@@ -188,7 +333,7 @@ const runtimeAnimationCollections = [];
 for (let animationIndex = 0; animationIndex < sceneObjects.length; animationIndex++) {
     const definition = EDITOR_SCENE[animationIndex];
     if (!definition.animation || !definition.animation.autoplay || !/\.(gltf|glb)$/i.test(definition.asset)) continue;
-    if (typeof AnimCollection === "undefined" || typeof sceneObjects[animationIndex].playAnim !== "function") continue;
+    if (!sceneObjects[animationIndex] || typeof AnimCollection === "undefined" || typeof sceneObjects[animationIndex].playAnim !== "function") continue;
     try {
         const animations = new AnimCollection(definition.asset);
         const clip = definition.animation.clip && animations[definition.animation.clip] !== undefined
@@ -201,20 +346,38 @@ for (let animationIndex = 0; animationIndex < sceneObjects.length; animationInde
     }
 }
 
-const playerData = configureData(new RenderData("player.obj"));
-const playerObject = new RenderObject(playerData);
+let playerPair = null;
+try {
+    playerPair = createRenderPair("player.obj");
+} catch (playerError) {
+    console.log("[VeuAzul] Jogador nao carregado: player.obj - " + playerError);
+    try {
+        playerPair = createRenderPair("editor_primitives/cube.obj");
+        console.log("[VeuAzul] Usando cubo de seguranca para o jogador");
+    } catch (playerFallbackError) {
+        console.log("[VeuAzul] Jogador de seguranca nao carregado: " + playerFallbackError);
+    }
+}
+const playerData = playerPair ? playerPair.data : null;
+const playerObject = playerPair ? playerPair.object : null;
 console.log("[VeuAzul] " + sceneObjects.length + " objetos, jogador e colisoes prontos");
 
-const MAX_RUNTIME_LIGHTS = 4;
 const reservedPointSlots = Math.min(2, EDITOR_POINT_LIGHTS.length);
 const globalLightBudget = MAX_RUNTIME_LIGHTS - reservedPointSlots;
 const runtimeLights = [];
+let nextRuntimeLightSlot = 0;
+for (let lightIndex = 0; lightIndex < runtimeEngineState.lightSlots.length; lightIndex++) {
+    const light = runtimeEngineState.lightSlots[lightIndex];
+    Lights.set(light, Lights.DIRECTION, 0.0, 1.0, 0.0);
+    Lights.set(light, Lights.AMBIENT, 0.0, 0.0, 0.0);
+    Lights.set(light, Lights.DIFFUSE, 0.0, 0.0, 0.0);
+}
 for (let i = 0; i < EDITOR_LIGHTS.length && runtimeLights.length < globalLightBudget; i++) {
         const definition = EDITOR_LIGHTS[i];
         // Older generated scenes approximated point lights as global directional
         // lights. Ignore them so their finite editor range is not misrepresented.
         if (definition.type === "point") continue;
-        const light = Lights.new();
+        const light = runtimeEngineState.lightSlots[nextRuntimeLightSlot++];
         const intensity = Math.max(0.0, definition.intensity || 0.0);
         const color = definition.color || { r: 1.0, g: 1.0, b: 1.0 };
         const direction = definition.direction || { x: -0.35, y: 0.85, z: 0.45 };
@@ -229,7 +392,7 @@ for (let i = 0; i < EDITOR_LIGHTS.length && runtimeLights.length < globalLightBu
         runtimeLights.push(light);
 }
 if (runtimeLights.length === 0 && EDITOR_POINT_LIGHTS.length === 0) {
-    const iceLight = Lights.new();
+    const iceLight = runtimeEngineState.lightSlots[nextRuntimeLightSlot++];
     Lights.set(iceLight, Lights.DIRECTION, -0.35, 0.85, 0.45);
     Lights.set(iceLight, Lights.AMBIENT, 0.15, 0.22, 0.32);
     Lights.set(iceLight, Lights.DIFFUSE, 0.78, 0.90, 1.0);
@@ -242,7 +405,7 @@ if (runtimeLights.length === 0 && EDITOR_POINT_LIGHTS.length === 0) {
 const runtimePointLights = [];
 for (let i = 0; i < EDITOR_POINT_LIGHTS.length && runtimeLights.length + runtimePointLights.length < MAX_RUNTIME_LIGHTS; i++) {
     const definition = EDITOR_POINT_LIGHTS[i];
-    const light = Lights.new();
+    const light = runtimeEngineState.lightSlots[nextRuntimeLightSlot++];
     Lights.set(light, Lights.DIRECTION, 0.0, 1.0, 0.0);
     Lights.set(light, Lights.AMBIENT, 0.0, 0.0, 0.0);
     Lights.set(light, Lights.DIFFUSE, 0.0, 0.0, 0.0);
@@ -353,23 +516,39 @@ if (!usingEditorColliders) {
 console.log("[VeuAzul] Colisao 3D: " + collisionShapes.length + " colisores, " + cameraBlockers.length + " bloqueadores de camera");
 
 const runtimePlayer = EDITOR_SETTINGS.player || {};
+let activeSpawnPoint = null;
+for (let spawnIndex = 0; spawnIndex < EDITOR_SPAWN_POINTS.length; spawnIndex++) {
+    const candidate = EDITOR_SPAWN_POINTS[spawnIndex];
+    if (BOOT_SPAWN_ID && candidate.id === BOOT_SPAWN_ID) {
+        activeSpawnPoint = candidate;
+        break;
+    }
+    if (!activeSpawnPoint && candidate.default) activeSpawnPoint = candidate;
+}
+if (!activeSpawnPoint && EDITOR_SPAWN_POINTS.length > 0) activeSpawnPoint = EDITOR_SPAWN_POINTS[0];
+const configuredSpawn = runtimePlayer.spawn || { x: 0.0, y: 0.08, z: 18.0 };
+const SPAWN = activeSpawnPoint ? activeSpawnPoint.position : configuredSpawn;
+const SPAWN_YAW = activeSpawnPoint
+    ? activeSpawnPoint.yaw === undefined
+        ? activeSpawnPoint.rotation ? activeSpawnPoint.rotation.y || 0.0 : 0.0
+        : activeSpawnPoint.yaw
+    : 0.0;
 const PLAYER_RADIUS = Math.max(0.1, runtimePlayer.radius || 0.68);
 const PLAYER_HEIGHT = Math.max(PLAYER_RADIUS * 2.0, runtimePlayer.height || 2.25);
-const PLAYER_GROUND_Y = runtimePlayer.spawn && runtimePlayer.spawn.y !== undefined ? runtimePlayer.spawn.y : 0.08;
+const PLAYER_GROUND_Y = SPAWN.y === undefined ? 0.08 : SPAWN.y;
 const WALK_SPEED = Math.max(0.01, runtimePlayer.walkSpeed || 0.125);
 const RUN_SPEED = Math.max(WALK_SPEED, runtimePlayer.runSpeed || 0.19);
 const JUMP_SPEED = Math.max(0.0, runtimePlayer.jumpSpeed === undefined ? 0.30 : runtimePlayer.jumpSpeed);
 const GRAVITY = Math.max(0.0001, runtimePlayer.gravity || 0.014);
 const SUPPORT_PROBE = 0.08;
 const LANDING_SEARCH_STEPS = 7;
-const SPAWN = runtimePlayer.spawn || { x: 0.0, y: PLAYER_GROUND_Y, z: 18.0 };
 let playerX = SPAWN.x;
 let playerZ = SPAWN.z;
-let playerY = PLAYER_GROUND_Y;
+let playerY = SPAWN.y === undefined ? PLAYER_GROUND_Y : SPAWN.y;
 let playerVelocityY = 0.0;
 let playerGrounded = true;
-let playerYaw = 0.0;
-let cameraYaw = EDITOR_CAMERA ? EDITOR_CAMERA.rotation.y : 0.0;
+let playerYaw = SPAWN_YAW;
+let cameraYaw = activeSpawnPoint ? SPAWN_YAW : EDITOR_CAMERA ? EDITOR_CAMERA.rotation.y : 0.0;
 let cameraPitch = 0.31;
 let shoulderSide = 1.0;
 let showHud = true;
@@ -385,7 +564,7 @@ const GAME_STATE_GAME = 2;
 const MENU_AUDIO_ASSET = "sounds/menu.wav";
 const MENU_AUDIO_VOLUME = 100;
 const MENU_OPTIONS = ["Iniciar Jogo", "Créditos"];
-let gameState = GAME_STATE_MENU;
+let gameState = BOOT_SKIP_MENU ? GAME_STATE_GAME : GAME_STATE_MENU;
 let menuSelection = 0;
 let menuStickLocked = false;
 let menuPulse = 0;
@@ -396,7 +575,7 @@ let runtimeAutoplayStarted = false;
 
 Sound.setVolume(100);
 let menuAudio = null;
-if (std.exists(MENU_AUDIO_ASSET)) {
+if (!BOOT_SKIP_MENU && std.exists(MENU_AUDIO_ASSET)) {
     try {
         menuAudio = Sound.Stream(MENU_AUDIO_ASSET);
         menuAudio.loop = true;
@@ -739,6 +918,63 @@ function arrayContains(items, value) {
     return false;
 }
 
+let runtimeSceneTransition = null;
+let runtimeFadeInRemaining = BOOT_SKIP_MENU ? BOOT_FADE_FRAMES : 0;
+let runtimeTriggerPhaseActive = false;
+let triggerTransitionSuppressionFrames = BOOT_SKIP_MENU ? BOOT_FADE_FRAMES : 0;
+
+function sceneProjectEntry(sceneId) {
+    for (let i = 0; i < EDITOR_SCENE_PROJECT.scenes.length; i++) {
+        if (EDITOR_SCENE_PROJECT.scenes[i].id === sceneId) return EDITOR_SCENE_PROJECT.scenes[i];
+    }
+    return null;
+}
+
+function requestSceneTransition(sceneId, spawnId, fadeFrames) {
+    if (runtimeSceneTransition || !sceneId) return false;
+    if (runtimeTriggerPhaseActive && triggerTransitionSuppressionFrames > 0) {
+        console.log("[VeuAzul] Transicao de trigger ignorada durante a entrada na cena");
+        return false;
+    }
+    const entry = sceneProjectEntry(sceneId);
+    if (!entry || !entry.file || !std.exists(entry.file)) {
+        console.log("[VeuAzul] Transicao ignorada; cena ausente: " + sceneId);
+        return false;
+    }
+    let resolvedSpawnId = spawnId || "";
+    if (resolvedSpawnId) {
+        let foundSpawn = false;
+        const spawnPoints = entry.spawnPoints || [];
+        for (let i = 0; i < spawnPoints.length; i++) {
+            if (spawnPoints[i].id === resolvedSpawnId) {
+                foundSpawn = true;
+                break;
+            }
+        }
+        if (!foundSpawn) {
+            console.log("[VeuAzul] Entrada ausente em " + sceneId + ": " + resolvedSpawnId + "; usando a padrao");
+            resolvedSpawnId = "";
+        }
+    }
+    runtimeSceneTransition = {
+        sceneId: sceneId,
+        spawnId: resolvedSpawnId,
+        fadeFrames: Math.max(1, Math.min(300, Math.round(fadeFrames || 30))),
+        elapsed: 0
+    };
+    console.log("[VeuAzul] Preparando cena " + sceneId + (resolvedSpawnId ? " em " + resolvedSpawnId : ""));
+    return true;
+}
+
+function runPortalPhase(triggerId, phase) {
+    for (let i = 0; i < EDITOR_PORTALS.length; i++) {
+        const portal = EDITOR_PORTALS[i];
+        if (portal.triggerId !== triggerId || portal.activation !== phase) continue;
+        requestSceneTransition(portal.targetSceneId, portal.targetSpawnId, portal.fadeFrames);
+        return;
+    }
+}
+
 function executeRuntimeAction(action) {
     if (!action) return;
     if (action.type === "message") {
@@ -769,6 +1005,10 @@ function executeRuntimeAction(action) {
         controlRuntimeVideo(action.targetId, action.mode || "play");
         return;
     }
+    if (action.type === "scene") {
+        requestSceneTransition(action.sceneId, action.spawnId, action.fadeFrames);
+        return;
+    }
     if (action.type === "teleport") {
         const position = action.position || { x: 0.0, y: PLAYER_GROUND_Y, z: 18.0 };
         playerX = position.x;
@@ -780,6 +1020,7 @@ function executeRuntimeAction(action) {
 }
 
 function runTriggerPhase(triggerId, phase) {
+    runtimeTriggerPhaseActive = true;
     for (let i = 0; i < EDITOR_EVENTS.length; i++) {
         const definition = EDITOR_EVENTS[i];
         if (definition.triggerId !== triggerId) continue;
@@ -789,6 +1030,8 @@ function runTriggerPhase(triggerId, phase) {
         }
     }
     if (runtimeVisualScripts) runtimeVisualScripts.trigger(triggerId, phase);
+    runPortalPhase(triggerId, phase);
+    runtimeTriggerPhaseActive = false;
 }
 
 function processRuntimeEvents() {
@@ -804,6 +1047,7 @@ function processRuntimeEvents() {
         for (let i = 0; i < activeTriggerIds.length; i++) runTriggerPhase(activeTriggerIds[i], "onInteract");
     }
     previousTriggerIds = activeTriggerIds.slice();
+    if (triggerTransitionSuppressionFrames > 0) triggerTransitionSuppressionFrames--;
 }
 
 function colliderHits(x, z, radius, collider) {
@@ -939,7 +1183,7 @@ function cameraBlocked(x, y, z) {
 let cameraCollisionCooldown = 0;
 let cachedCameraFactor = 1.0;
 
-const pad = Pads.get(0);
+const pad = runtimeEngineState.pad;
 pad.update();
 
 function executeVisualScriptAction(type, config) {
@@ -951,6 +1195,9 @@ function executeVisualScriptAction(type, config) {
     else if (type === "actionAudio") executeRuntimeAction({ type: "audio", targetId: config.targetId, mode: config.mode });
     else if (type === "actionParticle") executeRuntimeAction({ type: "particle", targetId: config.targetId, mode: config.mode });
     else if (type === "actionVideo") executeRuntimeAction({ type: "video", targetId: config.targetId, mode: config.mode });
+    else if (type === "actionScene") executeRuntimeAction({
+        type: "scene", sceneId: config.sceneId, spawnId: config.spawnId, fadeFrames: config.fadeFrames
+    });
 }
 
 const runtimeVisualScripts = typeof VisualScriptingRuntime !== "undefined"
@@ -963,6 +1210,7 @@ const runtimeVisualScripts = typeof VisualScriptingRuntime !== "undefined"
         log: function (message) { console.log("[VisualScript] " + message); }
     })
     : null;
+if (BOOT_SKIP_MENU && runtimeVisualScripts) runtimeVisualScripts.start();
 
 // AthenaEnv builds differ: some expose signed axes centered at 0, while others
 // expose unsigned axes centered at 128. Detect the active convention at boot.
@@ -1050,8 +1298,8 @@ function updatePlayerAndCamera() {
         playerY = SPAWN.y === undefined ? PLAYER_GROUND_Y : SPAWN.y;
         playerVelocityY = 0.0;
         playerGrounded = true;
-        playerYaw = 0.0;
-        cameraYaw = EDITOR_CAMERA ? EDITOR_CAMERA.rotation.y : 0.0;
+        playerYaw = SPAWN_YAW;
+        cameraYaw = activeSpawnPoint ? SPAWN_YAW : EDITOR_CAMERA ? EDITOR_CAMERA.rotation.y : 0.0;
     }
     if (pad.justPressed(Pads.START)) showHud = !showHud;
     if (pad.justPressed(Pads.L1)) shoulderSide *= -1.0;
@@ -1105,8 +1353,10 @@ function updatePlayerAndCamera() {
     if (runtimeVisualScripts) runtimeVisualScripts.step();
     updateRuntimeAudio();
 
-    playerObject.position = { x: playerX, y: playerY, z: playerZ };
-    playerObject.rotation = { x: 0.0, y: playerYaw, z: 0.0 };
+    if (playerObject) {
+        playerObject.position = { x: playerX, y: playerY, z: playerZ };
+        playerObject.rotation = { x: 0.0, y: playerYaw, z: 0.0 };
+    }
 
     const editorCameraMode = EDITOR_CAMERA ? (EDITOR_CAMERA.mode || "follow") : "follow";
     if (EDITOR_CAMERA && (editorCameraMode === "fixed" || editorCameraMode === "lookAtPlayer")) {
@@ -1303,12 +1553,7 @@ for (let uiResourceIndex = 0; uiResourceIndex < EDITOR_UI.length; uiResourceInde
     const resourceDefinition = EDITOR_UI[uiResourceIndex];
     if (resourceDefinition.type === "text" && resourceDefinition.fontAsset
         && runtimeUiFonts[resourceDefinition.fontAsset] === undefined) {
-        try {
-            runtimeUiFonts[resourceDefinition.fontAsset] = new Font(resourceDefinition.fontAsset);
-        } catch (uiFontError) {
-            console.log("[VeuAzul] Fonte de UI nao carregada: " + resourceDefinition.fontAsset + " - " + uiFontError);
-            runtimeUiFonts[resourceDefinition.fontAsset] = null;
-        }
+        runtimeUiFonts[resourceDefinition.fontAsset] = persistentRuntimeFont(resourceDefinition.fontAsset);
     }
     if (resourceDefinition.type === "image" && resourceDefinition.asset) {
         try {
@@ -1428,6 +1673,144 @@ function drawEditorInterface() {
     font.dropshadow = 0.0;
 }
 
+function safelyCall(resource, method) {
+    if (!resource || typeof resource[method] !== "function") return;
+    try {
+        resource[method]();
+    } catch (resourceError) {
+        console.log("[VeuAzul] Falha ao liberar recurso (" + method + "): " + resourceError);
+    }
+}
+
+function reapRetiredActiveSfx() {
+    const pending = runtimeEngineState.retiredActiveSfx;
+    let retainedCount = 0;
+    for (let i = 0; i < pending.length; i++) {
+        const entry = pending[i];
+        let stillPlaying = true;
+        try {
+            stillPlaying = entry && entry.sound && entry.channel >= 0 && entry.sound.playing(entry.channel);
+        } catch (sfxStateError) {
+            console.log("[VeuAzul] Falha ao revisar SFX encerrado: " + sfxStateError);
+        }
+        if (stillPlaying) {
+            pending[retainedCount++] = entry;
+        } else if (entry) {
+            safelyCall(entry.sound, "free");
+        }
+    }
+    pending.length = retainedCount;
+}
+
+function retainBorrowedNativeView(view) {
+    if (view === undefined || view === null) return;
+    const retired = runtimeEngineState.retiredNativeViews;
+    if (retired.indexOf(view) < 0) retired.push(view);
+}
+
+function retireRenderObject(resource) {
+    if (!resource) return;
+    try {
+        retainBorrowedNativeView(resource.transform);
+        retainBorrowedNativeView(resource.bones);
+        retainBorrowedNativeView(resource.bone_matrices);
+    } catch (viewError) {
+        console.log("[VeuAzul] Falha ao proteger views do objeto 3D: " + viewError);
+    }
+    safelyCall(resource, "free");
+}
+
+function releaseRenderData(resource) {
+    if (!resource) return;
+    // Skinned RenderData exposes bone vectors/matrices backed by pointers into
+    // its native skeleton. Keep only those borrowed views alive after free;
+    // ordinary OBJ RenderData can be collected normally. Release any texture
+    // wrappers first so the safety guard does not retain VRAM.
+    let hasBorrowedBoneViews = false;
+    try {
+        hasBorrowedBoneViews = resource.bones !== undefined && resource.bones !== null;
+    } catch (boneProbeError) {
+        console.log("[VeuAzul] Falha ao verificar dados esqueleticos: " + boneProbeError);
+    }
+    if (hasBorrowedBoneViews) {
+        const textures = resource.textures;
+        if (textures && textures.length) {
+            for (let textureIndex = 0; textureIndex < textures.length; textureIndex++) {
+                safelyCall(textures[textureIndex], "free");
+            }
+        }
+        retainBorrowedNativeView(resource.bones);
+    }
+    safelyCall(resource, "free");
+}
+
+function freeRuntimeSceneResources() {
+    for (const id in runtimeUiMedia) {
+        const entry = runtimeUiMedia[id];
+        if (entry.type === "video") {
+            // Video.frame is an Image view over the MPEG player's internal
+            // texture in AthenaEnv. Never finalize it after destroying Video.
+            retainBorrowedNativeView(entry.frame);
+            safelyCall(entry.media, "stop");
+        }
+        safelyCall(entry.media, "free");
+    }
+    for (let i = 0; i < runtimeAudio.length; i++) {
+        const entry = runtimeAudio[i];
+        if (entry.definition.mode === "stream") {
+            safelyCall(entry.sound, "pause");
+            safelyCall(entry.sound, "rewind");
+            safelyCall(entry.sound, "free");
+            continue;
+        }
+        entry.sound.loop = false;
+        let stillPlaying = false;
+        try {
+            stillPlaying = entry.channel >= 0 && entry.sound.playing(entry.channel);
+        } catch (sfxStateError) {
+            console.log("[VeuAzul] Falha ao consultar SFX: " + sfxStateError);
+            stillPlaying = true;
+        }
+        if (stillPlaying) runtimeEngineState.retiredActiveSfx.push({ sound: entry.sound, channel: entry.channel });
+        else safelyCall(entry.sound, "free");
+    }
+    safelyCall(menuAudio, "pause");
+    safelyCall(menuAudio, "rewind");
+    safelyCall(menuAudio, "free");
+    for (let i = 0; i < sceneObjects.length; i++) retireRenderObject(sceneObjects[i]);
+    retireRenderObject(playerObject);
+    for (let i = 0; i < runtimeParticleEmitters.length; i++) {
+        const pool = runtimeParticleEmitters[i].pool;
+        for (let particleIndex = 0; particleIndex < pool.length; particleIndex++) retireRenderObject(pool[particleIndex].object);
+    }
+    for (let i = 0; i < runtimeAnimationCollections.length; i++) safelyCall(runtimeAnimationCollections[i], "free");
+    for (let i = 0; i < sceneRenderData.length; i++) releaseRenderData(sceneRenderData[i]);
+    releaseRenderData(playerData);
+    for (let i = 0; i < runtimeParticleEmitters.length; i++) releaseRenderData(runtimeParticleEmitters[i].data);
+    for (let i = 0; i < runtimeShadows.length; i++) {
+        safelyCall(runtimeShadows[i].projector, "free");
+        safelyCall(runtimeShadows[i].texture, "free");
+    }
+    for (let i = 0; i < runtimeMaterialTextures.length; i++) safelyCall(runtimeMaterialTextures[i], "free");
+    safelyCall(menuBackground, "free");
+}
+
+function drawSceneTransitionFade() {
+    let alpha = 0;
+    if (runtimeSceneTransition) {
+        runtimeSceneTransition.elapsed++;
+        alpha = Math.round(128.0 * runtimeSceneTransition.elapsed / runtimeSceneTransition.fadeFrames);
+    } else if (runtimeFadeInRemaining > 0) {
+        alpha = Math.round(128.0 * runtimeFadeInRemaining / BOOT_FADE_FRAMES);
+        runtimeFadeInRemaining--;
+    }
+    if (alpha <= 0) return;
+    Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
+    Draw.rect(0, 0, canvas.width, canvas.height, Color.new(0, 0, 0, Math.min(128, alpha)));
+    Screen.setParam(Screen.DEPTH_TEST_ENABLE, true);
+    Screen.setParam(Screen.DEPTH_TEST_METHOD, Screen.DEPTH_GEQUAL);
+}
+
 function drawHud() {
     Screen.setParam(Screen.DEPTH_TEST_ENABLE, false);
     drawAtmosphere();
@@ -1491,6 +1874,8 @@ function drawHud() {
     Screen.setParam(Screen.DEPTH_TEST_METHOD, Screen.DEPTH_GEQUAL);
 }
 
+let runtimeLoopRunning = true;
+
 function renderGameFrame() {
     Screen.clear(CLEAR_COLOR);
     if (typeof Render.resetStats === "function") Render.resetStats();
@@ -1500,18 +1885,21 @@ function renderGameFrame() {
         const definition = EDITOR_SCENE[i];
         const center = definition.boundsCenter || definition.position;
         applyPointLightsAt(center.x, center.y, center.z);
-        if (runtimeObjectVisibility[definition.id] !== false) sceneObjects[i].render();
+        if (sceneObjects[i] && runtimeObjectVisibility[definition.id] !== false) sceneObjects[i].render();
     }
     renderRuntimeShadows();
     updateAndRenderParticles();
     applyPointLightsAt(playerX, playerY + PLAYER_HEIGHT * 0.5, playerZ);
-    playerObject.render();
+    if (playerObject) playerObject.render();
     disablePointLights();
     drawHud();
+    drawSceneTransitionFade();
     Screen.flip();
+    if (runtimeSceneTransition && runtimeSceneTransition.elapsed >= runtimeSceneTransition.fadeFrames) runtimeLoopRunning = false;
 }
 
-while (true) {
+while (runtimeLoopRunning) {
+    reapRetiredActiveSfx();
     if (gameState === GAME_STATE_MENU) {
         updateMenuInput();
         if (gameState === GAME_STATE_MENU) {
@@ -1541,4 +1929,37 @@ while (true) {
     startRuntimeAutoplayAudio();
     updatePlayerAndCamera();
     renderGameFrame();
+}
+
+if (!runtimeLoopRunning && runtimeSceneTransition) {
+    const completedTransition = {
+        sceneId: runtimeSceneTransition.sceneId,
+        spawnId: runtimeSceneTransition.spawnId,
+        fadeFrames: runtimeSceneTransition.fadeFrames
+    };
+    drawRuntimeLoading("CARREGANDO " + completedTransition.sceneId.toUpperCase() + "...");
+    freeRuntimeSceneResources();
+    console.log("[VeuAzul] Cena " + (EDITOR_SCENE_META.id || "atual") + " descarregada");
+    let restoreDirectoryResult = os.chdir(runtimePreviousDirectory);
+    if (typeof restoreDirectoryResult === "number" && restoreDirectoryResult !== 0) {
+        console.log("[VeuAzul] Falha ao restaurar diretorio " + runtimePreviousDirectory + ": " + restoreDirectoryResult + "; tentando ..");
+        restoreDirectoryResult = os.chdir("..");
+        if (typeof restoreDirectoryResult === "number" && restoreDirectoryResult !== 0) {
+            throw new Error("Nao foi possivel sair da pasta assets: " + restoreDirectoryResult);
+        }
+    }
+    return completedTransition;
+}
+
+return null;
+}
+
+let runtimeNextSceneTransition = runAthenaGame(null);
+while (runtimeNextSceneTransition) {
+    const completedSceneTransition = runtimeNextSceneTransition;
+    // runAthenaGame initializes every generated global before loading the next
+    // script. Do not force QuickJS GC here: explicit native frees followed by
+    // an immediate cycle collection corrupt shapes in current AthenaEnv builds.
+    console.log("[VeuAzul] Carregando cena " + completedSceneTransition.sceneId + " no runtime atual");
+    runtimeNextSceneTransition = runAthenaGame(completedSceneTransition);
 }

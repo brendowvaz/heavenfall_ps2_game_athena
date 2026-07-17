@@ -6,10 +6,32 @@
     {
       "id": "main",
       "name": "Ruínas do Véu Azul",
-      "updatedAt": "2026-07-15T11:12:14.624Z",
-      "objectCount": 28,
+      "updatedAt": "2026-07-17T13:36:20.044Z",
+      "objectCount": 30,
       "uiCount": 0,
-      "graphCount": 0
+      "graphCount": 0,
+      "spawnPoints": [
+        {
+          "id": "ruinas-entrada-principal",
+          "name": "Entrada principal",
+          "default": true
+        }
+      ]
+    },
+    {
+      "id": "salao-saida-01",
+      "name": "Salão Saída 01",
+      "updatedAt": "2026-07-17T13:35:11.079Z",
+      "objectCount": 3,
+      "uiCount": 0,
+      "graphCount": 0,
+      "spawnPoints": [
+        {
+          "id": "spawn-mrozcqvq-becjqz",
+          "name": "Entrada principal",
+          "default": true
+        }
+      ]
     }
   ]
 }
