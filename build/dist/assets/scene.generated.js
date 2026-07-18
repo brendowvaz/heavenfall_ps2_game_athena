@@ -26,7 +26,15 @@ globalThis.EDITOR_SETTINGS = {
     "walkSpeed": 0.125,
     "runSpeed": 0.19,
     "jumpSpeed": 0.5,
-    "gravity": 0.014
+    "gravity": 0.014,
+    "health": {
+      "enabled": true,
+      "maximum": 100,
+      "initial": 100,
+      "invulnerabilityFrames": 30,
+      "respawnOnDeath": true,
+      "showHud": true
+    }
   }
 };
 globalThis.EDITOR_SCENE = [
@@ -796,6 +804,31 @@ globalThis.EDITOR_COLLIDERS = [
     },
     "trigger": true,
     "cameraBlocker": false
+  },
+  {
+    "id": "damage-mrqnwlr6-e4nroh",
+    "name": "Área de dano",
+    "shape": "box",
+    "contractVersion": 2,
+    "rotationOrder": "XYZ",
+    "scaleMeaning": "halfExtents",
+    "position": {
+      "x": -7.2814,
+      "y": 1,
+      "z": -1.7025
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": {
+      "x": 0.3185,
+      "y": 0.6004,
+      "z": 0.6952
+    },
+    "trigger": true,
+    "cameraBlocker": false
   }
 ];
 globalThis.EDITOR_SPAWN_POINTS = [
@@ -830,6 +863,18 @@ globalThis.EDITOR_CHECKPOINTS = [
     "triggerId": "ruinas-checkpoint-inicial",
     "activation": "onEnter",
     "autosave": true
+  }
+];
+globalThis.EDITOR_GAMEPLAY_COMPONENTS = [
+  {
+    "id": "damage-mrqnwlr6-e4nroh-damage",
+    "type": "damage",
+    "triggerId": "damage-mrqnwlr6-e4nroh",
+    "enabled": true,
+    "amount": 10,
+    "targetId": "__player__",
+    "activation": "onEnter",
+    "cooldownFrames": 30
   }
 ];
 globalThis.EDITOR_EVENTS = [];

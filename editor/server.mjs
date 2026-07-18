@@ -248,6 +248,48 @@ function normalizeCheckpoint(checkpoint) {
   };
 }
 
+function normalizeGameplay(gameplay, kind) {
+  const source = gameplay || {};
+  const supportsHealth = ["model", "primitive", "collider"].includes(kind);
+  const supportsTriggerComponents = kind === "collider";
+  const healthMaximum = Math.round(Math.max(1, Math.min(999999, finite(source.health?.maximum, 100))));
+  return {
+    health: {
+      enabled: supportsHealth && source.health?.enabled === true,
+      maximum: healthMaximum,
+      initial: Math.round(Math.max(0, Math.min(healthMaximum, finite(source.health?.initial, healthMaximum)))),
+      invulnerabilityFrames: Math.round(Math.max(0, Math.min(3600, finite(source.health?.invulnerabilityFrames, 15)))),
+      hideOnDeath: source.health?.hideOnDeath !== false,
+      persistent: source.health?.persistent === true,
+    },
+    damage: {
+      enabled: supportsTriggerComponents && source.damage?.enabled === true,
+      amount: Math.round(Math.max(0, Math.min(999999, finite(source.damage?.amount, 10)))),
+      targetId: String(source.damage?.targetId || "__player__").replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96) || "__player__",
+      activation: ["onEnter", "onInteract"].includes(source.damage?.activation) ? source.damage.activation : "onEnter",
+      cooldownFrames: Math.round(Math.max(0, Math.min(3600, finite(source.damage?.cooldownFrames, 30)))),
+    },
+    collectible: {
+      enabled: supportsTriggerComponents && source.collectible?.enabled === true,
+      variableId: String(source.collectible?.variableId || "").replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96),
+      amount: Math.max(-999999, Math.min(999999, finite(source.collectible?.amount, 1))),
+      activation: ["onEnter", "onInteract"].includes(source.collectible?.activation) ? source.collectible.activation : "onEnter",
+      visualTargetId: String(source.collectible?.visualTargetId || "").replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96),
+      message: String(source.collectible?.message || "Item coletado.").slice(0, 160),
+      autosave: source.collectible?.autosave === true,
+    },
+    interactable: {
+      enabled: supportsTriggerComponents && source.interactable?.enabled === true,
+      prompt: String(source.interactable?.prompt || "Pressione Triangulo para interagir").slice(0, 120),
+      once: source.interactable?.once === true,
+    },
+    deathZone: {
+      enabled: supportsTriggerComponents && source.deathZone?.enabled === true,
+      fadeFrames: Math.round(Math.max(1, Math.min(300, finite(source.deathZone?.fadeFrames, 24)))),
+    },
+  };
+}
+
 function normalizeEvents(events) {
   return Object.fromEntries(eventPhases.map((phase) => [
     phase,
@@ -317,6 +359,17 @@ function normalizeScene(input) {
           runSpeed: Math.max(0.01, Math.min(3, finite(input?.settings?.runtime?.player?.runSpeed, 0.19))),
           jumpSpeed: Math.max(0, Math.min(2, finite(input?.settings?.runtime?.player?.jumpSpeed, 0.3))),
           gravity: Math.max(0.0001, Math.min(0.25, finite(input?.settings?.runtime?.player?.gravity, 0.014))),
+          health: {
+            enabled: input?.settings?.runtime?.player?.health?.enabled === true,
+            maximum: Math.round(Math.max(1, Math.min(999999, finite(input?.settings?.runtime?.player?.health?.maximum, 100)))),
+            initial: Math.round(Math.max(0, Math.min(
+              Math.max(1, Math.min(999999, finite(input?.settings?.runtime?.player?.health?.maximum, 100))),
+              finite(input?.settings?.runtime?.player?.health?.initial, input?.settings?.runtime?.player?.health?.maximum ?? 100)
+            ))),
+            invulnerabilityFrames: Math.round(Math.max(0, Math.min(3600, finite(input?.settings?.runtime?.player?.health?.invulnerabilityFrames, 30)))),
+            respawnOnDeath: input?.settings?.runtime?.player?.health?.respawnOnDeath !== false,
+            showHud: input?.settings?.runtime?.player?.health?.showHud !== false,
+          },
         },
       },
     },
@@ -337,6 +390,9 @@ function normalizeScene(input) {
         ? item.source.primitive
         : "cube";
       const cameraNear = Math.max(0.01, finite(item?.camera?.near, 0.1));
+      const gameplay = normalizeGameplay(item?.gameplay, kind);
+      const gameplayTrigger = kind === "collider" && (gameplay.damage.enabled || gameplay.collectible.enabled
+        || gameplay.interactable.enabled || gameplay.deathZone.enabled);
       return {
         id: String(item?.id || `object-${Date.now()}-${index}`).replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96),
         name: String(item?.name || `Objeto ${index + 1}`).slice(0, 120),
@@ -380,14 +436,15 @@ function normalizeScene(input) {
           loop: item?.animation?.loop !== false,
         } : undefined,
         collider: kind === "collider" ? {
-          trigger: item?.collider?.trigger === true || item?.portal?.enabled === true || item?.checkpoint?.enabled === true,
-          cameraBlocker: item?.portal?.enabled === true || item?.checkpoint?.enabled === true
+          trigger: item?.collider?.trigger === true || item?.portal?.enabled === true || item?.checkpoint?.enabled === true || gameplayTrigger,
+          cameraBlocker: item?.portal?.enabled === true || item?.checkpoint?.enabled === true || gameplayTrigger
             ? false
             : item?.collider?.cameraBlocker !== false,
         } : undefined,
         events: kind === "collider" ? normalizeEvents(item?.events || item?.collider?.events) : undefined,
         portal: kind === "collider" ? normalizePortal(item?.portal || item?.collider?.portal) : undefined,
         checkpoint: kind === "collider" ? normalizeCheckpoint(item?.checkpoint || item?.collider?.checkpoint) : undefined,
+        gameplay: ["model", "primitive", "collider"].includes(kind) ? gameplay : undefined,
         spawn: kind === "spawn" ? {
           default: item?.spawn?.default === true,
         } : undefined,
@@ -698,6 +755,52 @@ function generateAthenaScene(scene, metadata = {}) {
         && (item.id === targetId || isRuntimeDescendant(item, targetId)))
       .map((item) => item.id);
   }
+  const gameplayComponents = [];
+  for (const item of scene.objects) {
+    if (!item.runtime || !item.visible || !item.gameplay) continue;
+    if (item.gameplay.health?.enabled) {
+      gameplayComponents.push({
+        id: `${item.id}-health`,
+        type: "health",
+        objectId: item.id,
+        ...item.gameplay.health,
+      });
+    }
+    if (item.source.kind !== "collider" || !item.collider?.trigger) continue;
+    if (item.gameplay.damage?.enabled) {
+      gameplayComponents.push({
+        id: `${item.id}-damage`,
+        type: "damage",
+        triggerId: item.id,
+        ...item.gameplay.damage,
+      });
+    }
+    if (item.gameplay.collectible?.enabled) {
+      gameplayComponents.push({
+        id: `${item.id}-collectible`,
+        type: "collectible",
+        triggerId: item.id,
+        ...item.gameplay.collectible,
+        visualTargetIds: runtimeTargets(item.gameplay.collectible.visualTargetId),
+      });
+    }
+    if (item.gameplay.interactable?.enabled) {
+      gameplayComponents.push({
+        id: `${item.id}-interactable`,
+        type: "interactable",
+        triggerId: item.id,
+        ...item.gameplay.interactable,
+      });
+    }
+    if (item.gameplay.deathZone?.enabled) {
+      gameplayComponents.push({
+        id: `${item.id}-death-zone`,
+        type: "deathZone",
+        triggerId: item.id,
+        ...item.gameplay.deathZone,
+      });
+    }
+  }
   const events = scene.objects
     .filter((item) => item.runtime && item.visible && item.source.kind === "collider" && item.collider?.trigger)
     .map((item) => ({
@@ -890,6 +993,7 @@ function generateAthenaScene(scene, metadata = {}) {
     `globalThis.EDITOR_SPAWN_POINTS = ${JSON.stringify(spawnPoints, null, 2)};`,
     `globalThis.EDITOR_PORTALS = ${JSON.stringify(portals, null, 2)};`,
     `globalThis.EDITOR_CHECKPOINTS = ${JSON.stringify(checkpoints, null, 2)};`,
+    `globalThis.EDITOR_GAMEPLAY_COMPONENTS = ${JSON.stringify(gameplayComponents, null, 2)};`,
     `globalThis.EDITOR_EVENTS = ${JSON.stringify(events, null, 2)};`,
     `globalThis.EDITOR_LOGIC = ${JSON.stringify(logic, null, 2)};`,
     `globalThis.EDITOR_LIGHTS = ${JSON.stringify(lights, null, 2)};`,
@@ -1689,8 +1793,8 @@ function startBuildAndRun() {
 async function handleApi(request, response, url) {
   if (url.pathname === "/api/capabilities" && request.method === "GET") {
     sendJson(response, 200, {
-      editorSchemaVersion: 16,
-      features: ["materials", "material-runtime", "model-animation", "lights", "point-light-runtime", "light-flicker", "shadow-projectors", "cameras", "camera-modes", "camera-preview", "components", "trigger-events", "visual-scripting", "logic-variables", "global-variables", "player-jump-event", "variable-message", "persistent-state", "save-game", "memory-card-save", "checkpoints", "continue-menu", "multiple-scenes", "scene-manager", "startup-scene", "scene-order", "project-export", "dynamic-scene-loading", "scene-portals", "conditional-portals", "spawn-points", "runtime-settings", "ui-editor", "ui-runtime", "ui-images", "ui-video", "ui-fonts", "audio", "audio-runtime", "particles", "particle-runtime", "particle-color"],
+      editorSchemaVersion: 17,
+      features: ["materials", "material-runtime", "model-animation", "lights", "point-light-runtime", "light-flicker", "shadow-projectors", "cameras", "camera-modes", "camera-preview", "components", "gameplay-components", "health", "damage", "collectibles", "interactables", "death-zones", "trigger-events", "visual-scripting", "gameplay-events", "logic-variables", "global-variables", "player-jump-event", "variable-message", "persistent-state", "save-game", "memory-card-save", "checkpoints", "continue-menu", "multiple-scenes", "scene-manager", "startup-scene", "scene-order", "project-export", "dynamic-scene-loading", "scene-portals", "conditional-portals", "spawn-points", "runtime-settings", "ui-editor", "ui-runtime", "ui-images", "ui-video", "ui-fonts", "audio", "audio-runtime", "particles", "particle-runtime", "particle-color"],
     });
     return true;
   }

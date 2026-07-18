@@ -19,7 +19,7 @@ for (const preset of ["fire", "smoke", "sparks"]) {
         throw new Error(`Particle ${preset} material library must contain exactly one material; AthenaEnv renders unused material ranges as invalid DMA`);
     }
 }
-for (const marker of ["applyPointerSnap", "togglePivotEditing", "finishBoxSelection", "toggleIsolation", "setupPanelAccordions", "collapsedHierarchy", "applyRecordMaterial", "createLightObject", "applyCampfirePreset", "openCameraPreview", "renderTriggerEvents", "addTriggerAction", "renderUiPreview", "addUiElement", "switchProjectScene", "createProjectScene", "renderSceneManager", "setStartupProjectScene", "moveProjectScene", "exportSceneProjectFile", "withSceneProjectUiLock", "performSceneSave", "documentRevision", "saveQueue", "createAudioObject", "createParticleObject", "createShadowObject", "createSpawnPointObject", "addSpawnPoint", "addScenePortal", "addCheckpoint", "renderPortalEditor", "renderCheckpointEditor", "applyShadowTexture", "renderRuntimeSettings", "updateLegacyParticlePreview", "stepLegacyParticlePreview", "OctahedronGeometry", "addAudio", "addParticle", "addShadow", "renderLogicEditor", "convertTriggerActionsToLogic", "validateVisualScripting"]) {
+for (const marker of ["applyPointerSnap", "togglePivotEditing", "finishBoxSelection", "toggleIsolation", "setupPanelAccordions", "collapsedHierarchy", "applyRecordMaterial", "createLightObject", "applyCampfirePreset", "openCameraPreview", "renderTriggerEvents", "addTriggerAction", "renderUiPreview", "addUiElement", "switchProjectScene", "createProjectScene", "renderSceneManager", "setStartupProjectScene", "moveProjectScene", "exportSceneProjectFile", "withSceneProjectUiLock", "performSceneSave", "documentRevision", "saveQueue", "createAudioObject", "createParticleObject", "createShadowObject", "createSpawnPointObject", "addSpawnPoint", "addScenePortal", "addCheckpoint", "addGameplayTrigger", "renderPortalEditor", "renderCheckpointEditor", "renderGameplayEditor", "updateGameplayFromInspector", "applyShadowTexture", "renderRuntimeSettings", "updateLegacyParticlePreview", "stepLegacyParticlePreview", "OctahedronGeometry", "addAudio", "addParticle", "addShadow", "renderLogicEditor", "convertTriggerActionsToLogic", "validateVisualScripting"]) {
     if (!editorSource.includes(marker)) throw new Error(`Editor tool missing: ${marker}`);
 }
 for (const marker of ["Heavenfall", "Iniciar Jogo", "CRÉDITOS", "Brendow Vaz"]) {
@@ -31,10 +31,10 @@ for (const marker of ["MENU_AUDIO_ASSET", "updateMenuAudio", "startRuntimeAutopl
 if (source.includes("Render.SHADE_")) {
     throw new Error("AthenaEnv exposes shade_model as numeric Flat/Gouraud values, not Render.SHADE_* constants");
 }
-for (const marker of ["accurate_clipping", "texture_mapping", "runtimeShadows", "runtimeUiMedia", "controlRuntimeVideo", "EDITOR_LOGIC", "runtimeVisualScripts", "actionDisplayVariable", "actionSaveGame", "actionLoadGame", "EDITOR_SCENE_PROJECT", "EDITOR_SCENE_META", "EDITOR_SPAWN_POINTS", "EDITOR_PORTALS", "EDITOR_CHECKPOINTS", "requestSceneTransition", "freeRuntimeSceneResources", "retireRenderObject", "retainBorrowedNativeView", "retiredNativeViews", "releaseRenderData", "reapRetiredActiveSfx", "persistentRuntimeStream", "persistentState", "portalConditionSatisfied", "saveRuntimeGame", "loadRuntimeGame", "writeRuntimeSaveFile", "System.getMCInfo", "System.rename", "System.copyFile", "suspendRuntimeStream", "runAthenaGame", "runtimeNextSceneTransition"]) {
+for (const marker of ["accurate_clipping", "texture_mapping", "runtimeShadows", "runtimeUiMedia", "controlRuntimeVideo", "EDITOR_LOGIC", "runtimeVisualScripts", "actionDisplayVariable", "actionSaveGame", "actionLoadGame", "actionDamage", "actionHeal", "actionRespawn", "EDITOR_SCENE_PROJECT", "EDITOR_SCENE_META", "EDITOR_SPAWN_POINTS", "EDITOR_PORTALS", "EDITOR_CHECKPOINTS", "EDITOR_GAMEPLAY_COMPONENTS", "runRuntimeGameplayPhase", "applyRuntimeDamage", "applyRuntimeHealing", "respawnRuntimePlayer", "requestSceneTransition", "freeRuntimeSceneResources", "retireRenderObject", "retainBorrowedNativeView", "retiredNativeViews", "releaseRenderData", "reapRetiredActiveSfx", "persistentRuntimeStream", "persistentState", "portalConditionSatisfied", "saveRuntimeGame", "loadRuntimeGame", "writeRuntimeSaveFile", "System.getMCInfo", "System.rename", "System.copyFile", "suspendRuntimeStream", "runAthenaGame", "runtimeNextSceneTransition"]) {
     if (!source.includes(marker)) throw new Error(`Official Athena runtime integration missing: ${marker}`);
 }
-for (const marker of ["eventPlayerJump", "playerJump: playerJump"]) {
+for (const marker of ["eventPlayerJump", "playerJump: playerJump", "eventGameplay", "gameplay: gameplay"]) {
     if (!visualRuntimeSource.includes(marker)) throw new Error(`Visual scripting runtime event missing: ${marker}`);
 }
 const runtimeLoopStart = source.indexOf("while (runtimeLoopRunning) {");
@@ -51,12 +51,12 @@ if (/globalThis\.ATHENA_BOOT_[A-Z_]+\s*=/.test(source.slice(lifecycleLoop))) {
 if (!source.includes("os.getcwd()") || !source.includes('os.chdir(runtimePreviousDirectory)') || !source.includes('os.chdir("..")')) {
     throw new Error("Every transition must restore the directory above assets, including a checked fallback");
 }
-for (const id of ["snap-mode", "pivot-button", "box-select-button", "selection-marquee", "isolate-selection-button", "material-section", "material-texture-mapping", "material-smooth-shading", "material-accurate-clipping", "animation-section", "animation-clip", "light-section", "light-flicker", "light-campfire-preset", "camera-section", "camera-mode", "camera-preview", "add-spawn-button", "add-portal-button", "add-checkpoint-button", "spawn-section", "spawn-default", "portal-editor", "portal-enabled", "portal-scene", "portal-spawn", "portal-condition-enabled", "portal-condition-variable", "portal-condition-operator", "portal-condition-value", "checkpoint-editor", "checkpoint-enabled", "checkpoint-activation", "checkpoint-autosave", "object-persistent", "trigger-events-editor", "event-action-type", "event-scene", "event-spawn", "event-add-button", "event-convert-logic-button", "scene-picker", "scene-manager-button", "scene-manager-dialog", "scene-manager-list", "scene-manager-export-button", "duplicate-scene-button", "scene-background", "runtime-vsync", "runtime-performance", "player-spawn-x", "player-walk-speed", "ui-mode-button", "ui-editor", "ui-canvas", "ui-inspector", "ui-font-asset", "ui-media-section", "ui-media-asset", "logic-mode-button", "logic-editor", "logic-node-palette", "logic-properties", "audio-tools-section", "add-audio-button", "audio-section", "audio-asset", "particle-tools-section", "particle-section", "particle-preset", "particle-color", "add-shadow-button", "shadow-section", "shadow-texture"]) {
+for (const id of ["snap-mode", "pivot-button", "box-select-button", "selection-marquee", "isolate-selection-button", "material-section", "material-texture-mapping", "material-smooth-shading", "material-accurate-clipping", "animation-section", "animation-clip", "light-section", "light-flicker", "light-campfire-preset", "camera-section", "camera-mode", "camera-preview", "add-spawn-button", "add-portal-button", "add-checkpoint-button", "spawn-section", "spawn-default", "portal-editor", "portal-enabled", "portal-scene", "portal-spawn", "portal-condition-enabled", "portal-condition-variable", "portal-condition-operator", "portal-condition-value", "checkpoint-editor", "checkpoint-enabled", "checkpoint-activation", "checkpoint-autosave", "gameplay-section", "gameplay-health-enabled", "gameplay-damage-enabled", "gameplay-collectible-enabled", "gameplay-interactable-enabled", "gameplay-death-zone-enabled", "player-health-enabled", "player-health-maximum", "object-persistent", "trigger-events-editor", "event-action-type", "event-scene", "event-spawn", "event-add-button", "event-convert-logic-button", "scene-picker", "scene-manager-button", "scene-manager-dialog", "scene-manager-list", "scene-manager-export-button", "duplicate-scene-button", "scene-background", "runtime-vsync", "runtime-performance", "player-spawn-x", "player-walk-speed", "ui-mode-button", "ui-editor", "ui-canvas", "ui-inspector", "ui-font-asset", "ui-media-section", "ui-media-asset", "logic-mode-button", "logic-editor", "logic-node-palette", "logic-properties", "audio-tools-section", "add-audio-button", "audio-section", "audio-asset", "particle-tools-section", "particle-section", "particle-preset", "particle-color", "add-shadow-button", "shadow-section", "shadow-texture"]) {
     if (!editorHtml.includes(`id="${id}"`)) throw new Error(`Editor control missing: ${id}`);
 }
 source = source.replace(
     "while (runtimeLoopRunning) {",
-    "globalThis.__levelTest = { baseWalkable, isPlayerValid, applyMovement, colliderHits, updateVerticalMovement, executeAction: executeRuntimeAction, requestSceneTransition, runCheckpoint: runCheckpointPhase, saveGame: saveRuntimeGame, loadGame: loadRuntimeGame, getSaveData: () => runtimeEngineState.saveData, clearSessionCheckpoint: () => { runtimeEngineState.sessionCheckpoint = null; }, clearSceneTransition: () => { runtimeSceneTransition = null; }, freeResources: freeRuntimeSceneResources, releaseRenderData, getRetiredNativeViewCount: () => runtimeEngineState.retiredNativeViews.length, getSceneTransition: () => runtimeSceneTransition, getRuntimeMessage: () => runtimeMessageText, getVisibility: (id) => runtimeObjectVisibility[id], getPersistentVariable: (id) => readPersistentVariable(id, undefined, runtimeVariableTypes[id]), setPersistentVariable: (id, value) => writePersistentVariable(id, value, runtimeVariableTypes[id]), triggerJump: () => { runtimeVisualScripts.start(); runtimeVisualScripts.playerJump(); }, portalConditionSatisfied, getColliders: () => collisionShapes, getAudio: (id) => runtimeAudioById(id), getParticleEmitter: (id) => particleEmitterById(id), setPlayer: (state) => { playerX = state.x; playerY = state.y; playerZ = state.z; if (state.yaw !== undefined) playerYaw = state.yaw; playerVelocityY = state.velocityY; playerGrounded = state.grounded; }, getPlayer: () => ({ x: playerX, y: playerY, z: playerZ, yaw: playerYaw, velocityY: playerVelocityY, grounded: playerGrounded }) }; gameState = GAME_STATE_GAME; for (let __smokeFrame = 0; __smokeFrame < 2; __smokeFrame++) {"
+    "globalThis.__levelTest = { baseWalkable, isPlayerValid, applyMovement, colliderHits, updateVerticalMovement, executeAction: executeRuntimeAction, requestSceneTransition, runCheckpoint: runCheckpointPhase, runGameplay: runRuntimeGameplayPhase, saveGame: saveRuntimeGame, loadGame: loadRuntimeGame, getSaveData: () => runtimeEngineState.saveData, getPlayerHealth: () => runtimePlayerGameplay.currentHealth, getGameplayState: (id) => runtimeGameplayById[id], interactionAllowed: runtimeInteractionAllowed, clearSessionCheckpoint: () => { runtimeEngineState.sessionCheckpoint = null; }, clearSceneTransition: () => { runtimeSceneTransition = null; }, freeResources: freeRuntimeSceneResources, releaseRenderData, getRetiredNativeViewCount: () => runtimeEngineState.retiredNativeViews.length, getSceneTransition: () => runtimeSceneTransition, getRuntimeMessage: () => runtimeMessageText, getVisibility: (id) => runtimeObjectVisibility[id], getPersistentVariable: (id) => readPersistentVariable(id, undefined, runtimeVariableTypes[id]), setPersistentVariable: (id, value) => writePersistentVariable(id, value, runtimeVariableTypes[id]), triggerJump: () => { runtimeVisualScripts.start(); runtimeVisualScripts.playerJump(); }, portalConditionSatisfied, getColliders: () => collisionShapes, getAudio: (id) => runtimeAudioById(id), getParticleEmitter: (id) => particleEmitterById(id), setPlayer: (state) => { playerX = state.x; playerY = state.y; playerZ = state.z; if (state.yaw !== undefined) playerYaw = state.yaw; playerVelocityY = state.velocityY; playerGrounded = state.grounded; }, getPlayer: () => ({ x: playerX, y: playerY, z: playerZ, yaw: playerYaw, velocityY: playerVelocityY, grounded: playerGrounded }) }; gameState = GAME_STATE_GAME; for (let __smokeFrame = 0; __smokeFrame < 2; __smokeFrame++) {"
 );
 
 let vertexCount = 0;
@@ -233,11 +233,24 @@ const context = {
             if (filename === "scenes/project.generated.js") {
                 sandbox.EDITOR_SCENE_PROJECT.variables.push(
                     { id: "smoke-global-key", name: "Smoke global key", type: "boolean", initialValue: true },
-                    { id: "smoke-jump-count", name: "Smoke jump count", type: "number", initialValue: 0 }
+                    { id: "smoke-jump-count", name: "Smoke jump count", type: "number", initialValue: 0 },
+                    { id: "smoke-items", name: "Smoke items", type: "number", initialValue: 0 }
                 );
             }
             if (filename === "scene.generated.js" || filename === "scenes/main.generated.js") {
                 if (sandbox.EDITOR_SCENE[0]) sandbox.EDITOR_SCENE[0].persistent = true;
+                sandbox.EDITOR_SETTINGS.player.health = {
+                    enabled: true, maximum: 100, initial: 100,
+                    invulnerabilityFrames: 0, respawnOnDeath: true, showHud: true
+                };
+                const gameplayVisualId = sandbox.EDITOR_SCENE[0].id;
+                sandbox.EDITOR_GAMEPLAY_COMPONENTS.push(
+                    { id: `${gameplayVisualId}-health`, type: "health", objectId: gameplayVisualId, enabled: true, maximum: 40, initial: 40, invulnerabilityFrames: 0, hideOnDeath: true, persistent: true },
+                    { id: "smoke-damage", type: "damage", triggerId: "smoke-gameplay", targetId: "__player__", amount: 25, activation: "onEnter", cooldownFrames: 30 },
+                    { id: "smoke-collectible", type: "collectible", triggerId: "smoke-gameplay", variableId: "smoke-items", amount: 2, activation: "onEnter", visualTargetIds: [gameplayVisualId], message: "Coletado", autosave: false },
+                    { id: "smoke-interactable", type: "interactable", triggerId: "smoke-interaction", prompt: "Interagir", once: true },
+                    { id: "smoke-death-zone", type: "deathZone", triggerId: "smoke-death", fadeFrames: 18 }
+                );
                 sandbox.EDITOR_LOGIC.graphs.push({
                     id: "smoke-jump-graph",
                     name: "Smoke jump graph",
@@ -499,8 +512,42 @@ context.__levelTest.executeAction({ type: "particle", targetId: "smoke-particles
 if (!context.__levelTest.getParticleEmitter("smoke-particles").pool.some((particle) => particle.alive)) {
     throw new Error("Particle burst events must spawn the runtime pool");
 }
-const postLoopPlayer = context.__levelTest.getPlayer();
 const visibilityTarget = context.EDITOR_SCENE[0].id;
+context.__levelTest.executeAction({ type: "damage", targetId: "__player__", amount: 25 });
+context.__levelTest.executeAction({ type: "heal", targetId: "__player__", amount: 10 });
+if (context.__levelTest.getPlayerHealth() !== 85) {
+    throw new Error("Player health must apply damage and healing with the configured limits");
+}
+context.__levelTest.executeAction({ type: "damage", targetId: visibilityTarget, amount: 50 });
+if (context.__levelTest.getGameplayState(`${visibilityTarget}-health`).health !== 0
+    || context.__levelTest.getVisibility(visibilityTarget) !== false) {
+    throw new Error("Object health must emit death state and hide its visual at zero");
+}
+context.__levelTest.executeAction({ type: "heal", targetId: visibilityTarget, amount: 5 });
+if (context.__levelTest.getGameplayState(`${visibilityTarget}-health`).health !== 5
+    || context.__levelTest.getVisibility(visibilityTarget) !== true) {
+    throw new Error("Healing a dead object must restore its visual and persistent health");
+}
+context.__levelTest.runGameplay("smoke-gameplay", "onEnter");
+context.__levelTest.runGameplay("smoke-gameplay", "onEnter");
+if (context.__levelTest.getPersistentVariable("smoke-items") !== 2
+    || !context.__levelTest.getGameplayState("smoke-collectible").consumed
+    || context.__levelTest.getVisibility(visibilityTarget) !== false) {
+    throw new Error("Collectibles must increment once, persist consumption and hide their configured visual");
+}
+if (!context.__levelTest.interactionAllowed("smoke-interaction")) throw new Error("Unused interactables must accept interaction");
+context.__levelTest.runGameplay("smoke-interaction", "onInteract");
+if (context.__levelTest.interactionAllowed("smoke-interaction")) {
+    throw new Error("One-shot interactables must persist their consumed state");
+}
+context.__levelTest.clearSceneTransition();
+context.__levelTest.runGameplay("smoke-death", "onEnter");
+if (context.__levelTest.getSceneTransition()?.sceneId !== "main") {
+    throw new Error("Death zones must respawn through the normal scene lifecycle");
+}
+context.__levelTest.clearSceneTransition();
+context.__levelTest.executeAction({ type: "damage", targetId: "__player__", amount: 40 });
+const postLoopPlayer = context.__levelTest.getPlayer();
 context.__levelTest.executeAction({ type: "visibility", targetIds: [visibilityTarget], mode: "hide" });
 if (context.__levelTest.getVisibility(visibilityTarget) !== false) {
     throw new Error("Visibility actions must affect runtime objects");
@@ -520,9 +567,14 @@ if (systemRenameCalls === 0) throw new Error("Memory Card promotion must use Ath
 const storedSave = JSON.parse(memoryCardFiles.get(savePath));
 if (storedSave.version !== 1 || storedSave.sceneId !== "main"
     || storedSave.player.x !== 3.5 || storedSave.player.z !== 14.25 || storedSave.player.yaw !== 1.25
+    || storedSave.player.health !== 60
     || storedSave.variables["smoke-jump-count"] !== 7
+    || storedSave.variables["smoke-items"] !== 2
+    || storedSave.scenes.main.components["smoke-collectible"].consumed !== true
+    || storedSave.scenes.main.components["smoke-interactable"].consumed !== true
+    || storedSave.scenes.main.components[`${visibilityTarget}-health`].health !== 5
     || storedSave.scenes.main.objects[visibilityTarget].visible !== false) {
-    throw new Error("Memory Card saves must contain the scene, player, variables and persistent visibility");
+    throw new Error("Memory Card saves must contain player health, gameplay components, variables and persistent visibility");
 }
 context.__levelTest.setPersistentVariable("smoke-jump-count", 8);
 const staleBackup = JSON.parse(memoryCardFiles.get(savePath));

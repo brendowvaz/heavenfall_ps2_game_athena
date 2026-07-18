@@ -31,7 +31,14 @@ const runtimeEngineState = {
     saveAvailable: false,
     saveChecked: false,
     lastSaveError: "",
-    sessionCheckpoint: null
+    sessionCheckpoint: null,
+    playerGameplay: {
+        initialized: false,
+        enabled: false,
+        currentHealth: 0,
+        maximumHealth: 0,
+        invulnerabilityFrames: 0
+    }
 };
 
 function initializeRuntimeEngine() {
@@ -111,7 +118,9 @@ function writePersistentVariable(id, value, type) {
 function persistentRuntimeScene(sceneId) {
     const id = sceneId || "legacy";
     const scenes = runtimeEngineState.persistentState.scenes;
-    if (!scenes[id]) scenes[id] = { objects: {} };
+    if (!scenes[id]) scenes[id] = { objects: {}, components: {} };
+    if (!scenes[id].objects) scenes[id].objects = {};
+    if (!scenes[id].components) scenes[id].components = {};
     return scenes[id];
 }
 
@@ -137,11 +146,13 @@ function normalizeRuntimeSaveData(input) {
         x: Number(sourcePlayer.x),
         y: Number(sourcePlayer.y),
         z: Number(sourcePlayer.z),
-        yaw: Number(sourcePlayer.yaw)
+        yaw: Number(sourcePlayer.yaw),
+        health: sourcePlayer.health === undefined ? undefined : Number(sourcePlayer.health)
     };
     if (!sceneId || !Number.isFinite(player.x) || !Number.isFinite(player.y)
         || !Number.isFinite(player.z) || !Number.isFinite(player.yaw)) return null;
     if (Math.abs(player.x) > 100000 || Math.abs(player.y) > 100000 || Math.abs(player.z) > 100000) return null;
+    if (player.health !== undefined && (!Number.isFinite(player.health) || player.health < 0 || player.health > 999999)) return null;
 
     const variables = {};
     const sourceVariables = input.variables && typeof input.variables === "object" ? input.variables : {};
@@ -159,6 +170,7 @@ function normalizeRuntimeSaveData(input) {
         const savedSceneId = safeRuntimeSaveId(sceneIds[sceneIndex]);
         if (!savedSceneId) continue;
         const sourceObjects = sourceScenes[sceneIds[sceneIndex]] && sourceScenes[sceneIds[sceneIndex]].objects;
+        const sourceComponents = sourceScenes[sceneIds[sceneIndex]] && sourceScenes[sceneIds[sceneIndex]].components;
         const objects = {};
         const objectIds = sourceObjects && typeof sourceObjects === "object"
             ? Object.keys(sourceObjects).slice(0, 2048)
@@ -168,7 +180,22 @@ function normalizeRuntimeSaveData(input) {
             const visible = sourceObjects[objectIds[objectIndex]] && sourceObjects[objectIds[objectIndex]].visible;
             if (objectId && typeof visible === "boolean") objects[objectId] = { visible: visible };
         }
-        scenes[savedSceneId] = { objects: objects };
+        const components = {};
+        const componentIds = sourceComponents && typeof sourceComponents === "object"
+            ? Object.keys(sourceComponents).slice(0, 2048)
+            : [];
+        for (let componentIndex = 0; componentIndex < componentIds.length; componentIndex++) {
+            const componentId = safeRuntimeSaveId(componentIds[componentIndex]);
+            const sourceState = sourceComponents[componentIds[componentIndex]];
+            if (!componentId || !sourceState || typeof sourceState !== "object") continue;
+            const state = {};
+            if (typeof sourceState.consumed === "boolean") state.consumed = sourceState.consumed;
+            if (Number.isFinite(Number(sourceState.health))) {
+                state.health = Math.max(0, Math.min(999999, Number(sourceState.health)));
+            }
+            if (Object.keys(state).length) components[componentId] = state;
+        }
+        scenes[savedSceneId] = { objects: objects, components: components };
     }
 
     return {
@@ -524,6 +551,7 @@ globalThis.EDITOR_COLLIDERS = [];
 globalThis.EDITOR_SPAWN_POINTS = [];
 globalThis.EDITOR_PORTALS = [];
 globalThis.EDITOR_CHECKPOINTS = [];
+globalThis.EDITOR_GAMEPLAY_COMPONENTS = [];
 globalThis.EDITOR_EVENTS = [];
 globalThis.EDITOR_LOGIC = { version: 1, variables: [], graphs: [] };
 globalThis.EDITOR_LIGHTS = [];
@@ -913,6 +941,63 @@ let playerVelocityY = 0.0;
 let playerGrounded = true;
 let playerYaw = SPAWN_YAW;
 let cameraYaw = activeSpawnPoint ? SPAWN_YAW : EDITOR_CAMERA ? EDITOR_CAMERA.rotation.y : 0.0;
+const runtimePlayerHealthConfig = runtimePlayer.health || {};
+const runtimePlayerGameplay = runtimeEngineState.playerGameplay;
+const configuredPlayerMaximumHealth = Math.max(1, Math.min(999999, Math.round(runtimePlayerHealthConfig.maximum || 100)));
+if (!runtimePlayerGameplay.initialized) {
+    runtimePlayerGameplay.initialized = true;
+    runtimePlayerGameplay.currentHealth = Math.max(0, Math.min(
+        configuredPlayerMaximumHealth,
+        Math.round(runtimePlayerHealthConfig.initial === undefined ? configuredPlayerMaximumHealth : runtimePlayerHealthConfig.initial)
+    ));
+    runtimePlayerGameplay.invulnerabilityFrames = 0;
+}
+runtimePlayerGameplay.enabled = runtimePlayerHealthConfig.enabled === true;
+runtimePlayerGameplay.maximumHealth = configuredPlayerMaximumHealth;
+runtimePlayerGameplay.currentHealth = Math.max(0, Math.min(configuredPlayerMaximumHealth, runtimePlayerGameplay.currentHealth));
+
+const runtimeGameplayComponents = [];
+const runtimeGameplayById = {};
+const runtimeGameplayByTrigger = {};
+const runtimeHealthByTarget = {};
+for (let gameplayIndex = 0; gameplayIndex < EDITOR_GAMEPLAY_COMPONENTS.length; gameplayIndex++) {
+    const definition = EDITOR_GAMEPLAY_COMPONENTS[gameplayIndex];
+    if (!definition || !definition.id || !definition.type) continue;
+    const storedState = runtimePersistentScene.components[definition.id] || {};
+    const state = {
+        definition: definition,
+        consumed: (definition.type === "collectible" || (definition.type === "interactable" && definition.once === true))
+            ? storedState.consumed === true
+            : false,
+        cooldownFrames: 0,
+        invulnerabilityFrames: 0,
+        health: 0
+    };
+    if (definition.type === "health") {
+        const maximum = Math.max(1, Math.min(999999, Math.round(definition.maximum || 100)));
+        const initial = Math.max(0, Math.min(maximum, Math.round(definition.initial === undefined ? maximum : definition.initial)));
+        state.health = definition.persistent === true && Number.isFinite(Number(storedState.health))
+            ? Math.max(0, Math.min(maximum, Number(storedState.health)))
+            : initial;
+        state.maximumHealth = maximum;
+        runtimeHealthByTarget[definition.objectId] = state;
+        if (state.health <= 0 && definition.hideOnDeath !== false && runtimeObjectVisibility[definition.objectId] !== undefined) {
+            runtimeObjectVisibility[definition.objectId] = false;
+        }
+    }
+    if (definition.type === "collectible" && state.consumed) {
+        const visualTargets = definition.visualTargetIds || [];
+        for (let targetIndex = 0; targetIndex < visualTargets.length; targetIndex++) {
+            if (runtimeObjectVisibility[visualTargets[targetIndex]] !== undefined) runtimeObjectVisibility[visualTargets[targetIndex]] = false;
+        }
+    }
+    runtimeGameplayComponents.push(state);
+    runtimeGameplayById[definition.id] = state;
+    if (definition.triggerId) {
+        if (!runtimeGameplayByTrigger[definition.triggerId]) runtimeGameplayByTrigger[definition.triggerId] = [];
+        runtimeGameplayByTrigger[definition.triggerId].push(state);
+    }
+}
 if (BOOT_PLAYER_STATE && !isPlayerValid(playerX, playerZ)) {
     const fallbackPosition = SCENE_SPAWN;
     const fallbackYaw = activeSpawnPoint
@@ -1324,7 +1409,13 @@ function buildRuntimeSaveData() {
     return normalizeRuntimeSaveData({
         version: RUNTIME_SAVE_VERSION,
         sceneId: EDITOR_SCENE_META.id || BOOT_SCENE_ID || EDITOR_SCENE_PROJECT.startupSceneId,
-        player: { x: playerX, y: playerY, z: playerZ, yaw: playerYaw },
+        player: {
+            x: playerX,
+            y: playerY,
+            z: playerZ,
+            yaw: playerYaw,
+            health: runtimePlayerGameplay.enabled ? runtimePlayerGameplay.currentHealth : undefined
+        },
         variables: variables,
         scenes: runtimeEngineState.persistentState.scenes
     });
@@ -1348,6 +1439,12 @@ function applyRuntimeSaveData(data) {
         if (save.scenes[id]) scenes[id] = save.scenes[id];
     }
     runtimeEngineState.persistentState = { variables: variables, scenes: scenes };
+    if (save.player.health !== undefined) {
+        runtimeEngineState.playerGameplay.currentHealth = Math.max(0, Math.min(
+            runtimeEngineState.playerGameplay.maximumHealth || 999999,
+            Number(save.player.health)
+        ));
+    }
     runtimeEngineState.saveData = save;
     runtimeEngineState.saveAvailable = true;
     return true;
@@ -1479,6 +1576,205 @@ function runCheckpointPhase(triggerId, phase) {
     }
 }
 
+function persistRuntimeGameplayState(state) {
+    if (!state || !state.definition) return;
+    const definition = state.definition;
+    const persistent = definition.type === "collectible"
+        || (definition.type === "interactable" && definition.once === true)
+        || (definition.type === "health" && definition.persistent === true);
+    if (!persistent) return;
+    const stored = runtimePersistentScene.components[definition.id] || {};
+    if (definition.type === "health") stored.health = state.health;
+    else stored.consumed = state.consumed === true;
+    runtimePersistentScene.components[definition.id] = stored;
+}
+
+function emitRuntimeGameplayEvent(componentId, eventName, payload) {
+    if (!runtimeVisualScripts || typeof runtimeVisualScripts.gameplay !== "function") return;
+    runtimeVisualScripts.gameplay(componentId, eventName, payload || {});
+}
+
+function setRuntimeGameplayVisibility(targetIds, visible) {
+    const targets = targetIds || [];
+    for (let index = 0; index < targets.length; index++) {
+        const targetId = targets[index];
+        if (runtimeObjectVisibility[targetId] === undefined) continue;
+        runtimeObjectVisibility[targetId] = visible !== false;
+        persistRuntimeObjectVisibility(targetId);
+    }
+}
+
+function respawnRuntimePlayer(fadeFrames) {
+    if (runtimeSceneTransition) return false;
+    const checkpoint = runtimeEngineState.sessionCheckpoint;
+    if (checkpoint && runtimeSaveCanContinue(checkpoint)) {
+        applyRuntimeSaveData(checkpoint);
+        runtimePlayerGameplay.currentHealth = checkpoint.player.health === undefined
+            ? runtimePlayerGameplay.maximumHealth
+            : Math.max(1, Math.min(runtimePlayerGameplay.maximumHealth, checkpoint.player.health));
+        runtimePlayerGameplay.invulnerabilityFrames = 0;
+        emitRuntimeGameplayEvent("player-health", "respawn", { health: runtimePlayerGameplay.currentHealth });
+        return requestSceneTransition(checkpoint.sceneId, "", fadeFrames || 24, checkpoint.player);
+    }
+    runtimePlayerGameplay.currentHealth = Math.max(1, Math.min(
+        runtimePlayerGameplay.maximumHealth,
+        runtimePlayerHealthConfig.initial === undefined ? runtimePlayerGameplay.maximumHealth : runtimePlayerHealthConfig.initial
+    ));
+    runtimePlayerGameplay.invulnerabilityFrames = 0;
+    emitRuntimeGameplayEvent("player-health", "respawn", { health: runtimePlayerGameplay.currentHealth });
+    return requestSceneTransition(EDITOR_SCENE_META.id || BOOT_SCENE_ID || EDITOR_SCENE_PROJECT.startupSceneId, "", fadeFrames || 24);
+}
+
+function applyRuntimeDamage(targetId, amount, sourceComponentId) {
+    const damage = Math.max(0, Math.min(999999, Number(amount) || 0));
+    if (damage <= 0) return false;
+    if (!targetId || targetId === "__player__") {
+        if (!runtimePlayerGameplay.enabled || runtimePlayerGameplay.currentHealth <= 0 || runtimePlayerGameplay.invulnerabilityFrames > 0) return false;
+        runtimePlayerGameplay.currentHealth = Math.max(0, runtimePlayerGameplay.currentHealth - damage);
+        runtimePlayerGameplay.invulnerabilityFrames = Math.max(0, Math.round(runtimePlayerHealthConfig.invulnerabilityFrames || 0));
+        emitRuntimeGameplayEvent("player-health", "damaged", {
+            amount: damage,
+            health: runtimePlayerGameplay.currentHealth,
+            sourceComponentId: sourceComponentId || ""
+        });
+        if (runtimePlayerGameplay.currentHealth <= 0) {
+            emitRuntimeGameplayEvent("player-health", "death", { sourceComponentId: sourceComponentId || "" });
+            if (runtimePlayerHealthConfig.respawnOnDeath !== false) respawnRuntimePlayer(24);
+        }
+        return true;
+    }
+    const state = runtimeHealthByTarget[targetId];
+    if (!state || state.health <= 0 || state.invulnerabilityFrames > 0) return false;
+    const definition = state.definition;
+    state.health = Math.max(0, state.health - damage);
+    state.invulnerabilityFrames = Math.max(0, Math.round(definition.invulnerabilityFrames || 0));
+    persistRuntimeGameplayState(state);
+    emitRuntimeGameplayEvent(definition.id, "damaged", { amount: damage, health: state.health, sourceComponentId: sourceComponentId || "" });
+    if (state.health <= 0) {
+        if (definition.hideOnDeath !== false) setRuntimeGameplayVisibility([definition.objectId], false);
+        emitRuntimeGameplayEvent(definition.id, "death", { sourceComponentId: sourceComponentId || "" });
+    }
+    return true;
+}
+
+function applyRuntimeHealing(targetId, amount) {
+    const healing = Math.max(0, Math.min(999999, Number(amount) || 0));
+    if (healing <= 0) return false;
+    if (!targetId || targetId === "__player__") {
+        if (!runtimePlayerGameplay.enabled) return false;
+        const previous = runtimePlayerGameplay.currentHealth;
+        runtimePlayerGameplay.currentHealth = Math.min(runtimePlayerGameplay.maximumHealth, previous + healing);
+        if (runtimePlayerGameplay.currentHealth === previous) return false;
+        emitRuntimeGameplayEvent("player-health", "healed", { amount: runtimePlayerGameplay.currentHealth - previous, health: runtimePlayerGameplay.currentHealth });
+        return true;
+    }
+    const state = runtimeHealthByTarget[targetId];
+    if (!state) return false;
+    const previous = state.health;
+    state.health = Math.min(state.maximumHealth, state.health + healing);
+    if (state.health === previous) return false;
+    if (previous <= 0 && state.definition.hideOnDeath !== false) setRuntimeGameplayVisibility([state.definition.objectId], true);
+    persistRuntimeGameplayState(state);
+    emitRuntimeGameplayEvent(state.definition.id, "healed", { amount: state.health - previous, health: state.health });
+    return true;
+}
+
+function collectRuntimeGameplayComponent(state) {
+    if (!state || state.consumed) return false;
+    const definition = state.definition;
+    state.consumed = true;
+    persistRuntimeGameplayState(state);
+    if (definition.variableId && runtimeVariableTypes[definition.variableId] === "number") {
+        const current = Number(readPersistentVariable(definition.variableId, 0, "number")) || 0;
+        writePersistentVariable(definition.variableId, current + (Number(definition.amount) || 0), "number");
+    }
+    setRuntimeGameplayVisibility(definition.visualTargetIds, false);
+    if (definition.message) {
+        runtimeMessageText = definition.message;
+        runtimeMessageTimer = 150;
+    }
+    emitRuntimeGameplayEvent(definition.id, "collected", {
+        variableId: definition.variableId || "",
+        amount: Number(definition.amount) || 0
+    });
+    if (definition.autosave === true) saveRuntimeGame(true);
+    return true;
+}
+
+function runtimeInteractionAllowed(triggerId) {
+    const components = runtimeGameplayByTrigger[triggerId] || [];
+    for (let index = 0; index < components.length; index++) {
+        const state = components[index];
+        if (state.definition.type === "interactable" && state.definition.once === true && state.consumed) return false;
+    }
+    return true;
+}
+
+function runRuntimeGameplayPhase(triggerId, phase) {
+    if (phase === "onEnter" && triggerTransitionSuppressionFrames > 0) return;
+    const components = runtimeGameplayByTrigger[triggerId] || [];
+    for (let index = 0; index < components.length; index++) {
+        const state = components[index];
+        const definition = state.definition;
+        if (definition.type === "damage" && definition.activation === phase && state.cooldownFrames <= 0) {
+            if (applyRuntimeDamage(definition.targetId, definition.amount, definition.id)) {
+                state.cooldownFrames = Math.max(0, Math.round(definition.cooldownFrames || 0));
+                emitRuntimeGameplayEvent(definition.id, "activated", { targetId: definition.targetId, amount: definition.amount });
+            }
+        } else if (definition.type === "collectible" && definition.activation === phase) {
+            collectRuntimeGameplayComponent(state);
+        } else if (definition.type === "interactable" && phase === "onInteract" && !state.consumed) {
+            emitRuntimeGameplayEvent(definition.id, "interacted", { triggerId: triggerId });
+            if (definition.once === true) {
+                state.consumed = true;
+                persistRuntimeGameplayState(state);
+            }
+        } else if (definition.type === "deathZone" && phase === "onEnter") {
+            emitRuntimeGameplayEvent(definition.id, "entered", { triggerId: triggerId });
+            respawnRuntimePlayer(definition.fadeFrames);
+        }
+    }
+}
+
+function stepRuntimeGameplay() {
+    if (runtimePlayerGameplay.invulnerabilityFrames > 0) runtimePlayerGameplay.invulnerabilityFrames--;
+    for (let index = 0; index < runtimeGameplayComponents.length; index++) {
+        const state = runtimeGameplayComponents[index];
+        if (state.cooldownFrames > 0) state.cooldownFrames--;
+        if (state.invulnerabilityFrames > 0) state.invulnerabilityFrames--;
+    }
+}
+
+function runtimeInteractionPrompt() {
+    for (let triggerIndex = 0; triggerIndex < activeTriggerIds.length; triggerIndex++) {
+        const components = runtimeGameplayByTrigger[activeTriggerIds[triggerIndex]] || [];
+        for (let index = 0; index < components.length; index++) {
+            const state = components[index];
+            if (state.definition.type === "interactable" && !state.consumed) return state.definition.prompt || "Pressione Triangulo para interagir";
+            if (state.definition.type === "collectible" && state.definition.activation === "onInteract" && !state.consumed) return "Pressione Triangulo para coletar";
+        }
+    }
+    return "";
+}
+
+function resetRuntimeGameplayForNewGame() {
+    runtimePlayerGameplay.currentHealth = Math.max(0, Math.min(
+        runtimePlayerGameplay.maximumHealth,
+        runtimePlayerHealthConfig.initial === undefined ? runtimePlayerGameplay.maximumHealth : runtimePlayerHealthConfig.initial
+    ));
+    runtimePlayerGameplay.invulnerabilityFrames = 0;
+    for (let index = 0; index < runtimeGameplayComponents.length; index++) {
+        const state = runtimeGameplayComponents[index];
+        state.consumed = false;
+        state.cooldownFrames = 0;
+        state.invulnerabilityFrames = 0;
+        if (state.definition.type === "health") {
+            state.health = Math.max(0, Math.min(state.maximumHealth, state.definition.initial));
+            if (state.definition.hideOnDeath !== false) setRuntimeGameplayVisibility([state.definition.objectId], state.health > 0);
+        }
+    }
+}
+
 function executeRuntimeAction(action) {
     if (!action) return;
     if (action.type === "message") {
@@ -1522,6 +1818,18 @@ function executeRuntimeAction(action) {
         loadRuntimeGame(true);
         return;
     }
+    if (action.type === "damage") {
+        applyRuntimeDamage(action.targetId, action.amount, action.sourceComponentId);
+        return;
+    }
+    if (action.type === "heal") {
+        applyRuntimeHealing(action.targetId, action.amount);
+        return;
+    }
+    if (action.type === "respawn") {
+        respawnRuntimePlayer(action.fadeFrames);
+        return;
+    }
     if (action.type === "teleport") {
         const position = action.position || { x: 0.0, y: PLAYER_GROUND_Y, z: 18.0 };
         playerX = position.x;
@@ -1543,6 +1851,7 @@ function runTriggerPhase(triggerId, phase) {
         }
     }
     if (runtimeVisualScripts) runtimeVisualScripts.trigger(triggerId, phase);
+    runRuntimeGameplayPhase(triggerId, phase);
     runCheckpointPhase(triggerId, phase);
     runPortalPhase(triggerId, phase);
     runtimeTriggerPhaseActive = false;
@@ -1558,7 +1867,9 @@ function processRuntimeEvents() {
         if (!arrayContains(activeTriggerIds, id)) runTriggerPhase(id, "onExit");
     }
     if (pad.justPressed(Pads.TRIANGLE)) {
-        for (let i = 0; i < activeTriggerIds.length; i++) runTriggerPhase(activeTriggerIds[i], "onInteract");
+        for (let i = 0; i < activeTriggerIds.length; i++) {
+            if (runtimeInteractionAllowed(activeTriggerIds[i])) runTriggerPhase(activeTriggerIds[i], "onInteract");
+        }
     }
     previousTriggerIds = activeTriggerIds.slice();
     if (triggerTransitionSuppressionFrames > 0) triggerTransitionSuppressionFrames--;
@@ -1725,6 +2036,9 @@ function executeVisualScriptAction(type, config) {
     });
     else if (type === "actionSaveGame") executeRuntimeAction({ type: "save" });
     else if (type === "actionLoadGame") executeRuntimeAction({ type: "load" });
+    else if (type === "actionDamage") executeRuntimeAction({ type: "damage", targetId: config.targetId, amount: config.amount });
+    else if (type === "actionHeal") executeRuntimeAction({ type: "heal", targetId: config.targetId, amount: config.amount });
+    else if (type === "actionRespawn") executeRuntimeAction({ type: "respawn", fadeFrames: config.fadeFrames });
 }
 
 const runtimeVisualScripts = typeof VisualScriptingRuntime !== "undefined"
@@ -1775,9 +2089,13 @@ function moveMenuSelection(direction) {
 }
 
 function startExistingScenario() {
+    runtimePersistentScene.objects = {};
+    runtimePersistentScene.components = {};
     runtimeEngineState.persistentState = { variables: {}, scenes: {} };
+    runtimeEngineState.persistentState.scenes[EDITOR_SCENE_META.id || BOOT_SCENE_ID || "legacy"] = runtimePersistentScene;
     runtimeEngineState.sessionCheckpoint = null;
     initializePersistentVariables(runtimeVariableDefinitions);
+    resetRuntimeGameplayForNewGame();
     stopMenuAudio();
     startRuntimeAutoplayAudio();
     gameState = GAME_STATE_GAME;
@@ -1903,6 +2221,7 @@ function updatePlayerAndCamera() {
 
     updateVerticalMovement();
     updateActiveTriggers();
+    stepRuntimeGameplay();
     processRuntimeEvents();
     if (runtimeVisualScripts) runtimeVisualScripts.step();
     updateRuntimeAudio();
@@ -2401,6 +2720,16 @@ function drawHud() {
     }
 
     if (showHud) {
+        if (runtimePlayerGameplay.enabled && runtimePlayerHealthConfig.showHud !== false) {
+            const healthRatio = runtimePlayerGameplay.maximumHealth > 0
+                ? clamp(runtimePlayerGameplay.currentHealth / runtimePlayerGameplay.maximumHealth, 0.0, 1.0)
+                : 0.0;
+            Draw.rect(14, 67, 184, 18, Color.new(3, 10, 16, 104));
+            Draw.rect(17, 70, 178 * healthRatio, 12, Color.new(194, 52, 73, 118));
+            font.scale = 0.36;
+            font.color = Color.new(244, 232, 235, 128);
+            font.print(22, 69, "VIDA " + Math.round(runtimePlayerGameplay.currentHealth) + " / " + Math.round(runtimePlayerGameplay.maximumHealth));
+        }
         font.scale = 0.40;
         font.color = HUD_WHITE;
         font.print(14, canvas.height - 67, "BUILD 14 - SUPORTE E QUEDA");
@@ -2442,6 +2771,16 @@ function drawHud() {
         font.print(canvas.width - 186, 16, "FPS: " + fps.toFixed(1));
         font.print(canvas.width - 186, 30, "DRAWS: " + stats.drawCalls + "  TRI: " + stats.triangles);
         font.print(canvas.width - 186, 44, "VRAM: " + (vram / 1048576.0).toFixed(2) + " MB");
+    }
+
+    const interactionPrompt = runtimeInteractionPrompt();
+    if (interactionPrompt) {
+        const promptText = interactionPrompt.substring(0, 72);
+        const promptWidth = Math.min(canvas.width - 48, Math.max(240, estimateTextWidth(promptText, 0.44) + 36));
+        Draw.rect((canvas.width - promptWidth) * 0.5, canvas.height - 178, promptWidth, 30, Color.new(4, 11, 18, 108));
+        font.scale = 0.44;
+        font.color = Color.new(225, 238, 245, 128);
+        font.print((canvas.width - estimateTextWidth(promptText, 0.44)) * 0.5, canvas.height - 169, promptText);
     }
 
     Screen.setParam(Screen.DEPTH_TEST_ENABLE, true);

@@ -59,6 +59,7 @@ Abra `http://127.0.0.1:4173/editor/` no navegador. O editor oferece:
 - câmeras de cena com modos seguir, fixa e fixa olhando o jogador, além de preview em 640 × 448;
 - colisores visuais de caixa, esfera e cápsula, com trigger e bloqueio de câmera;
 - componentes de trigger com eventos de entrada, saída e interação executados no PS2;
+- componentes de gameplay declarativos para Vida, Dano, Coletável, Interagível e Área de morte, com presets de criação, HUD de vida e persistência no save;
 - visual scripting por grafos com eventos de início, trigger, botão, pulo real do jogador e temporizador; condições, variáveis globais, espera e ações para mensagens, exibição de valores, visibilidade, teleporte, salvar/carregar, troca de cena, áudio, partículas e vídeo;
 - projetores de sombra oficiais com textura, grade, direção da luz, bias, deslocamento, cor, blend e opção de seguir o jogador;
 - editor de interface 2D em 640 × 448 com painéis, textos, imagens e vídeos MPEG, arraste e redimensionamento;
@@ -74,6 +75,8 @@ Abra `http://127.0.0.1:4173/editor/` no navegador. O editor oferece:
 - duplicação, exclusão, desfazer/refazer e snap por grade, superfície, vértice ou centro de objeto;
 - copiar e colar modelos, grupos, primitivas e colisores com a hierarquia preservada;
 - salvamento direto para o runtime e botão para testar no PCSX2.
+
+Em **Cena e gameplay**, os botões **Dano**, **Coletável**, **Interação** e **Área de morte** criam triggers já configurados. **Vida** pode ser ligada no jogador, em modelos, primitivas ou colisores; aceita valor máximo/inicial, invulnerabilidade, ocultação ao morrer e persistência. Dano escolhe o alvo e a recarga. Coletável incrementa uma variável global numérica apenas uma vez, pode ocultar um objeto ou grupo e salvar automaticamente. Interagível mostra um prompt de `Triângulo` e pode ser consumido permanentemente. Área de morte retorna pelo ciclo normal de cenas ao último checkpoint ou à entrada padrão. O Visual Scripting recebe os eventos desses componentes e oferece as ações **Aplicar dano**, **Restaurar vida** e **Renascer**.
 
 Ao importar OBJ ou GLTF com arquivos externos, selecione também o MTL, BIN e as texturas relacionados. Eles serão copiados juntos para `assets/imported`.
 
@@ -95,7 +98,7 @@ As dimensões dos colisores seguem a visualização do editor: na caixa, `scale`
 
 Triggers podem executar ações **Ao entrar**, **Ao sair** ou **Ao interagir** com `Triângulo`. As ações mostram mensagens na HUD, mostram/ocultam objetos ou grupos, teletransportam o jogador, salvam/carregam o progresso, trocam de cena e controlam áudio, partículas ou vídeo. Grupos usados como alvo são resolvidos para seus modelos filhos durante a exportação, e todas as ações são executadas pelo `main.js` no PS2.
 
-O modo **LOGIC** amplia esses eventos para grafos visuais reutilizáveis. Um fluxo começa em **Ao iniciar**, **Trigger**, **Botão pressionado**, **Jogador pulou** ou **Temporizador** e segue pelas conexões entre condições, ações, alterações de variável global e esperas em quadros. **Jogador pulou** só dispara quando o personagem realmente inicia um pulo estando no chão. **Mostrar variável** escreve um prefixo e o valor atual na HUD. **Salvar jogo** grava o estado atual e **Carregar jogo** restaura o último save válido pela troca normal de cena. Condições possuem saídas separadas para **sim** e **não**. O nó terminal **Trocar de cena** escolhe a cena, a entrada e o fade. O botão **Validar** encontra nós desconectados, variáveis ausentes, portais condicionais inválidos, cenas ou entradas inexistentes e ações sem alvo antes da exportação. As ações antigas de um trigger podem ser convertidas para um grafo pelo inspector; a conversão remove a lista antiga para evitar execução duplicada.
+O modo **LOGIC** amplia esses eventos para grafos visuais reutilizáveis. Um fluxo começa em **Ao iniciar**, **Trigger**, **Evento de gameplay**, **Botão pressionado**, **Jogador pulou** ou **Temporizador** e segue pelas conexões entre condições, ações, alterações de variável global e esperas em quadros. **Jogador pulou** só dispara quando o personagem realmente inicia um pulo estando no chão. **Mostrar variável** escreve um prefixo e o valor atual na HUD. **Salvar jogo** grava o estado atual e **Carregar jogo** restaura o último save válido pela troca normal de cena. Condições possuem saídas separadas para **sim** e **não**. O nó terminal **Trocar de cena** escolhe a cena, a entrada e o fade. O botão **Validar** encontra nós desconectados, variáveis ausentes, componentes de gameplay inválidos, portais condicionais inválidos, cenas ou entradas inexistentes e ações sem alvo antes da exportação. As ações antigas de um trigger podem ser convertidas para um grafo pelo inspector; a conversão remove a lista antiga para evitar execução duplicada.
 
 Os grafos são dados declarativos, não código arbitrário. O runtime interpreta somente os nós permitidos, limita cada evento a 128 passos e interrompe ciclos acidentais. Isso mantém o resultado compatível com o QuickJS do AthenaEnv sem usar `eval` ou gerar chamadas não documentadas.
 

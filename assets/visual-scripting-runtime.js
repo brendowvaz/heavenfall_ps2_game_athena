@@ -167,6 +167,11 @@
                     let matches = false;
                     if (type === "start") matches = node.type === "eventStart";
                     else if (type === "playerJump") matches = node.type === "eventPlayerJump";
+                    else if (type === "gameplay") {
+                        matches = node.type === "eventGameplay"
+                            && config.componentId === payload.componentId
+                            && config.event === payload.event;
+                    }
                     else if (type === "trigger") {
                         matches = node.type === "eventTrigger"
                             && config.triggerId === payload.triggerId
@@ -227,11 +232,19 @@
             emitEvent("playerJump", {});
         }
 
+        function gameplay(componentId, eventName, payload) {
+            if (!started) return;
+            const eventPayload = payload || {};
+            eventPayload.componentId = componentId;
+            eventPayload.event = eventName;
+            emitEvent("gameplay", eventPayload);
+        }
+
         function getVariable(id) {
             return currentVariable(id);
         }
 
-        return { start: start, step: step, trigger: trigger, playerJump: playerJump, getVariable: getVariable };
+        return { start: start, step: step, trigger: trigger, playerJump: playerJump, gameplay: gameplay, getVariable: getVariable };
     }
 
     root.VisualScriptingRuntime = { create: create };

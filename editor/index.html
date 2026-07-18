@@ -126,6 +126,15 @@
           <label><span>Pulo</span><input id="player-jump-speed" type="number" min="0" max="2" step="0.01" value="0.3"></label>
           <label><span>Gravidade</span><input id="player-gravity" type="number" min="0.0001" max="0.25" step="0.001" value="0.014"></label>
         </div>
+        <div class="component-heading"><strong>Vida do jogador</strong><small>Componente persistente entre cenas</small></div>
+        <label class="property-row switch-property"><span><strong>Ativada</strong><small>Permitir dano, cura e morte</small></span><input id="player-health-enabled" type="checkbox"></label>
+        <div class="runtime-number-grid">
+          <label><span>Máxima</span><input id="player-health-maximum" type="number" min="1" max="999999" step="1" value="100"></label>
+          <label><span>Inicial</span><input id="player-health-initial" type="number" min="0" max="999999" step="1" value="100"></label>
+          <label><span>Invulnerável</span><input id="player-health-invulnerability" type="number" min="0" max="3600" step="1" value="30"></label>
+        </div>
+        <label class="property-row switch-property"><span><strong>Renascer ao morrer</strong><small>Voltar ao último checkpoint ou entrada</small></span><input id="player-health-respawn" type="checkbox" checked></label>
+        <label class="property-row switch-property"><span><strong>Mostrar vida</strong><small>Exibir barra automática na HUD</small></span><input id="player-health-hud" type="checkbox" checked></label>
       </section>
 
       <section class="panel-section add-section">
@@ -174,6 +183,10 @@
           <button id="add-spawn-button"><span>⌖</span>Entrada</button>
           <button id="add-portal-button"><span>⇥</span>Portal</button>
           <button id="add-checkpoint-button"><span>◆</span>Checkpoint</button>
+          <button data-gameplay="damage"><span>!</span>Dano</button>
+          <button data-gameplay="collectible"><span>+</span>Coletável</button>
+          <button data-gameplay="interactable"><span>△</span>Interação</button>
+          <button data-gameplay="deathZone"><span>×</span>Área de morte</button>
         </div>
       </section>
 
@@ -698,6 +711,51 @@
             <input id="spawn-default" type="checkbox">
           </label>
           <p class="compatibility-note">A posição e a rotação Y deste objeto definem onde e para onde o jogador aparece.</p>
+        </section>
+
+        <section id="gameplay-section" class="inspector-section gameplay-inspector" hidden>
+          <h3>Componentes de gameplay</h3>
+          <div class="portal-editor">
+            <div class="component-heading"><strong>Vida</strong><small>Dano, cura e morte</small></div>
+            <label class="property-row switch-property"><span><strong>Ativada</strong><small>Transformar o objeto em alvo de vida</small></span><input id="gameplay-health-enabled" type="checkbox"></label>
+            <label class="property-row number-property"><span><strong>Vida máxima</strong><small>Limite do componente</small></span><input id="gameplay-health-maximum" type="number" min="1" max="999999" step="1" value="100"></label>
+            <label class="property-row number-property"><span><strong>Vida inicial</strong><small>Valor ao iniciar uma sessão</small></span><input id="gameplay-health-initial" type="number" min="0" max="999999" step="1" value="100"></label>
+            <label class="property-row number-property"><span><strong>Invulnerabilidade</strong><small>Quadros após receber dano</small></span><input id="gameplay-health-invulnerability" type="number" min="0" max="3600" step="1" value="15"></label>
+            <label class="property-row switch-property"><span><strong>Ocultar ao morrer</strong><small>Desativar o visual quando chegar a zero</small></span><input id="gameplay-health-hide" type="checkbox" checked></label>
+            <label class="property-row switch-property"><span><strong>Persistir vida</strong><small>Incluir valor e morte no save</small></span><input id="gameplay-health-persistent" type="checkbox"></label>
+          </div>
+          <div id="gameplay-trigger-components">
+            <div class="portal-editor">
+              <div class="component-heading"><strong>Dano</strong><small>Aplicado por este trigger</small></div>
+              <label class="property-row switch-property"><span><strong>Ativado</strong><small>Causar dano ao entrar ou interagir</small></span><input id="gameplay-damage-enabled" type="checkbox"></label>
+              <label class="property-row select-property"><span><strong>Alvo</strong><small>Jogador ou objeto com Vida</small></span><select id="gameplay-damage-target"></select></label>
+              <label class="property-row number-property"><span><strong>Quantidade</strong><small>Pontos removidos</small></span><input id="gameplay-damage-amount" type="number" min="0" max="999999" step="1" value="10"></label>
+              <label class="property-row select-property"><span><strong>Ativação</strong><small>Momento do contato</small></span><select id="gameplay-damage-activation"><option value="onEnter">Ao entrar</option><option value="onInteract">Ao interagir</option></select></label>
+              <label class="property-row number-property"><span><strong>Recarga</strong><small>Quadros antes de causar dano novamente</small></span><input id="gameplay-damage-cooldown" type="number" min="0" max="3600" step="1" value="30"></label>
+            </div>
+            <div class="portal-editor">
+              <div class="component-heading"><strong>Coletável</strong><small>Contador global e estado persistente</small></div>
+              <label class="property-row switch-property"><span><strong>Ativado</strong><small>Coletar apenas uma vez</small></span><input id="gameplay-collectible-enabled" type="checkbox"></label>
+              <label class="property-row select-property"><span><strong>Variável numérica</strong><small>Contador incrementado</small></span><select id="gameplay-collectible-variable"></select></label>
+              <label class="property-row number-property"><span><strong>Quantidade</strong><small>Valor somado ao contador</small></span><input id="gameplay-collectible-amount" type="number" min="-999999" max="999999" step="1" value="1"></label>
+              <label class="property-row select-property"><span><strong>Ativação</strong><small>Automática ou com Triângulo</small></span><select id="gameplay-collectible-activation"><option value="onEnter">Ao entrar</option><option value="onInteract">Ao interagir</option></select></label>
+              <label class="property-row select-property"><span><strong>Visual</strong><small>Objeto ocultado após coletar</small></span><select id="gameplay-collectible-visual"></select></label>
+              <label class="property-row"><span><strong>Mensagem</strong><small>Texto mostrado na coleta</small></span><input id="gameplay-collectible-message" maxlength="160" value="Item coletado."></label>
+              <label class="property-row switch-property"><span><strong>Salvar automaticamente</strong><small>Atualizar o Memory Card após coletar</small></span><input id="gameplay-collectible-autosave" type="checkbox"></label>
+            </div>
+            <div class="portal-editor">
+              <div class="component-heading"><strong>Interagível</strong><small>Prompt e evento de gameplay</small></div>
+              <label class="property-row switch-property"><span><strong>Ativado</strong><small>Mostrar instrução enquanto estiver próximo</small></span><input id="gameplay-interactable-enabled" type="checkbox"></label>
+              <label class="property-row"><span><strong>Prompt</strong><small>Texto exibido antes de Triângulo</small></span><input id="gameplay-interactable-prompt" maxlength="120" value="Pressione Triangulo para interagir"></label>
+              <label class="property-row switch-property"><span><strong>Usar uma vez</strong><small>Persistir a interação no save</small></span><input id="gameplay-interactable-once" type="checkbox"></label>
+            </div>
+            <div class="portal-editor">
+              <div class="component-heading"><strong>Área de morte</strong><small>Retorno seguro ao checkpoint</small></div>
+              <label class="property-row switch-property"><span><strong>Ativada</strong><small>Renascer imediatamente ao entrar</small></span><input id="gameplay-death-zone-enabled" type="checkbox"></label>
+              <label class="property-row number-property"><span><strong>Fade</strong><small>Duração da transição em quadros</small></span><input id="gameplay-death-zone-fade" type="number" min="1" max="300" step="1" value="24"></label>
+            </div>
+          </div>
+          <p class="compatibility-note">Os componentes são exportados como dados seguros e executados pelo runtime do PS2.</p>
         </section>
 
         <section id="material-section" class="inspector-section material-inspector" hidden>

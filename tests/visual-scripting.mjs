@@ -53,7 +53,23 @@ jumpGraph.links.push(
   { id: id("link"), from: incrementJump.id, fromPort: "next", to: displayJump.id },
 );
 
-const normalized = normalizeLogic({ variables: [variable, jumpVariable], graphs: [graph, jumpGraph] }, id);
+const gameplayGraph = createLogicGraph("Interação de gameplay", id, false);
+const gameplayEvent = createLogicNode("eventGameplay", id, { x: 10, y: 340 });
+gameplayEvent.config = { componentId: "trigger-interactable", event: "interacted" };
+const damagePlayer = createLogicNode("actionDamage", id, { x: 250, y: 340 });
+damagePlayer.config = { targetId: "__player__", amount: 12 };
+const healPlayer = createLogicNode("actionHeal", id, { x: 490, y: 340 });
+healPlayer.config = { targetId: "__player__", amount: 3 };
+const respawnPlayer = createLogicNode("actionRespawn", id, { x: 730, y: 340 });
+respawnPlayer.config = { fadeFrames: 18 };
+gameplayGraph.nodes.push(gameplayEvent, damagePlayer, healPlayer, respawnPlayer);
+gameplayGraph.links.push(
+  { id: id("link"), from: gameplayEvent.id, fromPort: "next", to: damagePlayer.id },
+  { id: id("link"), from: damagePlayer.id, fromPort: "next", to: healPlayer.id },
+  { id: id("link"), from: healPlayer.id, fromPort: "next", to: respawnPlayer.id },
+);
+
+const normalized = normalizeLogic({ variables: [variable, jumpVariable], graphs: [graph, jumpGraph, gameplayGraph] }, id);
 assert.equal(validateLogic(normalized).length, 0, "valid graph should not report issues");
 assert.equal(normalized.graphs[0].nodes.length, 8);
 assert.deepEqual(loadGame.config, {}, "load nodes must not accept arbitrary file paths or code");
@@ -93,6 +109,10 @@ assert.equal(sharedVariables[jumpVariable.id], 1, "a real jump event must increm
 assert.deepEqual(actions.find((entry) => entry.type === "actionDisplayVariable")?.config, {
   variableId: jumpVariable.id, prefix: "Pulos: ", duration: 120,
 });
+runtime.gameplay("trigger-interactable", "interacted", { triggerId: "trigger" });
+assert.deepEqual(actions.find((entry) => entry.type === "actionDamage")?.config, { targetId: "__player__", amount: 12 });
+assert.deepEqual(actions.find((entry) => entry.type === "actionHeal")?.config, { targetId: "__player__", amount: 3 });
+assert.deepEqual(actions.find((entry) => entry.type === "actionRespawn")?.config, { fadeFrames: 18 });
 const nextSceneRuntime = sandbox.VisualScriptingRuntime.create({ variables: normalized.variables, graphs: [] }, {
   readVariable(variableId, initialValue) { return sharedVariables[variableId] ?? initialValue; },
 });
@@ -101,10 +121,13 @@ assert.equal(nextSceneRuntime.getVariable(jumpVariable.id), 1, "the jump counter
 
 const scene = normalizeScene({
   name: "Logic export",
-  settings: { runtime: { legacyArenaBounds: false } },
+  settings: { runtime: { legacyArenaBounds: false, player: { health: { enabled: true, maximum: 120, initial: 90 } } } },
   objects: [
     { id: "group", name: "Grupo", source: { kind: "group" } },
-    { id: "model", name: "Modelo", parentId: "group", persistent: true, source: { kind: "model", asset: "scene_0.obj" } },
+    {
+      id: "model", name: "Modelo", parentId: "group", persistent: true, source: { kind: "model", asset: "scene_0.obj" },
+      gameplay: { health: { enabled: true, maximum: 40, initial: 25, persistent: true } },
+    },
     {
       id: "trigger", name: "Trigger", source: { kind: "collider", collider: "box" }, collider: { trigger: true },
       portal: {
@@ -112,6 +135,12 @@ const scene = normalizeScene({
         condition: { enabled: true, variableId: variable.id, operator: "eq", value: true },
       },
       checkpoint: { enabled: true, activation: "onInteract", autosave: true },
+      gameplay: {
+        damage: { enabled: true, targetId: "__player__", amount: 8, activation: "onEnter", cooldownFrames: 20 },
+        collectible: { enabled: true, variableId: variable.id, amount: 1, activation: "onInteract", visualTargetId: "group", message: "Coletado" },
+        interactable: { enabled: true, prompt: "Usar", once: true },
+        deathZone: { enabled: true, fadeFrames: 16 },
+      },
     },
   ],
   logic: {
@@ -135,5 +164,9 @@ assert.equal(generatedSandbox.EDITOR_PORTALS[0].condition.variableId, variable.i
 assert.deepEqual({ ...generatedSandbox.EDITOR_CHECKPOINTS[0] }, {
   triggerId: "trigger", activation: "onInteract", autosave: true,
 });
+assert.equal(generatedSandbox.EDITOR_SETTINGS.player.health.maximum, 120);
+assert.equal(generatedSandbox.EDITOR_GAMEPLAY_COMPONENTS.length, 5);
+assert.deepEqual(Array.from(generatedSandbox.EDITOR_GAMEPLAY_COMPONENTS.find((item) => item.type === "collectible").visualTargetIds), ["model"]);
+assert.equal(generatedSandbox.EDITOR_GAMEPLAY_COMPONENTS.find((item) => item.type === "health").persistent, true);
 
 console.log("Visual scripting test passed.");

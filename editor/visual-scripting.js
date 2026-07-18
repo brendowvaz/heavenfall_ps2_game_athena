@@ -13,6 +13,7 @@ export const LOGIC_NODE_DEFINITIONS = Object.freeze({
   eventInput: { category: "event", label: "Botão pressionado", inputs: [], outputs: ["next"] },
   eventTimer: { category: "event", label: "Temporizador", inputs: [], outputs: ["next"] },
   eventPlayerJump: { category: "event", label: "Jogador pulou", inputs: [], outputs: ["next"] },
+  eventGameplay: { category: "event", label: "Evento de gameplay", inputs: [], outputs: ["next"] },
   conditionVariable: { category: "condition", label: "Comparar variável", inputs: ["in"], outputs: ["true", "false"] },
   actionMessage: { category: "action", label: "Mostrar mensagem", inputs: ["in"], outputs: ["next"] },
   actionDisplayVariable: { category: "action", label: "Mostrar variável", inputs: ["in"], outputs: ["next"] },
@@ -23,6 +24,9 @@ export const LOGIC_NODE_DEFINITIONS = Object.freeze({
   actionVideo: { category: "action", label: "Controlar vídeo", inputs: ["in"], outputs: ["next"] },
   actionSaveGame: { category: "action", label: "Salvar jogo", inputs: ["in"], outputs: ["next"] },
   actionLoadGame: { category: "action", label: "Carregar jogo", inputs: ["in"], outputs: ["next"] },
+  actionDamage: { category: "action", label: "Aplicar dano", inputs: ["in"], outputs: ["next"] },
+  actionHeal: { category: "action", label: "Restaurar vida", inputs: ["in"], outputs: ["next"] },
+  actionRespawn: { category: "action", label: "Renascer", inputs: ["in"], outputs: ["next"] },
   actionScene: { category: "action", label: "Trocar de cena", inputs: ["in"], outputs: [] },
   actionSetVariable: { category: "variable", label: "Alterar variável", inputs: ["in"], outputs: ["next"] },
   flowDelay: { category: "flow", label: "Esperar", inputs: ["in"], outputs: ["next"] },
@@ -74,6 +78,13 @@ function normalizeNodeConfig(type, config = {}) {
         intervalFrames: Math.round(Math.max(1, Math.min(216000, finite(config.intervalFrames, 60)))),
         repeat: config.repeat !== false,
       };
+    case "eventGameplay":
+      return {
+        componentId: safeId(config.componentId, ""),
+        event: ["damaged", "healed", "death", "collected", "interacted", "entered", "activated", "respawn"].includes(config.event)
+          ? config.event
+          : "interacted",
+      };
     case "conditionVariable":
       return {
         variableId: safeId(config.variableId, ""),
@@ -113,6 +124,14 @@ function normalizeNodeConfig(type, config = {}) {
         targetId: safeId(config.targetId, ""),
         mode: ["play", "pause", "stop"].includes(config.mode) ? config.mode : "play",
       };
+    case "actionDamage":
+    case "actionHeal":
+      return {
+        targetId: safeId(config.targetId, "__player__"),
+        amount: Math.max(0, Math.min(999999, finite(config.amount, 10))),
+      };
+    case "actionRespawn":
+      return { fadeFrames: Math.round(Math.max(1, Math.min(300, finite(config.fadeFrames, 24)))) };
     case "actionScene":
       return {
         sceneId: safeId(config.sceneId, ""),
@@ -276,8 +295,12 @@ export function validateLogic(logic = {}) {
         issues.push(`${graph.name}: um nó referencia uma variável inexistente.`);
       }
       if (node.type === "eventTrigger" && !config.triggerId) issues.push(`${graph.name}: um evento de trigger está sem alvo.`);
+      if (node.type === "eventGameplay" && !config.componentId) issues.push(`${graph.name}: evento de gameplay sem componente.`);
       if (["actionVisibility", "actionAudio", "actionParticle", "actionVideo"].includes(node.type) && !config.targetId) {
         issues.push(`${graph.name}: “${LOGIC_NODE_DEFINITIONS[node.type].label}” está sem alvo.`);
+      }
+      if (["actionDamage", "actionHeal"].includes(node.type) && !config.targetId) {
+        issues.push(`${graph.name}: acao de Vida sem alvo.`);
       }
       if (node.type === "actionScene" && !config.sceneId) {
         issues.push(`${graph.name}: “${LOGIC_NODE_DEFINITIONS[node.type].label}” está sem cena de destino.`);

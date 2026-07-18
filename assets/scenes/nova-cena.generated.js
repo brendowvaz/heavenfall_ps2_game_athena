@@ -26,7 +26,15 @@ globalThis.EDITOR_SETTINGS = {
     "walkSpeed": 0.125,
     "runSpeed": 0.19,
     "jumpSpeed": 0.3,
-    "gravity": 0.014
+    "gravity": 0.014,
+    "health": {
+      "enabled": false,
+      "maximum": 100,
+      "initial": 100,
+      "invulnerabilityFrames": 30,
+      "respawnOnDeath": true,
+      "showHud": true
+    }
   }
 };
 globalThis.EDITOR_SCENE = [
@@ -83,6 +91,7 @@ globalThis.EDITOR_COLLIDERS = [];
 globalThis.EDITOR_SPAWN_POINTS = [];
 globalThis.EDITOR_PORTALS = [];
 globalThis.EDITOR_CHECKPOINTS = [];
+globalThis.EDITOR_GAMEPLAY_COMPONENTS = [];
 globalThis.EDITOR_EVENTS = [];
 globalThis.EDITOR_LOGIC = {
   "version": 1,

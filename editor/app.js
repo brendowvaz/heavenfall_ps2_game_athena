@@ -253,6 +253,47 @@ function normalizeRecordEvents(events = {}) {
   ]));
 }
 
+function normalizeGameplayComponents(gameplay = {}, kind = "model") {
+  const supportsHealth = ["model", "primitive", "collider"].includes(kind);
+  const supportsTriggerComponents = kind === "collider";
+  const maximum = Math.round(THREE.MathUtils.clamp(clampNumber(gameplay.health?.maximum, 100), 1, 999999));
+  return {
+    health: {
+      enabled: supportsHealth && gameplay.health?.enabled === true,
+      maximum,
+      initial: Math.round(THREE.MathUtils.clamp(clampNumber(gameplay.health?.initial, maximum), 0, maximum)),
+      invulnerabilityFrames: Math.round(THREE.MathUtils.clamp(clampNumber(gameplay.health?.invulnerabilityFrames, 15), 0, 3600)),
+      hideOnDeath: gameplay.health?.hideOnDeath !== false,
+      persistent: gameplay.health?.persistent === true,
+    },
+    damage: {
+      enabled: supportsTriggerComponents && gameplay.damage?.enabled === true,
+      amount: Math.round(THREE.MathUtils.clamp(clampNumber(gameplay.damage?.amount, 10), 0, 999999)),
+      targetId: String(gameplay.damage?.targetId || "__player__").replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96) || "__player__",
+      activation: ["onEnter", "onInteract"].includes(gameplay.damage?.activation) ? gameplay.damage.activation : "onEnter",
+      cooldownFrames: Math.round(THREE.MathUtils.clamp(clampNumber(gameplay.damage?.cooldownFrames, 30), 0, 3600)),
+    },
+    collectible: {
+      enabled: supportsTriggerComponents && gameplay.collectible?.enabled === true,
+      variableId: String(gameplay.collectible?.variableId || "").replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96),
+      amount: THREE.MathUtils.clamp(clampNumber(gameplay.collectible?.amount, 1), -999999, 999999),
+      activation: ["onEnter", "onInteract"].includes(gameplay.collectible?.activation) ? gameplay.collectible.activation : "onEnter",
+      visualTargetId: String(gameplay.collectible?.visualTargetId || "").replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96),
+      message: String(gameplay.collectible?.message || "Item coletado.").slice(0, 160),
+      autosave: gameplay.collectible?.autosave === true,
+    },
+    interactable: {
+      enabled: supportsTriggerComponents && gameplay.interactable?.enabled === true,
+      prompt: String(gameplay.interactable?.prompt || "Pressione Triangulo para interagir").slice(0, 120),
+      once: gameplay.interactable?.once === true,
+    },
+    deathZone: {
+      enabled: supportsTriggerComponents && gameplay.deathZone?.enabled === true,
+      fadeFrames: Math.round(THREE.MathUtils.clamp(clampNumber(gameplay.deathZone?.fadeFrames, 24), 1, 300)),
+    },
+  };
+}
+
 function normalizeUiElement(item = {}, index = 0) {
   const type = ["panel", "text", "image", "video"].includes(item.type) ? item.type : "text";
   const media = type === "image" || type === "video";
@@ -305,6 +346,9 @@ function normalizeRecord(record = {}) {
     : inferredLightType;
   const cameraNear = Math.max(0.01, clampNumber(record.camera?.near, 0.1));
   const cameraFar = Math.max(cameraNear + 0.1, clampNumber(record.camera?.far, 500));
+  const gameplay = normalizeGameplayComponents(record.gameplay, kind);
+  const gameplayTrigger = kind === "collider" && (gameplay.damage.enabled || gameplay.collectible.enabled
+    || gameplay.interactable.enabled || gameplay.deathZone.enabled);
   return {
     id: record.id || uid(kind),
     name: record.name || ({ primitive: "Primitiva", group: "Grupo", collider: "Colisor", light: "Luz", camera: "Câmera", audio: "Áudio", particle: "Partículas", shadow: "Projetor de sombra", spawn: "Ponto de entrada" }[kind] || fileName(record.source?.asset)),
@@ -330,6 +374,9 @@ function normalizeRecord(record = {}) {
     locked: record.locked === true,
     runtime: record.runtime !== false,
     persistent: record.persistent === true,
+    ...(["model", "primitive", "collider"].includes(kind) ? {
+      gameplay,
+    } : {}),
     ...(["model", "primitive"].includes(kind) ? {
       material: {
         color: materialColor,
@@ -355,8 +402,8 @@ function normalizeRecord(record = {}) {
     } : {}),
     ...(kind === "collider" ? {
       collider: {
-        trigger: record.collider?.trigger === true || record.portal?.enabled === true || record.checkpoint?.enabled === true,
-        cameraBlocker: record.portal?.enabled === true || record.checkpoint?.enabled === true
+        trigger: record.collider?.trigger === true || record.portal?.enabled === true || record.checkpoint?.enabled === true || gameplayTrigger,
+        cameraBlocker: record.portal?.enabled === true || record.checkpoint?.enabled === true || gameplayTrigger
           ? false
           : record.collider?.cameraBlocker !== false,
       },
@@ -992,6 +1039,7 @@ function createSpawnPointObject(record) {
 }
 
 function normalizeRuntimeSettings(runtime = {}) {
+  const playerHealthMaximum = Math.round(THREE.MathUtils.clamp(clampNumber(runtime.player?.health?.maximum, 100), 1, 999999));
   return {
     vsync: runtime.vsync !== false,
     showPerformance: runtime.showPerformance === true,
@@ -1008,6 +1056,14 @@ function normalizeRuntimeSettings(runtime = {}) {
       runSpeed: THREE.MathUtils.clamp(clampNumber(runtime.player?.runSpeed, 0.19), 0.01, 3),
       jumpSpeed: THREE.MathUtils.clamp(clampNumber(runtime.player?.jumpSpeed, 0.3), 0, 2),
       gravity: THREE.MathUtils.clamp(clampNumber(runtime.player?.gravity, 0.014), 0.0001, 0.25),
+      health: {
+        enabled: runtime.player?.health?.enabled === true,
+        maximum: playerHealthMaximum,
+        initial: Math.round(THREE.MathUtils.clamp(clampNumber(runtime.player?.health?.initial, playerHealthMaximum), 0, playerHealthMaximum)),
+        invulnerabilityFrames: Math.round(THREE.MathUtils.clamp(clampNumber(runtime.player?.health?.invulnerabilityFrames, 30), 0, 3600)),
+        respawnOnDeath: runtime.player?.health?.respawnOnDeath !== false,
+        showHud: runtime.player?.health?.showHud !== false,
+      },
     },
   };
 }
@@ -1029,6 +1085,12 @@ function renderRuntimeSettings() {
   $("player-run-speed").value = runtime.player.runSpeed;
   $("player-jump-speed").value = runtime.player.jumpSpeed;
   $("player-gravity").value = runtime.player.gravity;
+  $("player-health-enabled").checked = runtime.player.health.enabled;
+  $("player-health-maximum").value = runtime.player.health.maximum;
+  $("player-health-initial").value = runtime.player.health.initial;
+  $("player-health-invulnerability").value = runtime.player.health.invulnerabilityFrames;
+  $("player-health-respawn").checked = runtime.player.health.respawnOnDeath;
+  $("player-health-hud").checked = runtime.player.health.showHud;
 }
 
 function updateRuntimeSettings() {
@@ -1051,6 +1113,14 @@ function updateRuntimeSettings() {
       runSpeed: $("player-run-speed").value,
       jumpSpeed: $("player-jump-speed").value,
       gravity: $("player-gravity").value,
+      health: {
+        enabled: $("player-health-enabled").checked,
+        maximum: $("player-health-maximum").value,
+        initial: $("player-health-initial").value,
+        invulnerabilityFrames: $("player-health-invulnerability").value,
+        respawnOnDeath: $("player-health-respawn").checked,
+        showHud: $("player-health-hud").checked,
+      },
     },
   });
   const background = new THREE.Color(state.document.settings.background);
@@ -2127,6 +2197,70 @@ function renderCheckpointEditor(record) {
       : "O checkpoint ficará disponível somente durante a sessão atual.";
 }
 
+function fillGameplayHealthTargetSelect(select, value) {
+  select.replaceChildren(new Option("Jogador", "__player__"));
+  for (const candidate of state.document.objects) {
+    if (!candidate.gameplay?.health?.enabled) continue;
+    select.append(new Option(candidate.name, candidate.id));
+  }
+  if (value && value !== "__player__" && !state.document.objects.some((item) => item.id === value && item.gameplay?.health?.enabled)) {
+    select.append(new Option(`${value} · alvo ausente`, value));
+  }
+  select.value = value || "__player__";
+}
+
+function fillGameplayVariableSelect(select, value) {
+  const variables = state.globalVariables.filter((variable) => variable.type === "number");
+  select.replaceChildren(new Option(variables.length ? "Selecione um contador" : "Crie uma variável numérica em LOGIC", ""));
+  for (const variable of variables) select.append(new Option(variable.name, variable.id));
+  if (value && !variables.some((variable) => variable.id === value)) select.append(new Option(`${value} · variável ausente`, value));
+  select.value = value || "";
+  select.disabled = variables.length === 0;
+}
+
+function fillGameplayVisualSelect(select, value) {
+  select.replaceChildren(new Option("Não ocultar visual", ""));
+  for (const candidate of state.document.objects) {
+    if (!["model", "primitive", "group"].includes(candidate.source.kind)) continue;
+    select.append(new Option(candidate.name, candidate.id));
+  }
+  if (value && !state.document.objects.some((item) => item.id === value)) select.append(new Option(`${value} · objeto ausente`, value));
+  select.value = value || "";
+}
+
+function renderGameplayEditor(record) {
+  const supported = ["model", "primitive", "collider"].includes(record.source.kind);
+  $("gameplay-section").hidden = !supported;
+  if (!supported) return;
+  record.gameplay = normalizeGameplayComponents(record.gameplay, record.source.kind);
+  const gameplay = record.gameplay;
+  $("gameplay-trigger-components").hidden = record.source.kind !== "collider";
+  $("gameplay-health-enabled").checked = gameplay.health.enabled;
+  $("gameplay-health-maximum").value = gameplay.health.maximum;
+  $("gameplay-health-initial").value = gameplay.health.initial;
+  $("gameplay-health-invulnerability").value = gameplay.health.invulnerabilityFrames;
+  $("gameplay-health-hide").checked = gameplay.health.hideOnDeath;
+  $("gameplay-health-persistent").checked = gameplay.health.persistent;
+  if (record.source.kind !== "collider") return;
+  $("gameplay-damage-enabled").checked = gameplay.damage.enabled;
+  fillGameplayHealthTargetSelect($("gameplay-damage-target"), gameplay.damage.targetId);
+  $("gameplay-damage-amount").value = gameplay.damage.amount;
+  $("gameplay-damage-activation").value = gameplay.damage.activation;
+  $("gameplay-damage-cooldown").value = gameplay.damage.cooldownFrames;
+  $("gameplay-collectible-enabled").checked = gameplay.collectible.enabled;
+  fillGameplayVariableSelect($("gameplay-collectible-variable"), gameplay.collectible.variableId);
+  $("gameplay-collectible-amount").value = gameplay.collectible.amount;
+  $("gameplay-collectible-activation").value = gameplay.collectible.activation;
+  fillGameplayVisualSelect($("gameplay-collectible-visual"), gameplay.collectible.visualTargetId);
+  $("gameplay-collectible-message").value = gameplay.collectible.message;
+  $("gameplay-collectible-autosave").checked = gameplay.collectible.autosave;
+  $("gameplay-interactable-enabled").checked = gameplay.interactable.enabled;
+  $("gameplay-interactable-prompt").value = gameplay.interactable.prompt;
+  $("gameplay-interactable-once").checked = gameplay.interactable.once;
+  $("gameplay-death-zone-enabled").checked = gameplay.deathZone.enabled;
+  $("gameplay-death-zone-fade").value = gameplay.deathZone.fadeFrames;
+}
+
 function eventActionSummary(action) {
   if (action.type === "message") return action.text;
   if (action.type === "save") return "Salvar progresso no Memory Card";
@@ -2317,7 +2451,59 @@ function logicCategoryLabel(category) {
 }
 
 function logicTargetName(id) {
+  if (id === "__player__" || id === "player-health") return "Jogador";
+  const gameplay = gameplayComponentOptions().find((option) => option.value === id);
+  if (gameplay) return gameplay.label;
   return recordById(id)?.name || uiElementById(id)?.name || id || "Sem alvo";
+}
+
+function gameplayComponentOptions(emptyLabel = "Selecione um componente") {
+  const options = [{ label: emptyLabel, value: "" }];
+  if (state.document.settings.runtime.player.health.enabled) options.push({ label: "Jogador · Vida", value: "player-health" });
+  for (const record of state.document.objects) {
+    const gameplay = record.gameplay;
+    if (!gameplay) continue;
+    if (gameplay.health.enabled) options.push({ label: `${record.name} · Vida`, value: `${record.id}-health` });
+    if (gameplay.damage.enabled) options.push({ label: `${record.name} · Dano`, value: `${record.id}-damage` });
+    if (gameplay.collectible.enabled) options.push({ label: `${record.name} · Coletável`, value: `${record.id}-collectible` });
+    if (gameplay.interactable.enabled) options.push({ label: `${record.name} · Interagível`, value: `${record.id}-interactable` });
+    if (gameplay.deathZone.enabled) options.push({ label: `${record.name} · Área de morte`, value: `${record.id}-death-zone` });
+  }
+  return options;
+}
+
+function gameplayHealthTargetOptions() {
+  return [
+    { label: "Jogador", value: "__player__" },
+    ...state.document.objects
+      .filter((record) => record.gameplay?.health?.enabled)
+      .map((record) => ({ label: record.name, value: record.id })),
+  ];
+}
+
+function gameplayComponentType(componentId) {
+  componentId = String(componentId || "");
+  if (componentId === "player-health" || componentId.endsWith("-health")) return "health";
+  if (componentId.endsWith("-damage")) return "damage";
+  if (componentId.endsWith("-collectible")) return "collectible";
+  if (componentId.endsWith("-interactable")) return "interactable";
+  if (componentId.endsWith("-death-zone")) return "deathZone";
+  return "";
+}
+
+function gameplayEventOptions(componentId) {
+  const type = gameplayComponentType(componentId);
+  if (type === "health") return [
+    { label: "Recebeu dano", value: "damaged" },
+    { label: "Recebeu cura", value: "healed" },
+    { label: "Morreu", value: "death" },
+    ...(componentId === "player-health" ? [{ label: "Jogador renasceu", value: "respawn" }] : []),
+  ];
+  if (type === "damage") return [{ label: "Dano ativado", value: "activated" }];
+  if (type === "collectible") return [{ label: "Foi coletado", value: "collected" }];
+  if (type === "interactable") return [{ label: "Foi usado", value: "interacted" }];
+  if (type === "deathZone") return [{ label: "Entrou na área", value: "entered" }];
+  return [{ label: "Foi usado", value: "interacted" }];
 }
 
 function logicNodeSummary(node) {
@@ -2327,6 +2513,7 @@ function logicNodeSummary(node) {
   if (node.type === "eventInput") return `Pad.${config.button}`;
   if (node.type === "eventTimer") return `${config.intervalFrames} quadros${config.repeat ? " · repetir" : ""}`;
   if (node.type === "eventPlayerJump") return "Dispara somente quando um pulo começa";
+  if (node.type === "eventGameplay") return `${config.event} · ${logicTargetName(config.componentId)}`;
   if (node.type === "conditionVariable") {
     const variable = state.document.logic.variables.find((item) => item.id === config.variableId);
     return `${variable?.name || "Variável"} ${{ eq: "=", neq: "≠", gt: ">", gte: "≥", lt: "<", lte: "≤" }[config.operator]} ${String(config.value)}`;
@@ -2341,6 +2528,9 @@ function logicNodeSummary(node) {
   if (["actionAudio", "actionParticle", "actionVideo"].includes(node.type)) return `${config.mode} · ${logicTargetName(config.targetId)}`;
   if (node.type === "actionSaveGame") return "Grava o checkpoint atual no Memory Card";
   if (node.type === "actionLoadGame") return "Restaura o último save válido";
+  if (node.type === "actionDamage") return `${config.amount} de dano · ${logicTargetName(config.targetId)}`;
+  if (node.type === "actionHeal") return `${config.amount} de cura · ${logicTargetName(config.targetId)}`;
+  if (node.type === "actionRespawn") return `Checkpoint · fade ${config.fadeFrames}`;
   if (node.type === "actionScene") {
     const scene = state.scenes.find((entry) => entry.id === config.sceneId);
     const spawn = projectSpawnPoints(config.sceneId).find((entry) => entry.id === config.spawnId);
@@ -2696,6 +2886,13 @@ function renderLogicNodeProperties(container, graph, node) {
     repeat.type = "checkbox";
     repeat.checked = config.repeat;
     container.append(logicField("Repetir", bindLogicControl(repeat, (control) => { config.repeat = control.checked; })));
+  } else if (node.type === "eventGameplay") {
+    appendLogicSelect(container, "Componente", gameplayComponentOptions(), config.componentId, (value) => {
+      config.componentId = value;
+      config.event = gameplayEventOptions(value)[0].value;
+    });
+    const events = gameplayEventOptions(config.componentId);
+    appendLogicSelect(container, "Evento", events, events.some((event) => event.value === config.event) ? config.event : events[0].value, (value) => { config.event = value; });
   } else if (node.type === "conditionVariable") {
     const variables = [{ label: "Selecione uma variável", value: "" }, ...state.document.logic.variables.map((variable) => ({ label: variable.name, value: variable.id }))];
     appendLogicSelect(container, "Variável", variables, config.variableId, (value) => {
@@ -2740,6 +2937,11 @@ function renderLogicNodeProperties(container, graph, node) {
     const videos = [{ label: "Selecione um vídeo", value: "" }, ...state.document.ui.filter((item) => item.type === "video").map((item) => ({ label: item.name, value: item.id }))];
     appendLogicSelect(container, "Vídeo de UI", videos, config.targetId, (value) => { config.targetId = value; });
     appendLogicSelect(container, "Comando", [{ label: "Tocar", value: "play" }, { label: "Pausar", value: "pause" }, { label: "Parar", value: "stop" }], config.mode, (value) => { config.mode = value; });
+  } else if (node.type === "actionDamage" || node.type === "actionHeal") {
+    appendLogicSelect(container, "Alvo de Vida", gameplayHealthTargetOptions(), config.targetId, (value) => { config.targetId = value; });
+    appendLogicNumber(container, node.type === "actionDamage" ? "Dano" : "Cura", config.amount, (value) => { config.amount = value; }, 0, 999999);
+  } else if (node.type === "actionRespawn") {
+    appendLogicNumber(container, "Fade em quadros", config.fadeFrames, (value) => { config.fadeFrames = value; }, 1, 300);
   } else if (node.type === "actionScene") {
     const scenes = [{ label: "Selecione uma cena", value: "" }, ...state.scenes.map((entry) => ({ label: entry.name, value: entry.id }))];
     appendLogicSelect(container, "Cena de destino", scenes, config.sceneId, (value) => {
@@ -2968,8 +3170,37 @@ function validateVisualScripting() {
       issues.push(`${record.name}: a condição do portal não possui uma variável global válida`);
     }
   }
+  for (const record of state.document.objects) {
+    const gameplay = record.gameplay;
+    if (!gameplay) continue;
+    if (gameplay.damage.enabled) {
+      const validTarget = gameplay.damage.targetId === "__player__"
+        ? state.document.settings.runtime.player.health.enabled
+        : state.document.objects.some((candidate) => candidate.id === gameplay.damage.targetId && candidate.gameplay?.health?.enabled);
+      if (!validTarget) issues.push(`${record.name}: Dano aponta para um alvo sem componente Vida`);
+    }
+    if (gameplay.collectible.enabled) {
+      const variable = state.globalVariables.find((candidate) => candidate.id === gameplay.collectible.variableId);
+      if (!variable || variable.type !== "number") issues.push(`${record.name}: Coletável precisa de uma variável global numérica`);
+      if (gameplay.collectible.visualTargetId && !recordById(gameplay.collectible.visualTargetId)) {
+        issues.push(`${record.name}: o visual do Coletável não existe`);
+      }
+    }
+  }
+  const gameplayComponentIds = new Set(gameplayComponentOptions().slice(1).map((option) => option.value));
   for (const graph of state.document.logic.graphs) {
     for (const node of graph.nodes) {
+      if (node.type === "eventGameplay" && !gameplayComponentIds.has(node.config.componentId)) {
+        issues.push(`${graph.name}: evento de gameplay aponta para um componente inexistente`);
+      } else if (node.type === "eventGameplay" && !gameplayEventOptions(node.config.componentId).some((event) => event.value === node.config.event)) {
+        issues.push(`${graph.name}: evento incompatível com o tipo do componente de gameplay`);
+      }
+      if (["actionDamage", "actionHeal"].includes(node.type)) {
+        const validTarget = node.config.targetId === "__player__"
+          ? state.document.settings.runtime.player.health.enabled
+          : state.document.objects.some((candidate) => candidate.id === node.config.targetId && candidate.gameplay?.health?.enabled);
+        if (!validTarget) issues.push(`${graph.name}: ação de Vida aponta para um alvo inválido`);
+      }
       if (node.type !== "actionScene") continue;
       const scene = state.scenes.find((entry) => entry.id === node.config.sceneId);
       if (!scene) {
@@ -3151,6 +3382,7 @@ function renderInspector() {
   const animationMode = record.source.kind === "model";
   const shadowMode = record.source.kind === "shadow";
   const spawnMode = record.source.kind === "spawn";
+  const gameplayMode = ["model", "primitive", "collider"].includes(record.source.kind);
   $("collider-section").hidden = !colliderMode;
   $("material-section").hidden = !materialMode;
   $("light-section").hidden = !lightMode;
@@ -3160,6 +3392,7 @@ function renderInspector() {
   $("animation-section").hidden = !animationMode;
   $("shadow-section").hidden = !shadowMode;
   $("spawn-section").hidden = !spawnMode;
+  $("gameplay-section").hidden = !gameplayMode;
   $("object-color-row").hidden = !colliderMode;
   if (colliderMode) {
     $("collider-shape").value = record.source.collider;
@@ -3169,6 +3402,7 @@ function renderInspector() {
     renderCheckpointEditor(record);
     renderTriggerEvents(record);
   }
+  if (gameplayMode) renderGameplayEditor(record);
   if (spawnMode) $("spawn-default").checked = record.spawn?.default === true;
   if (materialMode) {
     renderMaterialTextureOptions(record);
@@ -3726,6 +3960,34 @@ async function addCheckpoint() {
   setStatus("Checkpoint adicionado · o progresso será salvo ao entrar");
 }
 
+async function addGameplayTrigger(type) {
+  const definitions = {
+    damage: { name: "Área de dano", color: "#ff647c", positionY: 1, scale: { x: 1.25, y: 1, z: 1.25 } },
+    collectible: { name: "Coletável", color: "#ffd166", positionY: 0.75, scale: { x: 0.75, y: 0.75, z: 0.75 } },
+    interactable: { name: "Interagível", color: "#72e6aa", positionY: 1, scale: { x: 1.25, y: 1, z: 1.25 } },
+    deathZone: { name: "Área de morte", color: "#ff647c", positionY: 0.25, scale: { x: 3, y: 0.25, z: 3 } },
+  };
+  const preset = definitions[type];
+  if (!preset) return;
+  const gameplay = normalizeGameplayComponents({}, "collider");
+  gameplay[type].enabled = true;
+  if (type === "collectible") {
+    gameplay.collectible.variableId = state.globalVariables.find((variable) => variable.type === "number")?.id || "";
+  }
+  await addRecord({
+    id: uid(type),
+    name: preset.name,
+    source: { kind: "collider", collider: "box", asset: "" },
+    position: { x: orbit.target.x, y: preset.positionY, z: orbit.target.z },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: preset.scale,
+    color: preset.color,
+    collider: { trigger: true, cameraBlocker: false },
+    gameplay,
+  });
+  setStatus(`${preset.name} adicionado · configure o componente no inspector`);
+}
+
 async function addAudio() {
   const firstAudio = state.audioFiles[0]?.path || "";
   const mode = firstAudio.toLowerCase().endsWith(".adp") ? "sfx" : "stream";
@@ -4191,9 +4453,69 @@ function rebuildSpawnPointVisual(record) {
 }
 
 function colliderComponentColor(record) {
+  if (record.gameplay?.deathZone?.enabled || record.gameplay?.damage?.enabled) return "#ff647c";
+  if (record.gameplay?.collectible?.enabled) return "#ffd166";
+  if (record.gameplay?.interactable?.enabled) return "#72e6aa";
   if (record.portal?.enabled) return "#ffad66";
   if (record.checkpoint?.enabled) return "#62c6ff";
   return record.collider?.trigger ? "#ffad66" : "#68e0b2";
+}
+
+function updateGameplayFromInspector() {
+  const record = currentRecord();
+  if (!record || !["model", "primitive", "collider"].includes(record.source.kind)) return;
+  stageFieldHistory();
+  const input = {
+    health: {
+      enabled: $("gameplay-health-enabled").checked,
+      maximum: $("gameplay-health-maximum").value,
+      initial: $("gameplay-health-initial").value,
+      invulnerabilityFrames: $("gameplay-health-invulnerability").value,
+      hideOnDeath: $("gameplay-health-hide").checked,
+      persistent: $("gameplay-health-persistent").checked,
+    },
+  };
+  if (record.source.kind === "collider") {
+    input.damage = {
+      enabled: $("gameplay-damage-enabled").checked,
+      targetId: $("gameplay-damage-target").value,
+      amount: $("gameplay-damage-amount").value,
+      activation: $("gameplay-damage-activation").value,
+      cooldownFrames: $("gameplay-damage-cooldown").value,
+    };
+    input.collectible = {
+      enabled: $("gameplay-collectible-enabled").checked,
+      variableId: $("gameplay-collectible-variable").value,
+      amount: $("gameplay-collectible-amount").value,
+      activation: $("gameplay-collectible-activation").value,
+      visualTargetId: $("gameplay-collectible-visual").value,
+      message: $("gameplay-collectible-message").value,
+      autosave: $("gameplay-collectible-autosave").checked,
+    };
+    input.interactable = {
+      enabled: $("gameplay-interactable-enabled").checked,
+      prompt: $("gameplay-interactable-prompt").value,
+      once: $("gameplay-interactable-once").checked,
+    };
+    input.deathZone = {
+      enabled: $("gameplay-death-zone-enabled").checked,
+      fadeFrames: $("gameplay-death-zone-fade").value,
+    };
+  }
+  record.gameplay = normalizeGameplayComponents(input, record.source.kind);
+  if (record.source.kind === "collider") {
+    const usesTrigger = record.gameplay.damage.enabled || record.gameplay.collectible.enabled
+      || record.gameplay.interactable.enabled || record.gameplay.deathZone.enabled;
+    if (usesTrigger) {
+      record.collider.trigger = true;
+      record.collider.cameraBlocker = false;
+    }
+    record.color = colliderComponentColor(record);
+    rebuildColliderVisual(record);
+  }
+  finishFieldHistory();
+  markDirty();
+  renderInspector();
 }
 
 function updatePortalFromInspector({ resetSpawn = false, resetConditionValue = false } = {}) {
@@ -5528,6 +5850,12 @@ function bindInspector() {
     record.collider.trigger = event.target.checked;
     if (!record.collider.trigger && record.portal?.enabled) record.portal.enabled = false;
     if (!record.collider.trigger && record.checkpoint?.enabled) record.checkpoint.enabled = false;
+    if (!record.collider.trigger && record.gameplay) {
+      record.gameplay.damage.enabled = false;
+      record.gameplay.collectible.enabled = false;
+      record.gameplay.interactable.enabled = false;
+      record.gameplay.deathZone.enabled = false;
+    }
     record.color = colliderComponentColor(record);
     rebuildColliderVisual(record);
     finishFieldHistory();
@@ -5561,6 +5889,18 @@ function bindInspector() {
   }
   for (const id of ["checkpoint-enabled", "checkpoint-activation", "checkpoint-autosave"]) {
     $(id).addEventListener("change", updateCheckpointFromInspector);
+  }
+  for (const id of [
+    "gameplay-health-enabled", "gameplay-health-maximum", "gameplay-health-initial",
+    "gameplay-health-invulnerability", "gameplay-health-hide", "gameplay-health-persistent",
+    "gameplay-damage-enabled", "gameplay-damage-target", "gameplay-damage-amount",
+    "gameplay-damage-activation", "gameplay-damage-cooldown", "gameplay-collectible-enabled",
+    "gameplay-collectible-variable", "gameplay-collectible-amount", "gameplay-collectible-activation",
+    "gameplay-collectible-visual", "gameplay-collectible-message", "gameplay-collectible-autosave",
+    "gameplay-interactable-enabled", "gameplay-interactable-prompt", "gameplay-interactable-once",
+    "gameplay-death-zone-enabled", "gameplay-death-zone-fade",
+  ]) {
+    $(id).addEventListener("change", updateGameplayFromInspector);
   }
   $("spawn-default").addEventListener("change", (event) => {
     const record = currentRecord();
@@ -5716,6 +6056,7 @@ function bindUi() {
   $("add-spawn-button").addEventListener("click", addSpawnPoint);
   $("add-portal-button").addEventListener("click", addScenePortal);
   $("add-checkpoint-button").addEventListener("click", addCheckpoint);
+  document.querySelectorAll("[data-gameplay]").forEach((button) => button.addEventListener("click", () => addGameplayTrigger(button.dataset.gameplay)));
   document.querySelectorAll("[data-ui-type]").forEach((button) => button.addEventListener("click", () => addUiElement(button.dataset.uiType)));
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
   document.querySelectorAll("[data-axis-view]").forEach((button) => button.addEventListener("click", () => setAxisView(button.dataset.axisView)));
@@ -5725,7 +6066,7 @@ function bindUi() {
   $("pivot-button").addEventListener("click", togglePivotEditing);
   $("pivot-reset-button").addEventListener("click", resetPivotToCenter);
   $("isolate-selection-button").addEventListener("click", () => toggleIsolation());
-  for (const id of ["scene-background", "runtime-vsync", "runtime-performance", "runtime-arena-bounds", "player-spawn-x", "player-spawn-y", "player-spawn-z", "player-radius", "player-height", "player-walk-speed", "player-run-speed", "player-jump-speed", "player-gravity"]) {
+  for (const id of ["scene-background", "runtime-vsync", "runtime-performance", "runtime-arena-bounds", "player-spawn-x", "player-spawn-y", "player-spawn-z", "player-radius", "player-height", "player-walk-speed", "player-run-speed", "player-jump-speed", "player-gravity", "player-health-enabled", "player-health-maximum", "player-health-initial", "player-health-invulnerability", "player-health-respawn", "player-health-hud"]) {
     $(id).addEventListener("beforeinput", stageFieldHistory);
     $(id).addEventListener("input", updateRuntimeSettings);
     $(id).addEventListener("change", finishFieldHistory);
@@ -6027,7 +6368,7 @@ async function boot() {
       const capabilities = await capabilitiesResponse.json();
       state.serverSchemaVersion = Number(capabilities.editorSchemaVersion) || 0;
     }
-    state.serverOutdated = state.serverSchemaVersion < 16;
+    state.serverOutdated = state.serverSchemaVersion < 17;
     const data = await sceneResponse.json();
     if (!sceneResponse.ok) throw new Error(data.error || "Falha ao abrir a cena");
     await loadDocument(data);

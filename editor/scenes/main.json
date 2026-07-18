@@ -9,14 +9,14 @@
     "snapMode": "grid",
     "camera": {
       "position": {
-        "x": -13.694,
-        "y": 14.6687,
-        "z": -22.8821
+        "x": -8.5282,
+        "y": 2.4798,
+        "z": 3.6752
       },
       "target": {
-        "x": -0.136,
-        "y": 4.7687,
-        "z": -28.5585
+        "x": -7.2814,
+        "y": 1,
+        "z": -1.7025
       }
     },
     "runtime": {
@@ -34,7 +34,15 @@
         "walkSpeed": 0.125,
         "runSpeed": 0.19,
         "jumpSpeed": 0.5,
-        "gravity": 0.014
+        "gravity": 0.014,
+        "health": {
+          "enabled": true,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 30,
+          "respawnOnDeath": true,
+          "showHud": true
+        }
       }
     }
   },
@@ -94,6 +102,41 @@
         "enabled": true,
         "activation": "onEnter",
         "autosave": true
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
       }
     },
     {
@@ -171,6 +214,41 @@
         "clip": "",
         "autoplay": false,
         "loop": true
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
       }
     },
     {
@@ -219,6 +297,41 @@
         "clip": "",
         "autoplay": false,
         "loop": true
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
       }
     },
     {
@@ -267,6 +380,41 @@
         "clip": "",
         "autoplay": false,
         "loop": true
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
       }
     },
     {
@@ -315,6 +463,41 @@
         "clip": "",
         "autoplay": false,
         "loop": true
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
       }
     },
     {
@@ -363,6 +546,41 @@
         "clip": "",
         "autoplay": false,
         "loop": true
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
       }
     },
     {
@@ -411,6 +629,41 @@
         "clip": "",
         "autoplay": false,
         "loop": true
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
       }
     },
     {
@@ -459,6 +712,41 @@
         "clip": "",
         "autoplay": false,
         "loop": true
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
       }
     },
     {
@@ -507,6 +795,41 @@
         "clip": "",
         "autoplay": false,
         "loop": true
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
       }
     },
     {
@@ -593,6 +916,41 @@
         "enabled": false,
         "activation": "onEnter",
         "autosave": true
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
       }
     },
     {
@@ -650,6 +1008,41 @@
         "enabled": false,
         "activation": "onEnter",
         "autosave": true
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
       }
     },
     {
@@ -707,6 +1100,41 @@
         "enabled": false,
         "activation": "onEnter",
         "autosave": true
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
       }
     },
     {
@@ -764,6 +1192,41 @@
         "enabled": false,
         "activation": "onEnter",
         "autosave": true
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
       }
     },
     {
@@ -821,6 +1284,41 @@
         "enabled": false,
         "activation": "onEnter",
         "autosave": true
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
       }
     },
     {
@@ -1027,6 +1525,41 @@
         "textureMapping": true,
         "smoothShading": true,
         "accurateClipping": false
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
       }
     },
     {
@@ -1084,6 +1617,41 @@
         "enabled": false,
         "activation": "onEnter",
         "autosave": true
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
       }
     },
     {
@@ -1128,6 +1696,41 @@
         "textureMapping": true,
         "smoothShading": true,
         "accurateClipping": false
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
       }
     },
     {
@@ -1185,6 +1788,41 @@
         "enabled": false,
         "activation": "onEnter",
         "autosave": true
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
       }
     },
     {
@@ -1229,6 +1867,41 @@
         "textureMapping": true,
         "smoothShading": true,
         "accurateClipping": false
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
       }
     },
     {
@@ -1286,6 +1959,41 @@
         "enabled": false,
         "activation": "onEnter",
         "autosave": true
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
       }
     },
     {
@@ -1455,6 +2163,133 @@
         "enabled": false,
         "activation": "onEnter",
         "autosave": true
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
+      }
+    },
+    {
+      "id": "damage-mrqnwlr6-e4nroh",
+      "name": "Área de dano",
+      "source": {
+        "kind": "collider",
+        "asset": "",
+        "collider": "box"
+      },
+      "parentId": null,
+      "position": {
+        "x": -7.2814,
+        "y": 1,
+        "z": -1.7025
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 0.3185,
+        "y": 0.6004,
+        "z": 0.6952
+      },
+      "color": "#ff647c",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "collider": {
+        "trigger": true,
+        "cameraBlocker": false
+      },
+      "events": {
+        "onEnter": [],
+        "onExit": [],
+        "onInteract": []
+      },
+      "portal": {
+        "enabled": false,
+        "targetSceneId": "",
+        "targetSpawnId": "",
+        "activation": "onEnter",
+        "fadeFrames": 30,
+        "condition": {
+          "enabled": false,
+          "variableId": "",
+          "operator": "eq",
+          "value": false
+        }
+      },
+      "checkpoint": {
+        "enabled": false,
+        "activation": "onEnter",
+        "autosave": true
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": true,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
       }
     }
   ],
