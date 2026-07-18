@@ -548,6 +548,31 @@ globalThis.EDITOR_SCENE = [
 ];
 globalThis.EDITOR_COLLIDERS = [
   {
+    "id": "ruinas-checkpoint-inicial",
+    "name": "Checkpoint inicial",
+    "shape": "box",
+    "contractVersion": 2,
+    "rotationOrder": "XYZ",
+    "scaleMeaning": "halfExtents",
+    "position": {
+      "x": 6.9302,
+      "y": 1,
+      "z": -7.3291
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": {
+      "x": 1.25,
+      "y": 1,
+      "z": 1.25
+    },
+    "trigger": true,
+    "cameraBlocker": false
+  },
+  {
     "id": "collider-brazier-a",
     "name": "Colisão — braseiro A",
     "shape": "sphere",
@@ -756,8 +781,8 @@ globalThis.EDITOR_COLLIDERS = [
     "scaleMeaning": "halfExtents",
     "position": {
       "x": -0.1359,
-      "y": 1.5,
-      "z": 1.9653
+      "y": 4.7686,
+      "z": -27.3108
     },
     "rotation": {
       "x": 0,
@@ -765,8 +790,8 @@ globalThis.EDITOR_COLLIDERS = [
       "z": 0
     },
     "scale": {
-      "x": 8.1462,
-      "y": 1.8753,
+      "x": 4.249,
+      "y": 4.6385,
       "z": 0.3
     },
     "trigger": true,
@@ -798,6 +823,13 @@ globalThis.EDITOR_PORTALS = [
     "targetSpawnId": "spawn-mrozcqvq-becjqz",
     "activation": "onEnter",
     "fadeFrames": 30
+  }
+];
+globalThis.EDITOR_CHECKPOINTS = [
+  {
+    "triggerId": "ruinas-checkpoint-inicial",
+    "activation": "onEnter",
+    "autosave": true
   }
 ];
 globalThis.EDITOR_EVENTS = [];

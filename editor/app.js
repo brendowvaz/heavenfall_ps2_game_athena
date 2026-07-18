@@ -204,7 +204,7 @@ function fileName(asset) {
 }
 
 const eventPhases = ["onEnter", "onExit", "onInteract"];
-const eventActionTypes = ["message", "visibility", "teleport", "audio", "particle", "video", "scene"];
+const eventActionTypes = ["message", "visibility", "teleport", "audio", "particle", "video", "save", "load", "scene"];
 
 function normalizeEventAction(action = {}) {
   const type = eventActionTypes.includes(action.type) ? action.type : "message";
@@ -355,8 +355,10 @@ function normalizeRecord(record = {}) {
     } : {}),
     ...(kind === "collider" ? {
       collider: {
-        trigger: record.collider?.trigger === true,
-        cameraBlocker: record.collider?.cameraBlocker !== false,
+        trigger: record.collider?.trigger === true || record.portal?.enabled === true || record.checkpoint?.enabled === true,
+        cameraBlocker: record.portal?.enabled === true || record.checkpoint?.enabled === true
+          ? false
+          : record.collider?.cameraBlocker !== false,
       },
       events: normalizeRecordEvents(record.events || record.collider?.events),
       portal: {
@@ -375,6 +377,11 @@ function normalizeRecord(record = {}) {
             ? record.portal.condition.value
             : false,
         },
+      },
+      checkpoint: {
+        enabled: record.checkpoint?.enabled === true,
+        activation: ["onEnter", "onInteract"].includes(record.checkpoint?.activation) ? record.checkpoint.activation : "onEnter",
+        autosave: record.checkpoint?.autosave !== false,
       },
     } : {}),
     ...(kind === "spawn" ? {
@@ -2105,8 +2112,25 @@ function renderPortalEditor(record) {
     : baseNote;
 }
 
+function renderCheckpointEditor(record) {
+  const container = $("checkpoint-editor");
+  container.hidden = record.source.kind !== "collider";
+  if (container.hidden) return;
+  record.checkpoint ||= { enabled: false, activation: "onEnter", autosave: true };
+  $("checkpoint-enabled").checked = record.checkpoint.enabled;
+  $("checkpoint-activation").value = record.checkpoint.activation;
+  $("checkpoint-autosave").checked = record.checkpoint.autosave !== false;
+  $("checkpoint-note").textContent = !record.checkpoint.enabled
+    ? "Ative o componente para registrar a cena, a posição e o estado persistente."
+    : record.checkpoint.autosave !== false
+      ? "Ao ativar, o progresso será gravado no Memory Card do slot 1."
+      : "O checkpoint ficará disponível somente durante a sessão atual.";
+}
+
 function eventActionSummary(action) {
   if (action.type === "message") return action.text;
+  if (action.type === "save") return "Salvar progresso no Memory Card";
+  if (action.type === "load") return "Carregar último save";
   if (action.type === "teleport") return `Jogador → ${action.position.x}, ${action.position.y}, ${action.position.z}`;
   if (action.type === "scene") {
     const sceneName = state.scenes.find((entry) => entry.id === action.sceneId)?.name || action.sceneId || "Sem cena";
@@ -2254,6 +2278,8 @@ function addTriggerAction() {
       spawnId: $("event-spawn").value,
       fadeFrames: clampNumber($("event-fade").value, 30),
     };
+  } else if (type === "save" || type === "load") {
+    action = { type };
   } else {
     action = {
       type: "message",
@@ -2313,6 +2339,8 @@ function logicNodeSummary(node) {
   if (node.type === "actionVisibility") return `${config.mode} · ${logicTargetName(config.targetId)}`;
   if (node.type === "actionTeleport") return `${config.position.x}, ${config.position.y}, ${config.position.z}`;
   if (["actionAudio", "actionParticle", "actionVideo"].includes(node.type)) return `${config.mode} · ${logicTargetName(config.targetId)}`;
+  if (node.type === "actionSaveGame") return "Grava o checkpoint atual no Memory Card";
+  if (node.type === "actionLoadGame") return "Restaura o último save válido";
   if (node.type === "actionScene") {
     const scene = state.scenes.find((entry) => entry.id === config.sceneId);
     const spawn = projectSpawnPoints(config.sceneId).find((entry) => entry.id === config.spawnId);
@@ -2984,7 +3012,8 @@ function convertTriggerActionsToLogic() {
       const action = actions[index];
       const type = {
         message: "actionMessage", visibility: "actionVisibility", teleport: "actionTeleport",
-        audio: "actionAudio", particle: "actionParticle", video: "actionVideo", scene: "actionScene",
+        audio: "actionAudio", particle: "actionParticle", video: "actionVideo",
+        save: "actionSaveGame", load: "actionLoadGame", scene: "actionScene",
       }[action.type];
       if (!type) continue;
       const node = createLogicNode(type, uid, { x: 330 + index * 230, y: 80 + row * 150 });
@@ -3137,6 +3166,7 @@ function renderInspector() {
     $("collider-trigger").checked = record.collider?.trigger === true;
     $("collider-camera").checked = record.collider?.cameraBlocker !== false;
     renderPortalEditor(record);
+    renderCheckpointEditor(record);
     renderTriggerEvents(record);
   }
   if (spawnMode) $("spawn-default").checked = record.spawn?.default === true;
@@ -3681,6 +3711,21 @@ async function addScenePortal() {
   setStatus(targetScene ? "Portal adicionado · escolha a cena e a entrada no inspector" : "Portal adicionado · crie outra cena para definir o destino");
 }
 
+async function addCheckpoint() {
+  await addRecord({
+    id: uid("checkpoint"),
+    name: "Checkpoint",
+    source: { kind: "collider", collider: "box", asset: "" },
+    position: { x: orbit.target.x, y: 1, z: orbit.target.z },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 1.25, y: 1, z: 1.25 },
+    color: "#62c6ff",
+    collider: { trigger: true, cameraBlocker: false },
+    checkpoint: { enabled: true, activation: "onEnter", autosave: true },
+  });
+  setStatus("Checkpoint adicionado · o progresso será salvo ao entrar");
+}
+
 async function addAudio() {
   const firstAudio = state.audioFiles[0]?.path || "";
   const mode = firstAudio.toLowerCase().endsWith(".adp") ? "sfx" : "stream";
@@ -4145,6 +4190,12 @@ function rebuildSpawnPointVisual(record) {
   refreshSelectionVisuals();
 }
 
+function colliderComponentColor(record) {
+  if (record.portal?.enabled) return "#ffad66";
+  if (record.checkpoint?.enabled) return "#62c6ff";
+  return record.collider?.trigger ? "#ffad66" : "#68e0b2";
+}
+
 function updatePortalFromInspector({ resetSpawn = false, resetConditionValue = false } = {}) {
   const record = currentRecord();
   if (!record || record.source.kind !== "collider") return;
@@ -4176,9 +4227,28 @@ function updatePortalFromInspector({ resetSpawn = false, resetConditionValue = f
   }
   if (record.portal.enabled && !record.collider.trigger) {
     record.collider.trigger = true;
-    record.color = "#ffad66";
-    rebuildColliderVisual(record);
   }
+  record.color = colliderComponentColor(record);
+  rebuildColliderVisual(record);
+  finishFieldHistory();
+  markDirty();
+  renderInspector();
+}
+
+function updateCheckpointFromInspector() {
+  const record = currentRecord();
+  if (!record || record.source.kind !== "collider") return;
+  stageFieldHistory();
+  record.checkpoint ||= {};
+  record.checkpoint.enabled = $("checkpoint-enabled").checked;
+  record.checkpoint.activation = $("checkpoint-activation").value;
+  record.checkpoint.autosave = $("checkpoint-autosave").checked;
+  if (record.checkpoint.enabled) {
+    record.collider.trigger = true;
+    record.collider.cameraBlocker = false;
+  }
+  record.color = colliderComponentColor(record);
+  rebuildColliderVisual(record);
   finishFieldHistory();
   markDirty();
   renderInspector();
@@ -5457,7 +5527,8 @@ function bindInspector() {
     stageFieldHistory();
     record.collider.trigger = event.target.checked;
     if (!record.collider.trigger && record.portal?.enabled) record.portal.enabled = false;
-    record.color = record.collider.trigger ? "#ffad66" : "#68e0b2";
+    if (!record.collider.trigger && record.checkpoint?.enabled) record.checkpoint.enabled = false;
+    record.color = colliderComponentColor(record);
     rebuildColliderVisual(record);
     finishFieldHistory();
     markDirty();
@@ -5487,6 +5558,9 @@ function bindInspector() {
   $("portal-condition-variable").addEventListener("change", () => updatePortalFromInspector({ resetConditionValue: true }));
   for (const id of ["portal-condition-operator", "portal-condition-value"]) {
     $(id).addEventListener("change", () => updatePortalFromInspector());
+  }
+  for (const id of ["checkpoint-enabled", "checkpoint-activation", "checkpoint-autosave"]) {
+    $(id).addEventListener("change", updateCheckpointFromInspector);
   }
   $("spawn-default").addEventListener("change", (event) => {
     const record = currentRecord();
@@ -5641,6 +5715,7 @@ function bindUi() {
   $("add-shadow-button").addEventListener("click", addShadow);
   $("add-spawn-button").addEventListener("click", addSpawnPoint);
   $("add-portal-button").addEventListener("click", addScenePortal);
+  $("add-checkpoint-button").addEventListener("click", addCheckpoint);
   document.querySelectorAll("[data-ui-type]").forEach((button) => button.addEventListener("click", () => addUiElement(button.dataset.uiType)));
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
   document.querySelectorAll("[data-axis-view]").forEach((button) => button.addEventListener("click", () => setAxisView(button.dataset.axisView)));
@@ -5952,7 +6027,7 @@ async function boot() {
       const capabilities = await capabilitiesResponse.json();
       state.serverSchemaVersion = Number(capabilities.editorSchemaVersion) || 0;
     }
-    state.serverOutdated = state.serverSchemaVersion < 15;
+    state.serverOutdated = state.serverSchemaVersion < 16;
     const data = await sceneResponse.json();
     if (!sceneResponse.ok) throw new Error(data.error || "Falha ao abrir a cena");
     await loadDocument(data);

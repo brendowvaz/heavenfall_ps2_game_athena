@@ -26,16 +26,19 @@ const delay = createLogicNode("flowDelay", id, { x: 970, y: 20 });
 delay.config = { frames: 2 };
 const secondMessage = createLogicNode("actionMessage", id, { x: 1210, y: 20 });
 secondMessage.config = { text: "Depois", duration: 30 };
-const changeScene = createLogicNode("actionScene", id, { x: 1450, y: 20 });
+const saveGame = createLogicNode("actionSaveGame", id, { x: 1450, y: 20 });
+const loadGame = createLogicNode("actionLoadGame", id, { x: 1450, y: 180 });
+const changeScene = createLogicNode("actionScene", id, { x: 1690, y: 20 });
 changeScene.config = { sceneId: "temple", spawnId: "temple-gate", fadeFrames: 24 };
-graph.nodes.push(start, setVariable, condition, message, delay, secondMessage, changeScene);
+graph.nodes.push(start, setVariable, condition, message, delay, secondMessage, saveGame, changeScene);
 graph.links.push(
   { id: id("link"), from: start.id, fromPort: "next", to: setVariable.id },
   { id: id("link"), from: setVariable.id, fromPort: "next", to: condition.id },
   { id: id("link"), from: condition.id, fromPort: "true", to: message.id },
   { id: id("link"), from: message.id, fromPort: "next", to: delay.id },
   { id: id("link"), from: delay.id, fromPort: "next", to: secondMessage.id },
-  { id: id("link"), from: secondMessage.id, fromPort: "next", to: changeScene.id },
+  { id: id("link"), from: secondMessage.id, fromPort: "next", to: saveGame.id },
+  { id: id("link"), from: saveGame.id, fromPort: "next", to: changeScene.id },
 );
 
 const jumpGraph = createLogicGraph("Contador de pulos", id, false);
@@ -52,7 +55,8 @@ jumpGraph.links.push(
 
 const normalized = normalizeLogic({ variables: [variable, jumpVariable], graphs: [graph, jumpGraph] }, id);
 assert.equal(validateLogic(normalized).length, 0, "valid graph should not report issues");
-assert.equal(normalized.graphs[0].nodes.length, 7);
+assert.equal(normalized.graphs[0].nodes.length, 8);
+assert.deepEqual(loadGame.config, {}, "load nodes must not accept arbitrary file paths or code");
 
 const sandbox = { console, globalThis: null };
 sandbox.globalThis = sandbox;
@@ -83,6 +87,7 @@ assert.deepEqual(actions.filter((entry) => entry.type === "actionMessage").map((
 assert.deepEqual(actions.find((entry) => entry.type === "actionScene")?.config, {
   sceneId: "temple", spawnId: "temple-gate", fadeFrames: 24,
 });
+assert.deepEqual(actions.find((entry) => entry.type === "actionSaveGame")?.config, {});
 runtime.playerJump();
 assert.equal(sharedVariables[jumpVariable.id], 1, "a real jump event must increment the shared counter");
 assert.deepEqual(actions.find((entry) => entry.type === "actionDisplayVariable")?.config, {
@@ -106,6 +111,7 @@ const scene = normalizeScene({
         enabled: true, targetSceneId: "temple", targetSpawnId: "temple-gate", activation: "onEnter", fadeFrames: 24,
         condition: { enabled: true, variableId: variable.id, operator: "eq", value: true },
       },
+      checkpoint: { enabled: true, activation: "onInteract", autosave: true },
     },
   ],
   logic: {
@@ -126,5 +132,8 @@ assert.equal(generatedSandbox.EDITOR_LOGIC.graphs.length, 1);
 assert.deepEqual(Array.from(generatedSandbox.EDITOR_LOGIC.graphs[0].nodes[1].config.targetIds), ["model"]);
 assert.equal(generatedSandbox.EDITOR_SCENE[0].persistent, true);
 assert.equal(generatedSandbox.EDITOR_PORTALS[0].condition.variableId, variable.id);
+assert.deepEqual({ ...generatedSandbox.EDITOR_CHECKPOINTS[0] }, {
+  triggerId: "trigger", activation: "onInteract", autosave: true,
+});
 
 console.log("Visual scripting test passed.");

@@ -69,6 +69,7 @@ assert.equal(sceneSandbox.EDITOR_SCENE_META.id, "main");
 assert.equal(sceneSandbox.EDITOR_SCENE_META.name, "Principal");
 assert.deepEqual(Array.from(sceneSandbox.EDITOR_SPAWN_POINTS), []);
 assert.deepEqual(Array.from(sceneSandbox.EDITOR_PORTALS), []);
+assert.deepEqual(Array.from(sceneSandbox.EDITOR_CHECKPOINTS), []);
 
 assert.throws(
   () => normalizeSceneProject({ scenes: [] }),

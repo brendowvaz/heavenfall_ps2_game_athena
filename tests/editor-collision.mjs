@@ -63,10 +63,12 @@ const scene = normalizeScene({
       scale: { x: 0.5, y: 2, z: 1 },
       collider: { trigger: true, cameraBlocker: false },
       portal: { enabled: true, targetSceneId: "temple", targetSpawnId: "temple-gate", activation: "onInteract", fadeFrames: 24 },
+      checkpoint: { enabled: true, activation: "onInteract", autosave: true },
       events: {
         onEnter: [
           { id: "welcome", type: "message", text: "Bem-vindo às ruínas", duration: 150 },
           { id: "hide-cube", type: "visibility", targetId: "lit-cube", mode: "hide" },
+          { id: "save-progress", type: "save" },
         ],
         onExit: [
           { id: "stop-fire", type: "audio", targetId: "fire-audio", mode: "stop" },
@@ -76,6 +78,7 @@ const scene = normalizeScene({
           { id: "burst", type: "particle", targetId: "fire-particles", mode: "burst" },
           { id: "play-video", type: "video", targetId: "intro-video", mode: "play" },
           { id: "enter-temple", type: "scene", sceneId: "temple", spawnId: "temple-gate", fadeFrames: 24 },
+          { id: "load-progress", type: "load" },
         ],
       },
     },
@@ -221,6 +224,9 @@ assert(sandbox.EDITOR_EVENTS[0].onInteract[3].type === "scene"
   && sandbox.EDITOR_EVENTS[0].onInteract[3].sceneId === "temple"
   && sandbox.EDITOR_EVENTS[0].onInteract[3].spawnId === "temple-gate",
 "Scene actions must preserve their destination and spawn point");
+assert(sandbox.EDITOR_EVENTS[0].onEnter.some((action) => action.type === "save")
+  && sandbox.EDITOR_EVENTS[0].onInteract.some((action) => action.type === "load"),
+"Trigger save/load actions must survive normalization and runtime export");
 assert(sandbox.EDITOR_SPAWN_POINTS.length === 1
   && sandbox.EDITOR_SPAWN_POINTS[0].id === "main-entry"
   && approximately(Math.abs(sandbox.EDITOR_SPAWN_POINTS[0].yaw), Math.PI),
@@ -230,6 +236,11 @@ assert(sandbox.EDITOR_PORTALS.length === 1
   && sandbox.EDITOR_PORTALS[0].targetSceneId === "temple"
   && sandbox.EDITOR_PORTALS[0].activation === "onInteract",
 "Enabled portals must export as trigger-linked scene transitions");
+assert(sandbox.EDITOR_CHECKPOINTS.length === 1
+  && sandbox.EDITOR_CHECKPOINTS[0].triggerId === "child-box"
+  && sandbox.EDITOR_CHECKPOINTS[0].activation === "onInteract"
+  && sandbox.EDITOR_CHECKPOINTS[0].autosave === true,
+"Enabled checkpoints must export as safe trigger-linked save operations");
 
 assert(sandbox.EDITOR_SETTINGS.vsync === false && sandbox.EDITOR_SETTINGS.showPerformance === true
   && sandbox.EDITOR_SETTINGS.legacyArenaBounds === false && sandbox.EDITOR_SETTINGS.player.spawn.x === 4,

@@ -82,6 +82,7 @@ globalThis.EDITOR_SCENE = [
 globalThis.EDITOR_COLLIDERS = [];
 globalThis.EDITOR_SPAWN_POINTS = [];
 globalThis.EDITOR_PORTALS = [];
+globalThis.EDITOR_CHECKPOINTS = [];
 globalThis.EDITOR_EVENTS = [];
 globalThis.EDITOR_LOGIC = {
   "version": 1,

@@ -21,6 +21,8 @@ export const LOGIC_NODE_DEFINITIONS = Object.freeze({
   actionAudio: { category: "action", label: "Controlar áudio", inputs: ["in"], outputs: ["next"] },
   actionParticle: { category: "action", label: "Controlar partículas", inputs: ["in"], outputs: ["next"] },
   actionVideo: { category: "action", label: "Controlar vídeo", inputs: ["in"], outputs: ["next"] },
+  actionSaveGame: { category: "action", label: "Salvar jogo", inputs: ["in"], outputs: ["next"] },
+  actionLoadGame: { category: "action", label: "Carregar jogo", inputs: ["in"], outputs: ["next"] },
   actionScene: { category: "action", label: "Trocar de cena", inputs: ["in"], outputs: [] },
   actionSetVariable: { category: "variable", label: "Alterar variável", inputs: ["in"], outputs: ["next"] },
   flowDelay: { category: "flow", label: "Esperar", inputs: ["in"], outputs: ["next"] },

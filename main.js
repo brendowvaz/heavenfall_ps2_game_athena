@@ -4,6 +4,12 @@
 // Render.vertexList incompatibility present in some AthenaEnv builds.
 
 const MAX_RUNTIME_LIGHTS = 4;
+const RUNTIME_SAVE_VERSION = 1;
+const RUNTIME_SAVE_DIRECTORY = "mc0:/HEAVENFALL";
+const RUNTIME_SAVE_PATH = RUNTIME_SAVE_DIRECTORY + "/save.json";
+const RUNTIME_SAVE_TEMP_PATH = RUNTIME_SAVE_DIRECTORY + "/save.tmp";
+const RUNTIME_SAVE_BACKUP_PATH = RUNTIME_SAVE_DIRECTORY + "/save.bak";
+const RUNTIME_SAVE_MAX_BYTES = 128 * 1024;
 const runtimeEngineState = {
     canvas: null,
     font: null,
@@ -20,7 +26,12 @@ const runtimeEngineState = {
     persistentState: {
         variables: {},
         scenes: {}
-    }
+    },
+    saveData: null,
+    saveAvailable: false,
+    saveChecked: false,
+    lastSaveError: "",
+    sessionCheckpoint: null
 };
 
 function initializeRuntimeEngine() {
@@ -104,6 +115,263 @@ function persistentRuntimeScene(sceneId) {
     return scenes[id];
 }
 
+function safeRuntimeSaveId(value) {
+    const text = typeof value === "string" ? value : "";
+    if (!text || text.length > 96 || !/^[a-zA-Z0-9_-]+$/.test(text)) return "";
+    if (text === "__proto__" || text === "prototype" || text === "constructor") return "";
+    return text;
+}
+
+function runtimeSavePrimitive(value) {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string") return value.slice(0, 256);
+    return undefined;
+}
+
+function normalizeRuntimeSaveData(input) {
+    if (!input || Number(input.version) !== RUNTIME_SAVE_VERSION) return null;
+    const sceneId = safeRuntimeSaveId(input.sceneId);
+    const sourcePlayer = input.player || {};
+    const player = {
+        x: Number(sourcePlayer.x),
+        y: Number(sourcePlayer.y),
+        z: Number(sourcePlayer.z),
+        yaw: Number(sourcePlayer.yaw)
+    };
+    if (!sceneId || !Number.isFinite(player.x) || !Number.isFinite(player.y)
+        || !Number.isFinite(player.z) || !Number.isFinite(player.yaw)) return null;
+    if (Math.abs(player.x) > 100000 || Math.abs(player.y) > 100000 || Math.abs(player.z) > 100000) return null;
+
+    const variables = {};
+    const sourceVariables = input.variables && typeof input.variables === "object" ? input.variables : {};
+    const variableIds = Object.keys(sourceVariables).slice(0, 128);
+    for (let index = 0; index < variableIds.length; index++) {
+        const id = safeRuntimeSaveId(variableIds[index]);
+        const value = runtimeSavePrimitive(sourceVariables[variableIds[index]]);
+        if (id && value !== undefined) variables[id] = value;
+    }
+
+    const scenes = {};
+    const sourceScenes = input.scenes && typeof input.scenes === "object" ? input.scenes : {};
+    const sceneIds = Object.keys(sourceScenes).slice(0, 64);
+    for (let sceneIndex = 0; sceneIndex < sceneIds.length; sceneIndex++) {
+        const savedSceneId = safeRuntimeSaveId(sceneIds[sceneIndex]);
+        if (!savedSceneId) continue;
+        const sourceObjects = sourceScenes[sceneIds[sceneIndex]] && sourceScenes[sceneIds[sceneIndex]].objects;
+        const objects = {};
+        const objectIds = sourceObjects && typeof sourceObjects === "object"
+            ? Object.keys(sourceObjects).slice(0, 2048)
+            : [];
+        for (let objectIndex = 0; objectIndex < objectIds.length; objectIndex++) {
+            const objectId = safeRuntimeSaveId(objectIds[objectIndex]);
+            const visible = sourceObjects[objectIds[objectIndex]] && sourceObjects[objectIds[objectIndex]].visible;
+            if (objectId && typeof visible === "boolean") objects[objectId] = { visible: visible };
+        }
+        scenes[savedSceneId] = { objects: objects };
+    }
+
+    return {
+        version: RUNTIME_SAVE_VERSION,
+        sceneId: sceneId,
+        player: player,
+        variables: variables,
+        scenes: scenes
+    };
+}
+
+function runtimeSavePathExists(path) {
+    try {
+        return Boolean(std.exists(path));
+    } catch (existsError) {
+        console.log("[Heavenfall] Falha ao consultar " + path + ": " + existsError);
+        return false;
+    }
+}
+
+function readRuntimeSaveAtPath(path) {
+    try {
+        if (!runtimeSavePathExists(path)) return null;
+        const source = std.loadFile(path);
+        if (typeof source !== "string" || source.length === 0 || source.length > RUNTIME_SAVE_MAX_BYTES) return null;
+        return normalizeRuntimeSaveData(JSON.parse(source));
+    } catch (saveReadError) {
+        console.log("[Heavenfall] Save invalido em " + path + ": " + saveReadError);
+        return null;
+    }
+}
+
+function readRuntimeSaveFile() {
+    const primary = readRuntimeSaveAtPath(RUNTIME_SAVE_PATH);
+    const save = primary || readRuntimeSaveAtPath(RUNTIME_SAVE_BACKUP_PATH);
+    runtimeEngineState.saveChecked = true;
+    runtimeEngineState.saveData = save;
+    runtimeEngineState.saveAvailable = Boolean(save);
+    runtimeEngineState.lastSaveError = save ? "" : "Nenhum save valido encontrado";
+    return save;
+}
+
+function runtimeMemoryCardReady() {
+    try {
+        if (typeof System === "undefined" || typeof System.getMCInfo !== "function") {
+            return { ok: false, error: "API do Memory Card indisponivel" };
+        }
+        const info = System.getMCInfo(0);
+        if (!info || info.type === false || (typeof info.type === "number" && info.type === 0)) {
+            return { ok: false, error: "Memory Card ausente no slot 1" };
+        }
+        if (info.format === false || (typeof info.format === "number" && info.format === 0)) {
+            return { ok: false, error: "Memory Card do slot 1 nao esta formatado" };
+        }
+        return { ok: true, info: info };
+    } catch (memoryCardError) {
+        return { ok: false, error: "Falha ao consultar o Memory Card: " + memoryCardError };
+    }
+}
+
+function runtimeIoSucceeded(result) {
+    return result === undefined || result === true || result === 0;
+}
+
+function removeRuntimeSavePath(path) {
+    if (!runtimeSavePathExists(path)) return true;
+    try {
+        return runtimeIoSucceeded(os.remove(path));
+    } catch (removeError) {
+        console.log("[Heavenfall] Nao foi possivel remover " + path + ": " + removeError);
+        return false;
+    }
+}
+
+function renameRuntimeSavePath(source, destination) {
+    if (!runtimeSavePathExists(source)) return false;
+    if (runtimeSavePathExists(destination) && !removeRuntimeSavePath(destination)) return false;
+
+    function destinationReady() {
+        if (!readRuntimeSaveAtPath(destination)) return false;
+        if (runtimeSavePathExists(source)) removeRuntimeSavePath(source);
+        return true;
+    }
+
+    const operations = [];
+    if (typeof System !== "undefined" && typeof System.rename === "function") {
+        operations.push(function () { return System.rename(source, destination); });
+    }
+    if (typeof System !== "undefined" && typeof System.moveFile === "function") {
+        operations.push(function () { return System.moveFile(source, destination); });
+    }
+    if (typeof os.rename === "function") {
+        operations.push(function () { return os.rename(source, destination); });
+    }
+
+    for (let index = 0; index < operations.length; index++) {
+        try {
+            operations[index]();
+            if (destinationReady()) return true;
+            removeRuntimeSavePath(destination);
+        } catch (renameError) {
+            console.log("[Heavenfall] Metodo de movimentacao " + index + " falhou: " + renameError);
+            removeRuntimeSavePath(destination);
+        }
+    }
+
+    if (typeof System !== "undefined" && typeof System.copyFile === "function") {
+        try {
+            System.copyFile(source, destination);
+            if (destinationReady()) {
+                console.log("[Heavenfall] Save promovido por copia verificada");
+                return true;
+            }
+        } catch (copyError) {
+            console.log("[Heavenfall] Copia de seguranca falhou: " + copyError);
+        }
+    }
+    removeRuntimeSavePath(destination);
+    return false;
+}
+
+function writeRuntimeSaveFile(input) {
+    const data = normalizeRuntimeSaveData(input);
+    if (!data) return { ok: false, error: "Os dados do save sao invalidos" };
+    const card = runtimeMemoryCardReady();
+    if (!card.ok) return card;
+
+    let payload = "";
+    try {
+        payload = JSON.stringify(data);
+    } catch (serializeError) {
+        return { ok: false, error: "Nao foi possivel preparar o save: " + serializeError };
+    }
+    if (!payload || payload.length > RUNTIME_SAVE_MAX_BYTES) {
+        return { ok: false, error: "O save excede o limite de " + RUNTIME_SAVE_MAX_BYTES + " bytes" };
+    }
+
+    try {
+        if (typeof os.mkdir === "function") os.mkdir(RUNTIME_SAVE_DIRECTORY);
+    } catch (directoryError) {
+        console.log("[Heavenfall] Diretorio do save ja existe ou nao pode ser criado: " + directoryError);
+    }
+
+    removeRuntimeSavePath(RUNTIME_SAVE_TEMP_PATH);
+    let file = null;
+    try {
+        file = std.open(RUNTIME_SAVE_TEMP_PATH, "w");
+        if (!file) return { ok: false, error: "Nao foi possivel abrir o arquivo temporario no Memory Card" };
+        const writeResult = file.puts(payload);
+        if (typeof writeResult === "number" && writeResult < 0) throw new Error("codigo " + writeResult);
+        if (typeof file.flush === "function") {
+            const flushResult = file.flush();
+            if (typeof flushResult === "number" && flushResult < 0) throw new Error("flush " + flushResult);
+        }
+        const closeResult = file.close();
+        file = null;
+        if (typeof closeResult === "number" && closeResult < 0) throw new Error("close " + closeResult);
+    } catch (writeError) {
+        if (file && typeof file.close === "function") {
+            try { file.close(); } catch (closeError) { console.log("[Heavenfall] Falha ao fechar save: " + closeError); }
+        }
+        removeRuntimeSavePath(RUNTIME_SAVE_TEMP_PATH);
+        return { ok: false, error: "Falha ao gravar no Memory Card: " + writeError };
+    }
+
+    if (!readRuntimeSaveAtPath(RUNTIME_SAVE_TEMP_PATH)) {
+        removeRuntimeSavePath(RUNTIME_SAVE_TEMP_PATH);
+        return { ok: false, error: "A verificacao do arquivo gravado falhou" };
+    }
+
+    const hadPrimary = runtimeSavePathExists(RUNTIME_SAVE_PATH);
+    const primaryWasValid = hadPrimary && Boolean(readRuntimeSaveAtPath(RUNTIME_SAVE_PATH));
+    let preservedPrimary = false;
+    if (primaryWasValid) {
+        removeRuntimeSavePath(RUNTIME_SAVE_BACKUP_PATH);
+        if (!renameRuntimeSavePath(RUNTIME_SAVE_PATH, RUNTIME_SAVE_BACKUP_PATH)) {
+            removeRuntimeSavePath(RUNTIME_SAVE_TEMP_PATH);
+            return { ok: false, error: "Nao foi possivel preservar o save anterior" };
+        }
+        preservedPrimary = true;
+        if (runtimeSavePathExists(RUNTIME_SAVE_PATH) && !removeRuntimeSavePath(RUNTIME_SAVE_PATH)) {
+            removeRuntimeSavePath(RUNTIME_SAVE_TEMP_PATH);
+            return { ok: false, error: "Nao foi possivel liberar o destino do novo save" };
+        }
+    } else if (hadPrimary && !removeRuntimeSavePath(RUNTIME_SAVE_PATH)) {
+        removeRuntimeSavePath(RUNTIME_SAVE_TEMP_PATH);
+        return { ok: false, error: "Nao foi possivel remover o save principal corrompido" };
+    }
+    if (!renameRuntimeSavePath(RUNTIME_SAVE_TEMP_PATH, RUNTIME_SAVE_PATH)) {
+        if (preservedPrimary && runtimeSavePathExists(RUNTIME_SAVE_BACKUP_PATH)) {
+            renameRuntimeSavePath(RUNTIME_SAVE_BACKUP_PATH, RUNTIME_SAVE_PATH);
+        }
+        removeRuntimeSavePath(RUNTIME_SAVE_TEMP_PATH);
+        return { ok: false, error: "Nao foi possivel concluir a gravacao do save" };
+    }
+
+    runtimeEngineState.saveChecked = true;
+    runtimeEngineState.saveData = data;
+    runtimeEngineState.saveAvailable = true;
+    runtimeEngineState.lastSaveError = "";
+    return { ok: true, data: data };
+}
+
 function drawRuntimeLoading(message) {
     const font = runtimeEngineState.font;
     const canvas = runtimeEngineState.canvas;
@@ -130,6 +398,9 @@ const BOOT_SCENE_ID = hasSceneBoot
 const BOOT_SPAWN_ID = hasSceneBoot
     ? (typeof sceneBoot.spawnId === "string" ? sceneBoot.spawnId : "")
     : (typeof globalThis.ATHENA_BOOT_SPAWN_ID === "string" ? globalThis.ATHENA_BOOT_SPAWN_ID : "");
+const BOOT_PLAYER_STATE = hasSceneBoot && sceneBoot.player && typeof sceneBoot.player === "object"
+    ? sceneBoot.player
+    : null;
 const BOOT_SKIP_MENU = hasSceneBoot || globalThis.ATHENA_SKIP_MENU === true;
 const requestedFadeFrames = hasSceneBoot ? sceneBoot.fadeFrames : globalThis.ATHENA_BOOT_FADE_FRAMES;
 const BOOT_FADE_FRAMES = Math.max(1, Math.min(300, Number(requestedFadeFrames) || 30));
@@ -252,6 +523,7 @@ globalThis.EDITOR_SETTINGS = {};
 globalThis.EDITOR_COLLIDERS = [];
 globalThis.EDITOR_SPAWN_POINTS = [];
 globalThis.EDITOR_PORTALS = [];
+globalThis.EDITOR_CHECKPOINTS = [];
 globalThis.EDITOR_EVENTS = [];
 globalThis.EDITOR_LOGIC = { version: 1, variables: [], graphs: [] };
 globalThis.EDITOR_LIGHTS = [];
@@ -303,6 +575,7 @@ for (let variableIndex = 0; variableIndex < runtimeVariableDefinitions.length; v
     runtimeVariableTypes[variable.id] = variable.type || typeof variable.initialValue;
 }
 initializePersistentVariables(runtimeVariableDefinitions);
+if (!runtimeEngineState.saveChecked && !BOOT_SKIP_MENU) readRuntimeSaveFile();
 const runtimeLogicDefinition = {
     version: EDITOR_LOGIC.version || 1,
     variables: runtimeVariableDefinitions,
@@ -612,15 +885,21 @@ for (let spawnIndex = 0; spawnIndex < EDITOR_SPAWN_POINTS.length; spawnIndex++) 
 }
 if (!activeSpawnPoint && EDITOR_SPAWN_POINTS.length > 0) activeSpawnPoint = EDITOR_SPAWN_POINTS[0];
 const configuredSpawn = runtimePlayer.spawn || { x: 0.0, y: 0.08, z: 18.0 };
-const SPAWN = activeSpawnPoint ? activeSpawnPoint.position : configuredSpawn;
-const SPAWN_YAW = activeSpawnPoint
+const SCENE_SPAWN = activeSpawnPoint ? activeSpawnPoint.position : configuredSpawn;
+const SPAWN = BOOT_PLAYER_STATE && Number.isFinite(Number(BOOT_PLAYER_STATE.x))
+    && Number.isFinite(Number(BOOT_PLAYER_STATE.y)) && Number.isFinite(Number(BOOT_PLAYER_STATE.z))
+    ? { x: Number(BOOT_PLAYER_STATE.x), y: Number(BOOT_PLAYER_STATE.y), z: Number(BOOT_PLAYER_STATE.z) }
+    : SCENE_SPAWN;
+const SPAWN_YAW = BOOT_PLAYER_STATE && Number.isFinite(Number(BOOT_PLAYER_STATE.yaw))
+    ? Number(BOOT_PLAYER_STATE.yaw)
+    : activeSpawnPoint
     ? activeSpawnPoint.yaw === undefined
         ? activeSpawnPoint.rotation ? activeSpawnPoint.rotation.y || 0.0 : 0.0
         : activeSpawnPoint.yaw
     : 0.0;
 const PLAYER_RADIUS = Math.max(0.1, runtimePlayer.radius || 0.68);
 const PLAYER_HEIGHT = Math.max(PLAYER_RADIUS * 2.0, runtimePlayer.height || 2.25);
-const PLAYER_GROUND_Y = SPAWN.y === undefined ? 0.08 : SPAWN.y;
+const PLAYER_GROUND_Y = SCENE_SPAWN.y === undefined ? 0.08 : SCENE_SPAWN.y;
 const WALK_SPEED = Math.max(0.01, runtimePlayer.walkSpeed || 0.125);
 const RUN_SPEED = Math.max(WALK_SPEED, runtimePlayer.runSpeed || 0.19);
 const JUMP_SPEED = Math.max(0.0, runtimePlayer.jumpSpeed === undefined ? 0.30 : runtimePlayer.jumpSpeed);
@@ -634,6 +913,20 @@ let playerVelocityY = 0.0;
 let playerGrounded = true;
 let playerYaw = SPAWN_YAW;
 let cameraYaw = activeSpawnPoint ? SPAWN_YAW : EDITOR_CAMERA ? EDITOR_CAMERA.rotation.y : 0.0;
+if (BOOT_PLAYER_STATE && !isPlayerValid(playerX, playerZ)) {
+    const fallbackPosition = SCENE_SPAWN;
+    const fallbackYaw = activeSpawnPoint
+        ? activeSpawnPoint.yaw === undefined
+            ? activeSpawnPoint.rotation ? activeSpawnPoint.rotation.y || 0.0 : 0.0
+            : activeSpawnPoint.yaw
+        : 0.0;
+    console.log("[Heavenfall] Posicao salva invalida nesta cena; usando o ponto de entrada");
+    playerX = fallbackPosition.x;
+    playerY = fallbackPosition.y === undefined ? PLAYER_GROUND_Y : fallbackPosition.y;
+    playerZ = fallbackPosition.z;
+    playerYaw = fallbackYaw;
+    cameraYaw = fallbackYaw;
+}
 let cameraPitch = 0.31;
 let shoulderSide = 1.0;
 let showHud = true;
@@ -648,9 +941,9 @@ const GAME_STATE_CREDITS = 1;
 const GAME_STATE_GAME = 2;
 const MENU_AUDIO_ASSET = "sounds/menu.wav";
 const MENU_AUDIO_VOLUME = 100;
-const MENU_OPTIONS = ["Iniciar Jogo", "Créditos"];
+const MENU_OPTIONS = ["Continuar", "Iniciar Jogo", "Créditos"];
 let gameState = BOOT_SKIP_MENU ? GAME_STATE_GAME : GAME_STATE_MENU;
-let menuSelection = 0;
+let menuSelection = runtimeSaveCanContinue() ? 0 : 1;
 let menuStickLocked = false;
 let menuPulse = 0;
 let menuFrame = 0;
@@ -1015,7 +1308,91 @@ function sceneProjectEntry(sceneId) {
     return null;
 }
 
-function requestSceneTransition(sceneId, spawnId, fadeFrames) {
+function runtimeSaveCanContinue(data) {
+    const save = data || runtimeEngineState.saveData;
+    return Boolean(save && sceneProjectEntry(save.sceneId));
+}
+
+function buildRuntimeSaveData() {
+    const variables = {};
+    for (let index = 0; index < runtimeVariableDefinitions.length; index++) {
+        const definition = runtimeVariableDefinitions[index];
+        if (!definition || !definition.id) continue;
+        const value = readPersistentVariable(definition.id, definition.initialValue, definition.type);
+        if (runtimeSavePrimitive(value) !== undefined) variables[definition.id] = value;
+    }
+    return normalizeRuntimeSaveData({
+        version: RUNTIME_SAVE_VERSION,
+        sceneId: EDITOR_SCENE_META.id || BOOT_SCENE_ID || EDITOR_SCENE_PROJECT.startupSceneId,
+        player: { x: playerX, y: playerY, z: playerZ, yaw: playerYaw },
+        variables: variables,
+        scenes: runtimeEngineState.persistentState.scenes
+    });
+}
+
+function applyRuntimeSaveData(data) {
+    const save = normalizeRuntimeSaveData(data);
+    if (!save || !runtimeSaveCanContinue(save)) return false;
+    const variables = {};
+    for (let index = 0; index < runtimeVariableDefinitions.length; index++) {
+        const definition = runtimeVariableDefinitions[index];
+        if (!definition || !definition.id) continue;
+        const stored = Object.prototype.hasOwnProperty.call(save.variables, definition.id)
+            ? save.variables[definition.id]
+            : definition.initialValue;
+        variables[definition.id] = coercePersistentVariable(stored, definition.type, definition.initialValue);
+    }
+    const scenes = {};
+    for (let index = 0; index < EDITOR_SCENE_PROJECT.scenes.length; index++) {
+        const id = EDITOR_SCENE_PROJECT.scenes[index].id;
+        if (save.scenes[id]) scenes[id] = save.scenes[id];
+    }
+    runtimeEngineState.persistentState = { variables: variables, scenes: scenes };
+    runtimeEngineState.saveData = save;
+    runtimeEngineState.saveAvailable = true;
+    return true;
+}
+
+function showRuntimeSaveMessage(text, success) {
+    runtimeMessageText = text;
+    runtimeMessageTimer = success ? 150 : 240;
+    console.log("[Heavenfall] " + text);
+}
+
+function saveRuntimeGame(showFeedback, preparedSnapshot) {
+    const snapshot = preparedSnapshot || buildRuntimeSaveData();
+    if (!snapshot) {
+        if (showFeedback !== false) showRuntimeSaveMessage("Nao foi possivel preparar o checkpoint.", false);
+        return false;
+    }
+    runtimeEngineState.sessionCheckpoint = snapshot;
+    const result = writeRuntimeSaveFile(snapshot);
+    if (result.ok) {
+        if (showFeedback !== false) showRuntimeSaveMessage("Progresso salvo no Memory Card.", true);
+        return true;
+    }
+    runtimeEngineState.lastSaveError = result.error || "Falha desconhecida ao salvar";
+    if (showFeedback !== false) showRuntimeSaveMessage(runtimeEngineState.lastSaveError, false);
+    return false;
+}
+
+function loadRuntimeGame(showFeedback) {
+    if (runtimeSceneTransition) return false;
+    const save = runtimeEngineState.sessionCheckpoint || readRuntimeSaveFile();
+    if (!save || !runtimeSaveCanContinue(save)) {
+        if (showFeedback !== false) showRuntimeSaveMessage("Nenhum progresso compativel foi encontrado.", false);
+        return false;
+    }
+    if (!requestSceneTransition(save.sceneId, "", 24, save.player)) {
+        if (showFeedback !== false) showRuntimeSaveMessage("Nao foi possivel carregar a cena salva.", false);
+        return false;
+    }
+    applyRuntimeSaveData(save);
+    if (showFeedback !== false) showRuntimeSaveMessage("Carregando progresso salvo...", true);
+    return true;
+}
+
+function requestSceneTransition(sceneId, spawnId, fadeFrames, playerState) {
     if (runtimeSceneTransition || !sceneId) return false;
     if (runtimeTriggerPhaseActive && triggerTransitionSuppressionFrames > 0) {
         console.log("[VeuAzul] Transicao de trigger ignorada durante a entrada na cena");
@@ -1041,11 +1418,17 @@ function requestSceneTransition(sceneId, spawnId, fadeFrames) {
             resolvedSpawnId = "";
         }
     }
+    const resolvedPlayer = playerState && Number.isFinite(Number(playerState.x))
+        && Number.isFinite(Number(playerState.y)) && Number.isFinite(Number(playerState.z))
+        && Number.isFinite(Number(playerState.yaw))
+        ? { x: Number(playerState.x), y: Number(playerState.y), z: Number(playerState.z), yaw: Number(playerState.yaw) }
+        : null;
     runtimeSceneTransition = {
         sceneId: sceneId,
         spawnId: resolvedSpawnId,
         fadeFrames: Math.max(1, Math.min(300, Math.round(fadeFrames || 30))),
-        elapsed: 0
+        elapsed: 0,
+        player: resolvedPlayer
     };
     console.log("[VeuAzul] Preparando cena " + sceneId + (resolvedSpawnId ? " em " + resolvedSpawnId : ""));
     return true;
@@ -1076,6 +1459,22 @@ function runPortalPhase(triggerId, phase) {
         const portal = EDITOR_PORTALS[i];
         if (portal.triggerId !== triggerId || portal.activation !== phase || !portalConditionSatisfied(portal.condition)) continue;
         requestSceneTransition(portal.targetSceneId, portal.targetSpawnId, portal.fadeFrames);
+        return;
+    }
+}
+
+function runCheckpointPhase(triggerId, phase) {
+    for (let index = 0; index < EDITOR_CHECKPOINTS.length; index++) {
+        const checkpoint = EDITOR_CHECKPOINTS[index];
+        if (checkpoint.triggerId !== triggerId || checkpoint.activation !== phase) continue;
+        const snapshot = buildRuntimeSaveData();
+        if (!snapshot) {
+            showRuntimeSaveMessage("Nao foi possivel ativar o checkpoint.", false);
+            return;
+        }
+        runtimeEngineState.sessionCheckpoint = snapshot;
+        if (checkpoint.autosave !== false) saveRuntimeGame(true, snapshot);
+        else showRuntimeSaveMessage("Checkpoint ativado.", true);
         return;
     }
 }
@@ -1115,6 +1514,14 @@ function executeRuntimeAction(action) {
         requestSceneTransition(action.sceneId, action.spawnId, action.fadeFrames);
         return;
     }
+    if (action.type === "save") {
+        saveRuntimeGame(true);
+        return;
+    }
+    if (action.type === "load") {
+        loadRuntimeGame(true);
+        return;
+    }
     if (action.type === "teleport") {
         const position = action.position || { x: 0.0, y: PLAYER_GROUND_Y, z: 18.0 };
         playerX = position.x;
@@ -1136,6 +1543,7 @@ function runTriggerPhase(triggerId, phase) {
         }
     }
     if (runtimeVisualScripts) runtimeVisualScripts.trigger(triggerId, phase);
+    runCheckpointPhase(triggerId, phase);
     runPortalPhase(triggerId, phase);
     runtimeTriggerPhaseActive = false;
 }
@@ -1315,6 +1723,8 @@ function executeVisualScriptAction(type, config) {
     else if (type === "actionScene") executeRuntimeAction({
         type: "scene", sceneId: config.sceneId, spawnId: config.spawnId, fadeFrames: config.fadeFrames
     });
+    else if (type === "actionSaveGame") executeRuntimeAction({ type: "save" });
+    else if (type === "actionLoadGame") executeRuntimeAction({ type: "load" });
 }
 
 const runtimeVisualScripts = typeof VisualScriptingRuntime !== "undefined"
@@ -1350,14 +1760,24 @@ function buttonHeld(button) {
     return pad.pressed(button) || ((pad.btns & button) !== 0);
 }
 
+function menuOptionEnabled(index) {
+    return index !== 0 || runtimeSaveCanContinue();
+}
+
 function moveMenuSelection(direction) {
-    menuSelection += direction;
-    if (menuSelection < 0) menuSelection = MENU_OPTIONS.length - 1;
-    if (menuSelection >= MENU_OPTIONS.length) menuSelection = 0;
+    for (let attempts = 0; attempts < MENU_OPTIONS.length; attempts++) {
+        menuSelection += direction;
+        if (menuSelection < 0) menuSelection = MENU_OPTIONS.length - 1;
+        if (menuSelection >= MENU_OPTIONS.length) menuSelection = 0;
+        if (menuOptionEnabled(menuSelection)) break;
+    }
     menuPulse = 12;
 }
 
 function startExistingScenario() {
+    runtimeEngineState.persistentState = { variables: {}, scenes: {} };
+    runtimeEngineState.sessionCheckpoint = null;
+    initializePersistentVariables(runtimeVariableDefinitions);
     stopMenuAudio();
     startRuntimeAutoplayAudio();
     gameState = GAME_STATE_GAME;
@@ -1365,6 +1785,14 @@ function startExistingScenario() {
     collisionFlash = 0;
     runtimeMessageTimer = 0;
     if (runtimeVisualScripts) runtimeVisualScripts.start();
+}
+
+function startSavedScenario() {
+    if (!loadRuntimeGame(true)) return;
+    stopMenuAudio();
+    gameState = GAME_STATE_GAME;
+    titleTimer = 0;
+    collisionFlash = 0;
 }
 
 function updateMenuInput() {
@@ -1395,7 +1823,9 @@ function updateMenuInput() {
     if (direction !== 0) moveMenuSelection(direction);
 
     if (pad.justPressed(Pads.CROSS)) {
-        if (menuSelection === 0) startExistingScenario();
+        if (!menuOptionEnabled(menuSelection)) return;
+        if (menuSelection === 0) startSavedScenario();
+        else if (menuSelection === 1) startExistingScenario();
         else gameState = GAME_STATE_CREDITS;
     }
 
@@ -1603,12 +2033,13 @@ function drawMainMenu() {
     const boxX = (canvas.width - boxWidth) * 0.5;
     for (let i = 0; i < MENU_OPTIONS.length; i++) {
         const selected = i === menuSelection;
+        const enabled = menuOptionEnabled(i);
         const y = baseY + i * itemSpacing;
         const scale = selected ? 0.66 : 0.58;
         const text = MENU_OPTIONS[i];
         const textX = (canvas.width - estimateTextWidth(text, scale)) * 0.5;
 
-        if (selected) {
+        if (selected && enabled) {
             const pulse = 74 + Math.floor((Math.sin(menuFrame * 0.15) + 1.0) * 18.0);
             Draw.rect(boxX, y - 8, boxWidth, 34, Color.new(6, 24, 38, pulse));
             Draw.rect(boxX, y - 9, boxWidth, 1, Color.new(108, 200, 240, 88));
@@ -1617,8 +2048,10 @@ function drawMainMenu() {
             Draw.rect(boxX + 22, y + 5, 4, 10, Color.new(159, 225, 250, 106));
             Draw.rect(boxX + 26, y + 8, 4, 4, Color.new(159, 225, 250, 96));
             font.color = Color.new(232, 244, 250, 128);
-        } else {
+        } else if (enabled) {
             font.color = Color.new(151, 184, 202, 104);
+        } else {
+            font.color = Color.new(82, 102, 116, 72);
         }
 
         font.scale = scale;
@@ -2076,7 +2509,8 @@ if (!runtimeLoopRunning && runtimeSceneTransition) {
     const completedTransition = {
         sceneId: runtimeSceneTransition.sceneId,
         spawnId: runtimeSceneTransition.spawnId,
-        fadeFrames: runtimeSceneTransition.fadeFrames
+        fadeFrames: runtimeSceneTransition.fadeFrames,
+        player: runtimeSceneTransition.player
     };
     drawRuntimeLoading("CARREGANDO " + completedTransition.sceneId.toUpperCase() + "...");
     freeRuntimeSceneResources();

@@ -190,6 +190,7 @@ globalThis.EDITOR_PORTALS = [
     "fadeFrames": 30
   }
 ];
+globalThis.EDITOR_CHECKPOINTS = [];
 globalThis.EDITOR_EVENTS = [];
 globalThis.EDITOR_LOGIC = {
   "version": 1,

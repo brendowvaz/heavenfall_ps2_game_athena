@@ -183,7 +183,7 @@ function safeAssetPath(value) {
 }
 
 const eventPhases = ["onEnter", "onExit", "onInteract"];
-const eventActionTypes = ["message", "visibility", "teleport", "audio", "particle", "video", "scene"];
+const eventActionTypes = ["message", "visibility", "teleport", "audio", "particle", "video", "save", "load", "scene"];
 const particlePresetColors = { fire: "#ff380a", smoke: "#616b7a", sparks: "#ffb814" };
 
 function normalizeEventAction(action, index) {
@@ -237,6 +237,14 @@ function normalizePortal(portal) {
         : "eq",
       value: primitive(portal?.condition?.value),
     },
+  };
+}
+
+function normalizeCheckpoint(checkpoint) {
+  return {
+    enabled: checkpoint?.enabled === true,
+    activation: ["onEnter", "onInteract"].includes(checkpoint?.activation) ? checkpoint.activation : "onEnter",
+    autosave: checkpoint?.autosave !== false,
   };
 }
 
@@ -372,11 +380,14 @@ function normalizeScene(input) {
           loop: item?.animation?.loop !== false,
         } : undefined,
         collider: kind === "collider" ? {
-          trigger: item?.collider?.trigger === true,
-          cameraBlocker: item?.collider?.cameraBlocker !== false,
+          trigger: item?.collider?.trigger === true || item?.portal?.enabled === true || item?.checkpoint?.enabled === true,
+          cameraBlocker: item?.portal?.enabled === true || item?.checkpoint?.enabled === true
+            ? false
+            : item?.collider?.cameraBlocker !== false,
         } : undefined,
         events: kind === "collider" ? normalizeEvents(item?.events || item?.collider?.events) : undefined,
         portal: kind === "collider" ? normalizePortal(item?.portal || item?.collider?.portal) : undefined,
+        checkpoint: kind === "collider" ? normalizeCheckpoint(item?.checkpoint || item?.collider?.checkpoint) : undefined,
         spawn: kind === "spawn" ? {
           default: item?.spawn?.default === true,
         } : undefined,
@@ -661,6 +672,15 @@ function generateAthenaScene(scene, metadata = {}) {
       ...(item.portal.condition?.enabled ? { condition: item.portal.condition } : {}),
     }));
 
+  const checkpoints = scene.objects
+    .filter((item) => item.runtime && item.visible && item.source.kind === "collider"
+      && item.collider?.trigger && item.checkpoint?.enabled)
+    .map((item) => ({
+      triggerId: item.id,
+      activation: item.checkpoint.activation,
+      autosave: item.checkpoint.autosave !== false,
+    }));
+
   const recordById = new Map(scene.objects.map((item) => [item.id, item]));
   function isRuntimeDescendant(item, ancestorId) {
     let current = item;
@@ -869,6 +889,7 @@ function generateAthenaScene(scene, metadata = {}) {
     `globalThis.EDITOR_COLLIDERS = ${JSON.stringify(colliders, null, 2)};`,
     `globalThis.EDITOR_SPAWN_POINTS = ${JSON.stringify(spawnPoints, null, 2)};`,
     `globalThis.EDITOR_PORTALS = ${JSON.stringify(portals, null, 2)};`,
+    `globalThis.EDITOR_CHECKPOINTS = ${JSON.stringify(checkpoints, null, 2)};`,
     `globalThis.EDITOR_EVENTS = ${JSON.stringify(events, null, 2)};`,
     `globalThis.EDITOR_LOGIC = ${JSON.stringify(logic, null, 2)};`,
     `globalThis.EDITOR_LIGHTS = ${JSON.stringify(lights, null, 2)};`,
@@ -1668,8 +1689,8 @@ function startBuildAndRun() {
 async function handleApi(request, response, url) {
   if (url.pathname === "/api/capabilities" && request.method === "GET") {
     sendJson(response, 200, {
-      editorSchemaVersion: 15,
-      features: ["materials", "material-runtime", "model-animation", "lights", "point-light-runtime", "light-flicker", "shadow-projectors", "cameras", "camera-modes", "camera-preview", "components", "trigger-events", "visual-scripting", "logic-variables", "global-variables", "player-jump-event", "variable-message", "persistent-state", "multiple-scenes", "scene-manager", "startup-scene", "scene-order", "project-export", "dynamic-scene-loading", "scene-portals", "conditional-portals", "spawn-points", "runtime-settings", "ui-editor", "ui-runtime", "ui-images", "ui-video", "ui-fonts", "audio", "audio-runtime", "particles", "particle-runtime", "particle-color"],
+      editorSchemaVersion: 16,
+      features: ["materials", "material-runtime", "model-animation", "lights", "point-light-runtime", "light-flicker", "shadow-projectors", "cameras", "camera-modes", "camera-preview", "components", "trigger-events", "visual-scripting", "logic-variables", "global-variables", "player-jump-event", "variable-message", "persistent-state", "save-game", "memory-card-save", "checkpoints", "continue-menu", "multiple-scenes", "scene-manager", "startup-scene", "scene-order", "project-export", "dynamic-scene-loading", "scene-portals", "conditional-portals", "spawn-points", "runtime-settings", "ui-editor", "ui-runtime", "ui-images", "ui-video", "ui-fonts", "audio", "audio-runtime", "particles", "particle-runtime", "particle-color"],
     });
     return true;
   }

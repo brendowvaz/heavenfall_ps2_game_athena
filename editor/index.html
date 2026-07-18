@@ -173,6 +173,7 @@
           <button id="add-camera-button"><span>▣</span>Câmera</button>
           <button id="add-spawn-button"><span>⌖</span>Entrada</button>
           <button id="add-portal-button"><span>⇥</span>Portal</button>
+          <button id="add-checkpoint-button"><span>◆</span>Checkpoint</button>
         </div>
       </section>
 
@@ -591,6 +592,28 @@
             </div>
             <p id="portal-note" class="compatibility-note">A cena de destino é carregada isoladamente após o fade.</p>
           </div>
+          <div id="checkpoint-editor" class="portal-editor" hidden>
+            <div class="component-heading">
+              <strong>Checkpoint</strong>
+              <small>Progresso e Memory Card</small>
+            </div>
+            <label class="property-row switch-property">
+              <span><strong>Ativado</strong><small>Registrar o progresso neste trigger</small></span>
+              <input id="checkpoint-enabled" type="checkbox">
+            </label>
+            <label class="property-row select-property">
+              <span><strong>Ativação</strong><small>Automática ou com Triângulo</small></span>
+              <select id="checkpoint-activation">
+                <option value="onEnter">Ao entrar</option>
+                <option value="onInteract">Ao interagir</option>
+              </select>
+            </label>
+            <label class="property-row switch-property">
+              <span><strong>Salvar automaticamente</strong><small>Gravar no Memory Card do slot 1</small></span>
+              <input id="checkpoint-autosave" type="checkbox" checked>
+            </label>
+            <p id="checkpoint-note" class="compatibility-note">O save inclui cena, jogador, variáveis e objetos persistentes.</p>
+          </div>
           <div id="trigger-events-editor" class="trigger-events-editor" hidden>
             <div class="component-heading">
               <strong>Eventos do trigger</strong>
@@ -613,6 +636,8 @@
                 <option value="audio">Controlar áudio</option>
                 <option value="particle">Controlar partículas</option>
                 <option value="video">Controlar vídeo de UI</option>
+                <option value="save">Salvar jogo</option>
+                <option value="load">Carregar jogo</option>
                 <option value="scene">Trocar de cena</option>
               </select>
             </label>

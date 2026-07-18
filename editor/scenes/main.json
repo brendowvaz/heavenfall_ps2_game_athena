@@ -9,14 +9,14 @@
     "snapMode": "grid",
     "camera": {
       "position": {
-        "x": 13.018,
-        "y": 25.7425,
-        "z": 26.2875
+        "x": -13.694,
+        "y": 14.6687,
+        "z": -22.8821
       },
       "target": {
-        "x": 5.8836,
-        "y": 1.5,
-        "z": 1.9653
+        "x": -0.136,
+        "y": 4.7687,
+        "z": -28.5585
       }
     },
     "runtime": {
@@ -39,6 +39,63 @@
     }
   },
   "objects": [
+    {
+      "id": "ruinas-checkpoint-inicial",
+      "name": "Checkpoint inicial",
+      "source": {
+        "kind": "collider",
+        "asset": "",
+        "collider": "box"
+      },
+      "parentId": null,
+      "position": {
+        "x": 6.9302,
+        "y": 1,
+        "z": -7.3291
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1.25,
+        "y": 1,
+        "z": 1.25
+      },
+      "color": "#62c6ff",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "collider": {
+        "trigger": true,
+        "cameraBlocker": false
+      },
+      "events": {
+        "onEnter": [],
+        "onExit": [],
+        "onInteract": []
+      },
+      "portal": {
+        "enabled": false,
+        "targetSceneId": "",
+        "targetSpawnId": "",
+        "activation": "onEnter",
+        "fadeFrames": 30,
+        "condition": {
+          "enabled": false,
+          "variableId": "",
+          "operator": "eq",
+          "value": false
+        }
+      },
+      "checkpoint": {
+        "enabled": true,
+        "activation": "onEnter",
+        "autosave": true
+      }
+    },
     {
       "id": "environment-root",
       "name": "Cenário congelado",
@@ -531,6 +588,11 @@
           "operator": "eq",
           "value": false
         }
+      },
+      "checkpoint": {
+        "enabled": false,
+        "activation": "onEnter",
+        "autosave": true
       }
     },
     {
@@ -583,6 +645,11 @@
           "operator": "eq",
           "value": false
         }
+      },
+      "checkpoint": {
+        "enabled": false,
+        "activation": "onEnter",
+        "autosave": true
       }
     },
     {
@@ -635,6 +702,11 @@
           "operator": "eq",
           "value": false
         }
+      },
+      "checkpoint": {
+        "enabled": false,
+        "activation": "onEnter",
+        "autosave": true
       }
     },
     {
@@ -687,6 +759,11 @@
           "operator": "eq",
           "value": false
         }
+      },
+      "checkpoint": {
+        "enabled": false,
+        "activation": "onEnter",
+        "autosave": true
       }
     },
     {
@@ -739,6 +816,11 @@
           "operator": "eq",
           "value": false
         }
+      },
+      "checkpoint": {
+        "enabled": false,
+        "activation": "onEnter",
+        "autosave": true
       }
     },
     {
@@ -997,6 +1079,11 @@
           "operator": "eq",
           "value": false
         }
+      },
+      "checkpoint": {
+        "enabled": false,
+        "activation": "onEnter",
+        "autosave": true
       }
     },
     {
@@ -1093,6 +1180,11 @@
           "operator": "eq",
           "value": false
         }
+      },
+      "checkpoint": {
+        "enabled": false,
+        "activation": "onEnter",
+        "autosave": true
       }
     },
     {
@@ -1189,6 +1281,11 @@
           "operator": "eq",
           "value": false
         }
+      },
+      "checkpoint": {
+        "enabled": false,
+        "activation": "onEnter",
+        "autosave": true
       }
     },
     {
@@ -1229,52 +1326,6 @@
         "flicker": false,
         "flickerAmount": 0.24,
         "flickerSpeed": 7.5
-      }
-    },
-    {
-      "id": "shadow-mrlgjxkp-3y2jd3",
-      "name": "Projetor de sombra",
-      "source": {
-        "kind": "shadow",
-        "asset": ""
-      },
-      "parentId": null,
-      "position": {
-        "x": 0.8319,
-        "y": 0.2437,
-        "z": 2.7748
-      },
-      "rotation": {
-        "x": 0,
-        "y": 0,
-        "z": 0
-      },
-      "scale": {
-        "x": 1,
-        "y": 1,
-        "z": 1
-      },
-      "color": "#000000",
-      "visible": true,
-      "locked": false,
-      "runtime": true,
-      "persistent": false,
-      "shadow": {
-        "width": 2.5,
-        "height": 2.5,
-        "gridX": 6,
-        "gridZ": 6,
-        "lightDirection": {
-          "x": 0,
-          "y": 1,
-          "z": 1
-        },
-        "bias": -0.02,
-        "lightOffset": 1,
-        "color": "#000000",
-        "opacity": 0.65,
-        "blend": "darken",
-        "followPlayer": true
       }
     },
     {
@@ -1360,8 +1411,8 @@
       "parentId": null,
       "position": {
         "x": -0.1359,
-        "y": 1.5,
-        "z": 1.9653
+        "y": 4.7686,
+        "z": -27.3108
       },
       "rotation": {
         "x": 0,
@@ -1369,8 +1420,8 @@
         "z": 0
       },
       "scale": {
-        "x": 8.1462,
-        "y": 1.8753,
+        "x": 4.249,
+        "y": 4.6385,
         "z": 0.3
       },
       "color": "#ffad66",
@@ -1399,6 +1450,11 @@
           "operator": "eq",
           "value": false
         }
+      },
+      "checkpoint": {
+        "enabled": false,
+        "activation": "onEnter",
+        "autosave": true
       }
     }
   ],

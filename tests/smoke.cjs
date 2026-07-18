@@ -19,7 +19,7 @@ for (const preset of ["fire", "smoke", "sparks"]) {
         throw new Error(`Particle ${preset} material library must contain exactly one material; AthenaEnv renders unused material ranges as invalid DMA`);
     }
 }
-for (const marker of ["applyPointerSnap", "togglePivotEditing", "finishBoxSelection", "toggleIsolation", "setupPanelAccordions", "collapsedHierarchy", "applyRecordMaterial", "createLightObject", "applyCampfirePreset", "openCameraPreview", "renderTriggerEvents", "addTriggerAction", "renderUiPreview", "addUiElement", "switchProjectScene", "createProjectScene", "renderSceneManager", "setStartupProjectScene", "moveProjectScene", "exportSceneProjectFile", "withSceneProjectUiLock", "performSceneSave", "documentRevision", "saveQueue", "createAudioObject", "createParticleObject", "createShadowObject", "createSpawnPointObject", "addSpawnPoint", "addScenePortal", "renderPortalEditor", "applyShadowTexture", "renderRuntimeSettings", "updateLegacyParticlePreview", "stepLegacyParticlePreview", "OctahedronGeometry", "addAudio", "addParticle", "addShadow", "renderLogicEditor", "convertTriggerActionsToLogic", "validateVisualScripting"]) {
+for (const marker of ["applyPointerSnap", "togglePivotEditing", "finishBoxSelection", "toggleIsolation", "setupPanelAccordions", "collapsedHierarchy", "applyRecordMaterial", "createLightObject", "applyCampfirePreset", "openCameraPreview", "renderTriggerEvents", "addTriggerAction", "renderUiPreview", "addUiElement", "switchProjectScene", "createProjectScene", "renderSceneManager", "setStartupProjectScene", "moveProjectScene", "exportSceneProjectFile", "withSceneProjectUiLock", "performSceneSave", "documentRevision", "saveQueue", "createAudioObject", "createParticleObject", "createShadowObject", "createSpawnPointObject", "addSpawnPoint", "addScenePortal", "addCheckpoint", "renderPortalEditor", "renderCheckpointEditor", "applyShadowTexture", "renderRuntimeSettings", "updateLegacyParticlePreview", "stepLegacyParticlePreview", "OctahedronGeometry", "addAudio", "addParticle", "addShadow", "renderLogicEditor", "convertTriggerActionsToLogic", "validateVisualScripting"]) {
     if (!editorSource.includes(marker)) throw new Error(`Editor tool missing: ${marker}`);
 }
 for (const marker of ["Heavenfall", "Iniciar Jogo", "CRÉDITOS", "Brendow Vaz"]) {
@@ -31,7 +31,7 @@ for (const marker of ["MENU_AUDIO_ASSET", "updateMenuAudio", "startRuntimeAutopl
 if (source.includes("Render.SHADE_")) {
     throw new Error("AthenaEnv exposes shade_model as numeric Flat/Gouraud values, not Render.SHADE_* constants");
 }
-for (const marker of ["accurate_clipping", "texture_mapping", "runtimeShadows", "runtimeUiMedia", "controlRuntimeVideo", "EDITOR_LOGIC", "runtimeVisualScripts", "actionDisplayVariable", "EDITOR_SCENE_PROJECT", "EDITOR_SCENE_META", "EDITOR_SPAWN_POINTS", "EDITOR_PORTALS", "requestSceneTransition", "freeRuntimeSceneResources", "retireRenderObject", "retainBorrowedNativeView", "retiredNativeViews", "releaseRenderData", "reapRetiredActiveSfx", "persistentRuntimeStream", "persistentState", "portalConditionSatisfied", "suspendRuntimeStream", "runAthenaGame", "runtimeNextSceneTransition"]) {
+for (const marker of ["accurate_clipping", "texture_mapping", "runtimeShadows", "runtimeUiMedia", "controlRuntimeVideo", "EDITOR_LOGIC", "runtimeVisualScripts", "actionDisplayVariable", "actionSaveGame", "actionLoadGame", "EDITOR_SCENE_PROJECT", "EDITOR_SCENE_META", "EDITOR_SPAWN_POINTS", "EDITOR_PORTALS", "EDITOR_CHECKPOINTS", "requestSceneTransition", "freeRuntimeSceneResources", "retireRenderObject", "retainBorrowedNativeView", "retiredNativeViews", "releaseRenderData", "reapRetiredActiveSfx", "persistentRuntimeStream", "persistentState", "portalConditionSatisfied", "saveRuntimeGame", "loadRuntimeGame", "writeRuntimeSaveFile", "System.getMCInfo", "System.rename", "System.copyFile", "suspendRuntimeStream", "runAthenaGame", "runtimeNextSceneTransition"]) {
     if (!source.includes(marker)) throw new Error(`Official Athena runtime integration missing: ${marker}`);
 }
 for (const marker of ["eventPlayerJump", "playerJump: playerJump"]) {
@@ -51,12 +51,12 @@ if (/globalThis\.ATHENA_BOOT_[A-Z_]+\s*=/.test(source.slice(lifecycleLoop))) {
 if (!source.includes("os.getcwd()") || !source.includes('os.chdir(runtimePreviousDirectory)') || !source.includes('os.chdir("..")')) {
     throw new Error("Every transition must restore the directory above assets, including a checked fallback");
 }
-for (const id of ["snap-mode", "pivot-button", "box-select-button", "selection-marquee", "isolate-selection-button", "material-section", "material-texture-mapping", "material-smooth-shading", "material-accurate-clipping", "animation-section", "animation-clip", "light-section", "light-flicker", "light-campfire-preset", "camera-section", "camera-mode", "camera-preview", "add-spawn-button", "add-portal-button", "spawn-section", "spawn-default", "portal-editor", "portal-enabled", "portal-scene", "portal-spawn", "portal-condition-enabled", "portal-condition-variable", "portal-condition-operator", "portal-condition-value", "object-persistent", "trigger-events-editor", "event-action-type", "event-scene", "event-spawn", "event-add-button", "event-convert-logic-button", "scene-picker", "scene-manager-button", "scene-manager-dialog", "scene-manager-list", "scene-manager-export-button", "duplicate-scene-button", "scene-background", "runtime-vsync", "runtime-performance", "player-spawn-x", "player-walk-speed", "ui-mode-button", "ui-editor", "ui-canvas", "ui-inspector", "ui-font-asset", "ui-media-section", "ui-media-asset", "logic-mode-button", "logic-editor", "logic-node-palette", "logic-properties", "audio-tools-section", "add-audio-button", "audio-section", "audio-asset", "particle-tools-section", "particle-section", "particle-preset", "particle-color", "add-shadow-button", "shadow-section", "shadow-texture"]) {
+for (const id of ["snap-mode", "pivot-button", "box-select-button", "selection-marquee", "isolate-selection-button", "material-section", "material-texture-mapping", "material-smooth-shading", "material-accurate-clipping", "animation-section", "animation-clip", "light-section", "light-flicker", "light-campfire-preset", "camera-section", "camera-mode", "camera-preview", "add-spawn-button", "add-portal-button", "add-checkpoint-button", "spawn-section", "spawn-default", "portal-editor", "portal-enabled", "portal-scene", "portal-spawn", "portal-condition-enabled", "portal-condition-variable", "portal-condition-operator", "portal-condition-value", "checkpoint-editor", "checkpoint-enabled", "checkpoint-activation", "checkpoint-autosave", "object-persistent", "trigger-events-editor", "event-action-type", "event-scene", "event-spawn", "event-add-button", "event-convert-logic-button", "scene-picker", "scene-manager-button", "scene-manager-dialog", "scene-manager-list", "scene-manager-export-button", "duplicate-scene-button", "scene-background", "runtime-vsync", "runtime-performance", "player-spawn-x", "player-walk-speed", "ui-mode-button", "ui-editor", "ui-canvas", "ui-inspector", "ui-font-asset", "ui-media-section", "ui-media-asset", "logic-mode-button", "logic-editor", "logic-node-palette", "logic-properties", "audio-tools-section", "add-audio-button", "audio-section", "audio-asset", "particle-tools-section", "particle-section", "particle-preset", "particle-color", "add-shadow-button", "shadow-section", "shadow-texture"]) {
     if (!editorHtml.includes(`id="${id}"`)) throw new Error(`Editor control missing: ${id}`);
 }
 source = source.replace(
     "while (runtimeLoopRunning) {",
-    "globalThis.__levelTest = { baseWalkable, isPlayerValid, applyMovement, colliderHits, updateVerticalMovement, executeAction: executeRuntimeAction, requestSceneTransition, freeResources: freeRuntimeSceneResources, releaseRenderData, getRetiredNativeViewCount: () => runtimeEngineState.retiredNativeViews.length, getSceneTransition: () => runtimeSceneTransition, getRuntimeMessage: () => runtimeMessageText, getVisibility: (id) => runtimeObjectVisibility[id], getPersistentVariable: (id) => readPersistentVariable(id, undefined, runtimeVariableTypes[id]), setPersistentVariable: (id, value) => writePersistentVariable(id, value, runtimeVariableTypes[id]), triggerJump: () => { runtimeVisualScripts.start(); runtimeVisualScripts.playerJump(); }, portalConditionSatisfied, getColliders: () => collisionShapes, getAudio: (id) => runtimeAudioById(id), getParticleEmitter: (id) => particleEmitterById(id), setPlayer: (state) => { playerX = state.x; playerY = state.y; playerZ = state.z; playerVelocityY = state.velocityY; playerGrounded = state.grounded; }, getPlayer: () => ({ x: playerX, y: playerY, z: playerZ, velocityY: playerVelocityY, grounded: playerGrounded }) }; gameState = GAME_STATE_GAME; for (let __smokeFrame = 0; __smokeFrame < 2; __smokeFrame++) {"
+    "globalThis.__levelTest = { baseWalkable, isPlayerValid, applyMovement, colliderHits, updateVerticalMovement, executeAction: executeRuntimeAction, requestSceneTransition, runCheckpoint: runCheckpointPhase, saveGame: saveRuntimeGame, loadGame: loadRuntimeGame, getSaveData: () => runtimeEngineState.saveData, clearSessionCheckpoint: () => { runtimeEngineState.sessionCheckpoint = null; }, clearSceneTransition: () => { runtimeSceneTransition = null; }, freeResources: freeRuntimeSceneResources, releaseRenderData, getRetiredNativeViewCount: () => runtimeEngineState.retiredNativeViews.length, getSceneTransition: () => runtimeSceneTransition, getRuntimeMessage: () => runtimeMessageText, getVisibility: (id) => runtimeObjectVisibility[id], getPersistentVariable: (id) => readPersistentVariable(id, undefined, runtimeVariableTypes[id]), setPersistentVariable: (id, value) => writePersistentVariable(id, value, runtimeVariableTypes[id]), triggerJump: () => { runtimeVisualScripts.start(); runtimeVisualScripts.playerJump(); }, portalConditionSatisfied, getColliders: () => collisionShapes, getAudio: (id) => runtimeAudioById(id), getParticleEmitter: (id) => particleEmitterById(id), setPlayer: (state) => { playerX = state.x; playerY = state.y; playerZ = state.z; if (state.yaw !== undefined) playerYaw = state.yaw; playerVelocityY = state.velocityY; playerGrounded = state.grounded; }, getPlayer: () => ({ x: playerX, y: playerY, z: playerZ, yaw: playerYaw, velocityY: playerVelocityY, grounded: playerGrounded }) }; gameState = GAME_STATE_GAME; for (let __smokeFrame = 0; __smokeFrame < 2; __smokeFrame++) {"
 );
 
 let vertexCount = 0;
@@ -79,6 +79,10 @@ let nextLightId = 0;
 const lightSetCalls = [];
 const assetLoads = [];
 const manifest = require(path.join(__dirname, "..", "assets", "manifest.json"));
+const memoryCardFiles = new Map();
+let systemRenameCalls = 0;
+let systemCopyCalls = 0;
+let forceSystemRenameFailure = false;
 let sandbox;
 
 class MockFont {
@@ -195,10 +199,33 @@ const context = {
         }
     },
     Camera: { position() {}, target() {}, update() {} },
-    os: { chdir() {} },
+    os: {
+        chdir() {},
+        mkdir() { return 0; },
+        remove(filename) { return memoryCardFiles.delete(filename) ? 0 : -2; },
+        rename() { return -38; }
+    },
     std: {
         exists(filename) {
+            if (filename.startsWith("mc0:/")) return memoryCardFiles.has(filename);
             return fs.existsSync(path.join(__dirname, "..", "assets", filename));
+        },
+        loadFile(filename) {
+            return memoryCardFiles.has(filename) ? memoryCardFiles.get(filename) : null;
+        },
+        open(filename, flags) {
+            if (!filename.startsWith("mc0:/") || flags !== "w") return null;
+            let content = "";
+            let closed = false;
+            return {
+                puts(value) { content += String(value); return String(value).length; },
+                flush() {},
+                close() {
+                    if (closed) return;
+                    closed = true;
+                    memoryCardFiles.set(filename, content);
+                }
+            };
         },
         loadScript(filename) {
             const script = fs.readFileSync(path.join(__dirname, "..", "assets", filename), "utf8");
@@ -249,6 +276,11 @@ const context = {
                     fadeFrames: 30,
                     condition: { enabled: true, variableId: "smoke-global-key", operator: "eq", value: true }
                 });
+                sandbox.EDITOR_CHECKPOINTS.push({
+                    triggerId: "smoke-checkpoint",
+                    activation: "onEnter",
+                    autosave: true
+                });
                 for (let index = 0; index < 4; index++) {
                     sandbox.EDITOR_LIGHTS.push({
                         id: `smoke-global-${index}`,
@@ -297,6 +329,23 @@ const context = {
         },
         gc() { throw new Error("Runtime must not force QuickJS collection between scenes"); }
     },
+    System: {
+        getMCInfo(slot) { return slot === 0 ? { type: 2, freemem: 8 * 1024 * 1024, format: 1 } : { type: 0, freemem: 0, format: 0 }; },
+        rename(source, destination) {
+            systemRenameCalls++;
+            if (forceSystemRenameFailure) return -38;
+            if (!memoryCardFiles.has(source)) return -2;
+            memoryCardFiles.set(destination, memoryCardFiles.get(source));
+            memoryCardFiles.delete(source);
+            return 0;
+        },
+        copyFile(source, destination) {
+            systemCopyCalls++;
+            if (!memoryCardFiles.has(source)) return -2;
+            memoryCardFiles.set(destination, memoryCardFiles.get(source));
+            return 0;
+        }
+    },
     Shadows: {
         SHADOW_BLEND_DARKEN: 0, SHADOW_BLEND_ALPHA: 1, SHADOW_BLEND_ADD: 2,
         Projector: MockShadowProjector
@@ -339,7 +388,7 @@ const context = {
 sandbox = vm.createContext(context);
 vm.runInContext(source, sandbox, { filename: sourcePath, timeout: 5000 });
 
-if (!Array.isArray(context.EDITOR_LIGHTS) || !Array.isArray(context.EDITOR_POINT_LIGHTS) || !Array.isArray(context.EDITOR_EVENTS) || !Array.isArray(context.EDITOR_SPAWN_POINTS) || !Array.isArray(context.EDITOR_PORTALS) || !Array.isArray(context.EDITOR_UI) || !Array.isArray(context.EDITOR_AUDIO) || !Array.isArray(context.EDITOR_PARTICLES) || !Array.isArray(context.EDITOR_SHADOWS) || !("EDITOR_CAMERA" in context)) {
+if (!Array.isArray(context.EDITOR_LIGHTS) || !Array.isArray(context.EDITOR_POINT_LIGHTS) || !Array.isArray(context.EDITOR_EVENTS) || !Array.isArray(context.EDITOR_SPAWN_POINTS) || !Array.isArray(context.EDITOR_PORTALS) || !Array.isArray(context.EDITOR_CHECKPOINTS) || !Array.isArray(context.EDITOR_UI) || !Array.isArray(context.EDITOR_AUDIO) || !Array.isArray(context.EDITOR_PARTICLES) || !Array.isArray(context.EDITOR_SHADOWS) || !("EDITOR_CAMERA" in context)) {
     throw new Error("Generated scene must expose lights, events, portals, spawn points, interface, audio, particles, shadows and active camera contracts");
 }
 if (!fontPrints.some((entry) => entry.text === "UI runtime")) throw new Error("Exported UI text must be drawn by Font in the runtime loop");
@@ -459,6 +508,47 @@ if (context.__levelTest.getVisibility(visibilityTarget) !== false) {
 context.__levelTest.executeAction({ type: "teleport", position: { x: 2, y: 0.08, z: 16 } });
 if (context.__levelTest.getPlayer().x !== 2 || context.__levelTest.getPlayer().z !== 16) {
     throw new Error("Teleport actions must affect the runtime player");
+}
+context.__levelTest.setPlayer({ x: 3.5, y: 0.08, z: 14.25, yaw: 1.25, velocityY: 0, grounded: true });
+context.__levelTest.setPersistentVariable("smoke-jump-count", 7);
+context.__levelTest.runCheckpoint("smoke-checkpoint", "onEnter");
+const savePath = "mc0:/HEAVENFALL/save.json";
+if (!memoryCardFiles.has(savePath) || memoryCardFiles.has("mc0:/HEAVENFALL/save.tmp")) {
+    throw new Error("Checkpoint saves must be verified and atomically promoted on the Memory Card");
+}
+if (systemRenameCalls === 0) throw new Error("Memory Card promotion must use AthenaEnv System.rename instead of the generic POSIX wrapper");
+const storedSave = JSON.parse(memoryCardFiles.get(savePath));
+if (storedSave.version !== 1 || storedSave.sceneId !== "main"
+    || storedSave.player.x !== 3.5 || storedSave.player.z !== 14.25 || storedSave.player.yaw !== 1.25
+    || storedSave.variables["smoke-jump-count"] !== 7
+    || storedSave.scenes.main.objects[visibilityTarget].visible !== false) {
+    throw new Error("Memory Card saves must contain the scene, player, variables and persistent visibility");
+}
+context.__levelTest.setPersistentVariable("smoke-jump-count", 8);
+const staleBackup = JSON.parse(memoryCardFiles.get(savePath));
+staleBackup.variables["smoke-jump-count"] = 3;
+memoryCardFiles.set("mc0:/HEAVENFALL/save.bak", JSON.stringify(staleBackup));
+forceSystemRenameFailure = true;
+if (!context.__levelTest.saveGame(false) || !memoryCardFiles.has("mc0:/HEAVENFALL/save.bak")) {
+    throw new Error("Replacing a save must preserve the previous verified file as a backup");
+}
+forceSystemRenameFailure = false;
+if (systemCopyCalls === 0) {
+    throw new Error("Memory Card promotion must fall back to a verified System.copyFile when rename is unsupported");
+}
+memoryCardFiles.set(savePath, "{corrupted");
+context.__levelTest.setPersistentVariable("smoke-jump-count", 99);
+context.__levelTest.executeAction({ type: "visibility", targetIds: [visibilityTarget], mode: "show" });
+context.__levelTest.setPlayer({ x: 9, y: 1, z: 9, yaw: 0, velocityY: 0, grounded: false });
+context.__levelTest.clearSceneTransition();
+context.__levelTest.clearSessionCheckpoint();
+if (!context.__levelTest.loadGame(false)) throw new Error("A valid Memory Card save must load through the normal scene lifecycle");
+const loadedTransition = context.__levelTest.getSceneTransition();
+if (!loadedTransition || loadedTransition.sceneId !== "main" || loadedTransition.player.x !== 3.5
+    || loadedTransition.player.z !== 14.25 || loadedTransition.player.yaw !== 1.25
+    || context.__levelTest.getPersistentVariable("smoke-jump-count") !== 7
+    || context.__levelTest.getSaveData().scenes.main.objects[visibilityTarget].visible !== false) {
+    throw new Error("Continue must fall back to the backup, restore state and pass the saved player position into the next scene boot");
 }
 context.__levelTest.setPlayer(postLoopPlayer);
 if (!context.__levelTest.isPlayerValid(0, 18)) {
@@ -669,7 +759,7 @@ if (fontCreations !== 1 || nextLightId !== 4) {
 if (context.__levelTest.getPersistentVariable("smoke-global-key") !== true) {
     throw new Error("Global variable values must survive loading a different scene");
 }
-if (context.__levelTest.getPersistentVariable("smoke-jump-count") !== 1) {
+if (context.__levelTest.getPersistentVariable("smoke-jump-count") !== 7) {
     throw new Error("The jump counter must survive loading a different scene");
 }
 if (context.__levelTest.getPersistentVariable("jump-count") !== 2) {
