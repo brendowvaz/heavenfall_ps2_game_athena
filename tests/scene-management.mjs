@@ -7,6 +7,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import {
   generateAthenaScene,
   generateSceneProjectManifest,
+  mergeSceneVariables,
   normalizeScene,
   normalizeSceneProject,
   writeJsonAtomic,
@@ -17,27 +18,40 @@ import { withSceneProjectFileLock } from "../editor/scene-project-lock.mjs";
 const migrated = normalizeSceneProject({
   version: 1,
   activeSceneId: "level-two",
+  variables: [{ id: "has-key", name: "Possui chave", type: "boolean", initialValue: false }],
   scenes: [
     { id: "main", name: "Principal", objectCount: 4 },
     { id: "level-two", name: "Templo", uiCount: 2, graphCount: 1, spawnPoints: [{ id: "temple-gate", name: "Portão", default: true }] },
   ],
 });
-assert.equal(migrated.version, 2);
+assert.equal(migrated.version, 3);
 assert.equal(migrated.activeSceneId, "level-two");
 assert.equal(migrated.startupSceneId, "level-two", "Legacy projects should start from their formerly active scene");
 assert.equal(migrated.scenes[1].graphCount, 1);
 assert.equal(migrated.scenes[1].spawnPoints[0].id, "temple-gate");
+assert.equal(migrated.variables[0].id, "has-key");
+assert.deepEqual(
+  mergeSceneVariables([
+    { logic: { variables: migrated.variables } },
+    { logic: { variables: [...migrated.variables, { id: "score", name: "Pontos", type: "number", initialValue: 2 }] } },
+  ]).map((variable) => variable.id),
+  ["has-key", "score"],
+  "Legacy per-scene variables must migrate once into the project catalog",
+);
 
 const project = normalizeSceneProject({
-  version: 2,
+  version: 3,
   activeSceneId: "level-two",
   startupSceneId: "main",
+  variables: migrated.variables,
   scenes: migrated.scenes,
 });
 const manifestSandbox = { globalThis: null };
 manifestSandbox.globalThis = manifestSandbox;
 vm.runInNewContext(generateSceneProjectManifest(project), manifestSandbox);
 assert.equal(manifestSandbox.EDITOR_SCENE_PROJECT.startupSceneId, "main");
+assert.equal(manifestSandbox.EDITOR_SCENE_PROJECT.version, 2);
+assert.equal(manifestSandbox.EDITOR_SCENE_PROJECT.variables[0].id, "has-key");
 assert.deepEqual(
   Array.from(manifestSandbox.EDITOR_SCENE_PROJECT.scenes, (entry) => entry.file),
   ["scenes/main.generated.js", "scenes/level-two.generated.js"],

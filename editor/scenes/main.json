@@ -65,7 +65,8 @@
       "color": "#8bd5f7",
       "visible": true,
       "locked": false,
-      "runtime": true
+      "runtime": true,
+      "persistent": false
     },
     {
       "id": "legacy-scene-0",
@@ -94,6 +95,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "material": {
         "color": "#ffffff",
         "texture": "",
@@ -141,6 +143,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "material": {
         "color": "#ffffff",
         "texture": "",
@@ -188,6 +191,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "material": {
         "color": "#ffffff",
         "texture": "",
@@ -235,6 +239,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "material": {
         "color": "#ffffff",
         "texture": "",
@@ -282,6 +287,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "material": {
         "color": "#ffffff",
         "texture": "",
@@ -329,6 +335,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "material": {
         "color": "#ffffff",
         "texture": "",
@@ -376,6 +383,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "material": {
         "color": "#ffffff",
         "texture": "",
@@ -423,6 +431,7 @@
       "visible": true,
       "locked": true,
       "runtime": false,
+      "persistent": false,
       "material": {
         "color": "#ffffff",
         "texture": "",
@@ -469,7 +478,8 @@
       "color": "#68e0b2",
       "visible": true,
       "locked": false,
-      "runtime": true
+      "runtime": true,
+      "persistent": false
     },
     {
       "id": "collider-brazier-a",
@@ -499,6 +509,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "collider": {
         "trigger": false,
         "cameraBlocker": true
@@ -513,7 +524,13 @@
         "targetSceneId": "",
         "targetSpawnId": "",
         "activation": "onEnter",
-        "fadeFrames": 30
+        "fadeFrames": 30,
+        "condition": {
+          "enabled": false,
+          "variableId": "",
+          "operator": "eq",
+          "value": false
+        }
       }
     },
     {
@@ -544,6 +561,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "collider": {
         "trigger": false,
         "cameraBlocker": true
@@ -558,7 +576,13 @@
         "targetSceneId": "",
         "targetSpawnId": "",
         "activation": "onEnter",
-        "fadeFrames": 30
+        "fadeFrames": 30,
+        "condition": {
+          "enabled": false,
+          "variableId": "",
+          "operator": "eq",
+          "value": false
+        }
       }
     },
     {
@@ -589,6 +613,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "collider": {
         "trigger": false,
         "cameraBlocker": true
@@ -603,7 +628,13 @@
         "targetSceneId": "",
         "targetSpawnId": "",
         "activation": "onEnter",
-        "fadeFrames": 30
+        "fadeFrames": 30,
+        "condition": {
+          "enabled": false,
+          "variableId": "",
+          "operator": "eq",
+          "value": false
+        }
       }
     },
     {
@@ -634,6 +665,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "collider": {
         "trigger": false,
         "cameraBlocker": true
@@ -648,7 +680,13 @@
         "targetSceneId": "",
         "targetSpawnId": "",
         "activation": "onEnter",
-        "fadeFrames": 30
+        "fadeFrames": 30,
+        "condition": {
+          "enabled": false,
+          "variableId": "",
+          "operator": "eq",
+          "value": false
+        }
       }
     },
     {
@@ -679,6 +717,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "collider": {
         "trigger": false,
         "cameraBlocker": true
@@ -693,7 +732,13 @@
         "targetSceneId": "",
         "targetSpawnId": "",
         "activation": "onEnter",
-        "fadeFrames": 30
+        "fadeFrames": 30,
+        "condition": {
+          "enabled": false,
+          "variableId": "",
+          "operator": "eq",
+          "value": false
+        }
       }
     },
     {
@@ -723,6 +768,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "audio": {
         "mode": "stream",
         "autoplay": true,
@@ -761,6 +807,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "particle": {
         "preset": "fire",
         "color": "#ff380a",
@@ -801,6 +848,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "particle": {
         "preset": "smoke",
         "color": "#616b7a",
@@ -841,6 +889,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "particle": {
         "preset": "sparks",
         "color": "#ffb814",
@@ -882,6 +931,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "material": {
         "color": "#8bd5f7",
         "texture": "",
@@ -925,6 +975,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "collider": {
         "trigger": false,
         "cameraBlocker": true
@@ -939,7 +990,13 @@
         "targetSceneId": "",
         "targetSpawnId": "",
         "activation": "onEnter",
-        "fadeFrames": 30
+        "fadeFrames": 30,
+        "condition": {
+          "enabled": false,
+          "variableId": "",
+          "operator": "eq",
+          "value": false
+        }
       }
     },
     {
@@ -970,6 +1027,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "material": {
         "color": "#8bd5f7",
         "texture": "",
@@ -1013,6 +1071,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "collider": {
         "trigger": false,
         "cameraBlocker": true
@@ -1027,7 +1086,13 @@
         "targetSceneId": "",
         "targetSpawnId": "",
         "activation": "onEnter",
-        "fadeFrames": 30
+        "fadeFrames": 30,
+        "condition": {
+          "enabled": false,
+          "variableId": "",
+          "operator": "eq",
+          "value": false
+        }
       }
     },
     {
@@ -1058,6 +1123,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "material": {
         "color": "#8bd5f7",
         "texture": "",
@@ -1101,6 +1167,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "collider": {
         "trigger": false,
         "cameraBlocker": true
@@ -1115,7 +1182,13 @@
         "targetSceneId": "",
         "targetSpawnId": "",
         "activation": "onEnter",
-        "fadeFrames": 30
+        "fadeFrames": 30,
+        "condition": {
+          "enabled": false,
+          "variableId": "",
+          "operator": "eq",
+          "value": false
+        }
       }
     },
     {
@@ -1146,6 +1219,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "light": {
         "type": "ambient",
         "color": "#ffffff",
@@ -1184,6 +1258,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "shadow": {
         "width": 2.5,
         "height": 2.5,
@@ -1230,6 +1305,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "light": {
         "type": "directional",
         "color": "#fff1cf",
@@ -1268,6 +1344,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "spawn": {
         "default": true
       }
@@ -1300,6 +1377,7 @@
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "collider": {
         "trigger": true,
         "cameraBlocker": false
@@ -1314,14 +1392,78 @@
         "targetSceneId": "salao-saida-01",
         "targetSpawnId": "spawn-mrozcqvq-becjqz",
         "activation": "onEnter",
-        "fadeFrames": 30
+        "fadeFrames": 30,
+        "condition": {
+          "enabled": false,
+          "variableId": "",
+          "operator": "eq",
+          "value": false
+        }
       }
     }
   ],
   "ui": [],
   "logic": {
     "version": 1,
-    "variables": [],
-    "graphs": []
+    "variables": [
+      {
+        "id": "jump-count",
+        "name": "Pulos",
+        "type": "number",
+        "initialValue": 0
+      }
+    ],
+    "graphs": [
+      {
+        "id": "global-jump-counter",
+        "name": "Contador global de pulos",
+        "enabled": true,
+        "nodes": [
+          {
+            "id": "jump-event",
+            "type": "eventPlayerJump",
+            "x": 80,
+            "y": 120,
+            "config": {}
+          },
+          {
+            "id": "jump-increment",
+            "type": "actionSetVariable",
+            "x": 340,
+            "y": 120,
+            "config": {
+              "variableId": "jump-count",
+              "operation": "add",
+              "value": 1
+            }
+          },
+          {
+            "id": "jump-display",
+            "type": "actionDisplayVariable",
+            "x": 620,
+            "y": 120,
+            "config": {
+              "variableId": "jump-count",
+              "prefix": "Pulos: ",
+              "duration": 120
+            }
+          }
+        ],
+        "links": [
+          {
+            "id": "jump-to-increment",
+            "from": "jump-event",
+            "fromPort": "next",
+            "to": "jump-increment"
+          },
+          {
+            "id": "increment-to-display",
+            "from": "jump-increment",
+            "fromPort": "next",
+            "to": "jump-display"
+          }
+        ]
+      }
+    ]
   }
 }

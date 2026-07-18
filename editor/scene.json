@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "name": "Salão Saída 01",
+  "name": "Ruínas do Véu Azul",
   "settings": {
     "background": "#07101d",
     "gridSize": 120,
@@ -9,14 +9,14 @@
     "snapMode": "grid",
     "camera": {
       "position": {
-        "x": -3.9957,
-        "y": 17.5751,
-        "z": 19.2506
+        "x": 13.018,
+        "y": 25.7425,
+        "z": 26.2875
       },
       "target": {
-        "x": 1.3234,
-        "y": 3.1365,
-        "z": -1.505
+        "x": 5.8836,
+        "y": 1.5,
+        "z": 1.9653
       }
     },
     "runtime": {
@@ -33,24 +33,23 @@
         "height": 2.25,
         "walkSpeed": 0.125,
         "runSpeed": 0.19,
-        "jumpSpeed": 0.3,
+        "jumpSpeed": 0.5,
         "gravity": 0.014
       }
     }
   },
   "objects": [
     {
-      "id": "cube-mrma4n0n-86qbzb",
-      "name": "Cubo",
+      "id": "environment-root",
+      "name": "Cenário congelado",
       "source": {
-        "kind": "primitive",
-        "asset": "editor_primitives/cube.obj",
-        "primitive": "cube"
+        "kind": "group",
+        "asset": ""
       },
       "parentId": null,
       "position": {
         "x": 0,
-        "y": 0.038,
+        "y": 0,
         "z": 0
       },
       "rotation": {
@@ -59,14 +58,880 @@
         "z": 0
       },
       "scale": {
-        "x": 8.1708,
-        "y": 0.0244,
-        "z": 7.3448
+        "x": 1,
+        "y": 1,
+        "z": 1
       },
       "color": "#8bd5f7",
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false
+    },
+    {
+      "id": "legacy-scene-0",
+      "name": "Cenário — bloco 1",
+      "source": {
+        "kind": "model",
+        "asset": "scene_0.obj"
+      },
+      "parentId": "environment-root",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "material": {
+        "color": "#ffffff",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      },
+      "animation": {
+        "clip": "",
+        "autoplay": false,
+        "loop": true
+      }
+    },
+    {
+      "id": "legacy-scene-1",
+      "name": "Cenário — bloco 2",
+      "source": {
+        "kind": "model",
+        "asset": "scene_1.obj"
+      },
+      "parentId": "environment-root",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "material": {
+        "color": "#ffffff",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      },
+      "animation": {
+        "clip": "",
+        "autoplay": false,
+        "loop": true
+      }
+    },
+    {
+      "id": "legacy-scene-2",
+      "name": "Cenário — bloco 3",
+      "source": {
+        "kind": "model",
+        "asset": "scene_2.obj"
+      },
+      "parentId": "environment-root",
+      "position": {
+        "x": 0,
+        "y": 1.494,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "material": {
+        "color": "#ffffff",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      },
+      "animation": {
+        "clip": "",
+        "autoplay": false,
+        "loop": true
+      }
+    },
+    {
+      "id": "legacy-scene-3",
+      "name": "Cenário — bloco 4",
+      "source": {
+        "kind": "model",
+        "asset": "scene_3.obj"
+      },
+      "parentId": "environment-root",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "material": {
+        "color": "#ffffff",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      },
+      "animation": {
+        "clip": "",
+        "autoplay": false,
+        "loop": true
+      }
+    },
+    {
+      "id": "legacy-scene-4",
+      "name": "Cenário — bloco 5",
+      "source": {
+        "kind": "model",
+        "asset": "scene_4.obj"
+      },
+      "parentId": "environment-root",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "material": {
+        "color": "#ffffff",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      },
+      "animation": {
+        "clip": "",
+        "autoplay": false,
+        "loop": true
+      }
+    },
+    {
+      "id": "legacy-scene-5",
+      "name": "Cenário — bloco 6",
+      "source": {
+        "kind": "model",
+        "asset": "scene_5.obj"
+      },
+      "parentId": "environment-root",
+      "position": {
+        "x": -4.602,
+        "y": -2.7304,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "material": {
+        "color": "#ffffff",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      },
+      "animation": {
+        "clip": "",
+        "autoplay": false,
+        "loop": true
+      }
+    },
+    {
+      "id": "legacy-scene-6",
+      "name": "Cenário — bloco 7",
+      "source": {
+        "kind": "model",
+        "asset": "scene_6.obj"
+      },
+      "parentId": "environment-root",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "material": {
+        "color": "#ffffff",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      },
+      "animation": {
+        "clip": "",
+        "autoplay": false,
+        "loop": true
+      }
+    },
+    {
+      "id": "player-reference",
+      "name": "Jogador (referência)",
+      "source": {
+        "kind": "model",
+        "asset": "player.obj"
+      },
+      "parentId": null,
+      "position": {
+        "x": 0,
+        "y": 0.08,
+        "z": 18
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#d7f3ff",
+      "visible": true,
+      "locked": true,
+      "runtime": false,
+      "persistent": false,
+      "material": {
+        "color": "#ffffff",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      },
+      "animation": {
+        "clip": "",
+        "autoplay": false,
+        "loop": true
+      }
+    },
+    {
+      "id": "collision-root",
+      "name": "Colisões",
+      "source": {
+        "kind": "group",
+        "asset": ""
+      },
+      "parentId": null,
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#68e0b2",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false
+    },
+    {
+      "id": "collider-brazier-a",
+      "name": "Colisão — braseiro A",
+      "source": {
+        "kind": "collider",
+        "asset": "",
+        "collider": "sphere"
+      },
+      "parentId": "collision-root",
+      "position": {
+        "x": -4.55,
+        "y": 1,
+        "z": 17.4
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1.1,
+        "y": 1.1,
+        "z": 1.1
+      },
+      "color": "#68e0b2",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "collider": {
+        "trigger": false,
+        "cameraBlocker": true
+      },
+      "events": {
+        "onEnter": [],
+        "onExit": [],
+        "onInteract": []
+      },
+      "portal": {
+        "enabled": false,
+        "targetSceneId": "",
+        "targetSpawnId": "",
+        "activation": "onEnter",
+        "fadeFrames": 30,
+        "condition": {
+          "enabled": false,
+          "variableId": "",
+          "operator": "eq",
+          "value": false
+        }
+      }
+    },
+    {
+      "id": "collider-brazier-b",
+      "name": "Colisão — braseiro B",
+      "source": {
+        "kind": "collider",
+        "asset": "",
+        "collider": "sphere"
+      },
+      "parentId": "collision-root",
+      "position": {
+        "x": 4.55,
+        "y": 1,
+        "z": 15
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1.1,
+        "y": 1.1,
+        "z": 1.1
+      },
+      "color": "#68e0b2",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "collider": {
+        "trigger": false,
+        "cameraBlocker": true
+      },
+      "events": {
+        "onEnter": [],
+        "onExit": [],
+        "onInteract": []
+      },
+      "portal": {
+        "enabled": false,
+        "targetSceneId": "",
+        "targetSpawnId": "",
+        "activation": "onEnter",
+        "fadeFrames": 30,
+        "condition": {
+          "enabled": false,
+          "variableId": "",
+          "operator": "eq",
+          "value": false
+        }
+      }
+    },
+    {
+      "id": "collider-mqn4vahj-jrwccf",
+      "name": "Colisor caixa",
+      "source": {
+        "kind": "collider",
+        "asset": "",
+        "collider": "box"
+      },
+      "parentId": "collision-root",
+      "position": {
+        "x": -7.2814,
+        "y": 0.653,
+        "z": -1.7025
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 0.3563,
+        "y": 0.7501,
+        "z": 0.1927
+      },
+      "color": "#68e0b2",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "collider": {
+        "trigger": false,
+        "cameraBlocker": true
+      },
+      "events": {
+        "onEnter": [],
+        "onExit": [],
+        "onInteract": []
+      },
+      "portal": {
+        "enabled": false,
+        "targetSceneId": "",
+        "targetSpawnId": "",
+        "activation": "onEnter",
+        "fadeFrames": 30,
+        "condition": {
+          "enabled": false,
+          "variableId": "",
+          "operator": "eq",
+          "value": false
+        }
+      }
+    },
+    {
+      "id": "collider-mqnsd74n-8zfift",
+      "name": "Colisor caixa",
+      "source": {
+        "kind": "collider",
+        "asset": "",
+        "collider": "box"
+      },
+      "parentId": "collision-root",
+      "position": {
+        "x": 3.4754,
+        "y": 1,
+        "z": -27.1918
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 0.5911,
+        "y": 1,
+        "z": 0.6432
+      },
+      "color": "#68e0b2",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "collider": {
+        "trigger": false,
+        "cameraBlocker": true
+      },
+      "events": {
+        "onEnter": [],
+        "onExit": [],
+        "onInteract": []
+      },
+      "portal": {
+        "enabled": false,
+        "targetSceneId": "",
+        "targetSpawnId": "",
+        "activation": "onEnter",
+        "fadeFrames": 30,
+        "condition": {
+          "enabled": false,
+          "variableId": "",
+          "operator": "eq",
+          "value": false
+        }
+      }
+    },
+    {
+      "id": "collider-mqnsl5rv-g4qscv",
+      "name": "Colisor caixa",
+      "source": {
+        "kind": "collider",
+        "asset": "",
+        "collider": "box"
+      },
+      "parentId": "collision-root",
+      "position": {
+        "x": -3.5558,
+        "y": 0.9659,
+        "z": -27.1368
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 0.6118,
+        "y": 1,
+        "z": 0.5466
+      },
+      "color": "#68e0b2",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "collider": {
+        "trigger": false,
+        "cameraBlocker": true
+      },
+      "events": {
+        "onEnter": [],
+        "onExit": [],
+        "onInteract": []
+      },
+      "portal": {
+        "enabled": false,
+        "targetSceneId": "",
+        "targetSpawnId": "",
+        "activation": "onEnter",
+        "fadeFrames": 30,
+        "condition": {
+          "enabled": false,
+          "variableId": "",
+          "operator": "eq",
+          "value": false
+        }
+      }
+    },
+    {
+      "id": "audio-mqstseeq-rlh7su",
+      "name": "Nova fonte de áudio",
+      "source": {
+        "kind": "audio",
+        "asset": "sounds/4pfmg-m8432.wav"
+      },
+      "parentId": null,
+      "position": {
+        "x": 3.1782,
+        "y": 9.783,
+        "z": -1.0882
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#78d8ba",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "audio": {
+        "mode": "stream",
+        "autoplay": true,
+        "loop": true,
+        "volume": 80,
+        "spatial": false,
+        "distance": 14,
+        "pan": 0,
+        "pitch": 0
+      }
+    },
+    {
+      "id": "particle-mqsv2zgn-oj2elz",
+      "name": "Emissor de fogo",
+      "source": {
+        "kind": "particle",
+        "asset": ""
+      },
+      "parentId": null,
+      "position": {
+        "x": 3.3882,
+        "y": 0.3,
+        "z": -1.0882
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#ff9c58",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "particle": {
+        "preset": "fire",
+        "color": "#ff380a",
+        "autoplay": true,
+        "maxParticles": 6,
+        "rate": 8,
+        "lifetime": 70,
+        "speed": 0.035,
+        "spread": 0.4,
+        "size": 0.16,
+        "gravity": -0.0004
+      }
+    },
+    {
+      "id": "particle-mqsv30cf-fr42ui",
+      "name": "Emissor de fumaça",
+      "source": {
+        "kind": "particle",
+        "asset": ""
+      },
+      "parentId": null,
+      "position": {
+        "x": 3.3882,
+        "y": 0.3,
+        "z": -1.0882
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#ff9c58",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "particle": {
+        "preset": "smoke",
+        "color": "#616b7a",
+        "autoplay": true,
+        "maxParticles": 5,
+        "rate": 3.5,
+        "lifetime": 150,
+        "speed": 0.018,
+        "spread": 0.55,
+        "size": 0.24,
+        "gravity": -0.00015
+      }
+    },
+    {
+      "id": "particle-mqsv30tb-ns9soz",
+      "name": "Emissor de faíscas",
+      "source": {
+        "kind": "particle",
+        "asset": ""
+      },
+      "parentId": null,
+      "position": {
+        "x": 3.3882,
+        "y": 0.3,
+        "z": -1.0882
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#ff9c58",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "particle": {
+        "preset": "sparks",
+        "color": "#ffb814",
+        "autoplay": true,
+        "maxParticles": 8,
+        "rate": 10,
+        "lifetime": 48,
+        "speed": 0.045,
+        "spread": 0.2,
+        "size": 0.08,
+        "gravity": 0.0018
+      }
+    },
+    {
+      "id": "cube-mqsv37o3-ik30mv",
+      "name": "Cubo",
+      "source": {
+        "kind": "primitive",
+        "asset": "editor_primitives/cube.obj",
+        "primitive": "cube"
+      },
+      "parentId": null,
+      "position": {
+        "x": 1.1899,
+        "y": 1.0842,
+        "z": -2.7506
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
       "material": {
         "color": "#8bd5f7",
         "texture": "",
@@ -83,7 +948,7 @@
       }
     },
     {
-      "id": "collider-mrma5rac-rh1ftg",
+      "id": "collider-mqsv3hdj-nem4ee",
       "name": "Colisor caixa",
       "source": {
         "kind": "collider",
@@ -92,9 +957,9 @@
       },
       "parentId": null,
       "position": {
-        "x": 0.7446,
-        "y": -0.0077,
-        "z": -0.0545
+        "x": 1.1899,
+        "y": 1.0842,
+        "z": -2.7506
       },
       "rotation": {
         "x": 0,
@@ -102,14 +967,15 @@
         "z": 0
       },
       "scale": {
-        "x": 8.8,
-        "y": 0.0216,
-        "z": 7.989
+        "x": 1,
+        "y": 1,
+        "z": 1
       },
       "color": "#68e0b2",
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "collider": {
         "trigger": false,
         "cameraBlocker": true
@@ -124,21 +990,220 @@
         "targetSceneId": "",
         "targetSpawnId": "",
         "activation": "onEnter",
-        "fadeFrames": 30
+        "fadeFrames": 30,
+        "condition": {
+          "enabled": false,
+          "variableId": "",
+          "operator": "eq",
+          "value": false
+        }
       }
     },
     {
-      "id": "spawn-mrozcqvq-becjqz",
-      "name": "Entrada principal",
+      "id": "sphere-mqsv3t2f-u9f4xz",
+      "name": "Esfera",
       "source": {
-        "kind": "spawn",
-        "asset": ""
+        "kind": "primitive",
+        "asset": "editor_primitives/sphere.obj",
+        "primitive": "sphere"
       },
       "parentId": null,
       "position": {
-        "x": 0.1134,
-        "y": 0.08,
-        "z": 8.2951
+        "x": 8.4307,
+        "y": 1,
+        "z": -6.6116
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "material": {
+        "color": "#8bd5f7",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      }
+    },
+    {
+      "id": "collider-mqsv3van-zazopg",
+      "name": "Colisor esfera",
+      "source": {
+        "kind": "collider",
+        "asset": "",
+        "collider": "sphere"
+      },
+      "parentId": null,
+      "position": {
+        "x": 8.4308,
+        "y": 1,
+        "z": -6.6116
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#68e0b2",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "collider": {
+        "trigger": false,
+        "cameraBlocker": true
+      },
+      "events": {
+        "onEnter": [],
+        "onExit": [],
+        "onInteract": []
+      },
+      "portal": {
+        "enabled": false,
+        "targetSceneId": "",
+        "targetSpawnId": "",
+        "activation": "onEnter",
+        "fadeFrames": 30,
+        "condition": {
+          "enabled": false,
+          "variableId": "",
+          "operator": "eq",
+          "value": false
+        }
+      }
+    },
+    {
+      "id": "plane-mquad1fj-0xucmf",
+      "name": "Plano",
+      "source": {
+        "kind": "primitive",
+        "asset": "editor_primitives/plane.obj",
+        "primitive": "plane"
+      },
+      "parentId": null,
+      "position": {
+        "x": 0.8841,
+        "y": 5.9612,
+        "z": 4.144
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "material": {
+        "color": "#8bd5f7",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      }
+    },
+    {
+      "id": "collider-mquadpg8-88nl6w",
+      "name": "Colisor caixa",
+      "source": {
+        "kind": "collider",
+        "asset": "",
+        "collider": "box"
+      },
+      "parentId": null,
+      "position": {
+        "x": 0.8824,
+        "y": 5.8894,
+        "z": 4.1441
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 2.9568,
+        "y": -0.0181,
+        "z": 2.8734
+      },
+      "color": "#68e0b2",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "collider": {
+        "trigger": false,
+        "cameraBlocker": true
+      },
+      "events": {
+        "onEnter": [],
+        "onExit": [],
+        "onInteract": []
+      },
+      "portal": {
+        "enabled": false,
+        "targetSceneId": "",
+        "targetSpawnId": "",
+        "activation": "onEnter",
+        "fadeFrames": 30,
+        "condition": {
+          "enabled": false,
+          "variableId": "",
+          "operator": "eq",
+          "value": false
+        }
+      }
+    },
+    {
+      "id": "light-mrlgfick-2o3fmn",
+      "name": "Luz ambiente",
+      "source": {
+        "kind": "light",
+        "asset": "",
+        "light": "ambient"
+      },
+      "parentId": null,
+      "position": {
+        "x": 1.7451,
+        "y": 5.7225,
+        "z": 10.7886
       },
       "rotation": {
         "x": 0,
@@ -154,22 +1219,30 @@
       "visible": true,
       "locked": false,
       "runtime": true,
-      "spawn": {
-        "default": true
+      "persistent": false,
+      "light": {
+        "type": "ambient",
+        "color": "#ffffff",
+        "intensity": 0.45,
+        "distance": 12,
+        "castShadow": false,
+        "flicker": false,
+        "flickerAmount": 0.24,
+        "flickerSpeed": 7.5
       }
     },
     {
-      "id": "audio-mrp00loe-4bbzbg",
-      "name": "Nova fonte de áudio",
+      "id": "shadow-mrlgjxkp-3y2jd3",
+      "name": "Projetor de sombra",
       "source": {
-        "kind": "audio",
-        "asset": "sounds/4pfmg-m8432.wav"
+        "kind": "shadow",
+        "asset": ""
       },
       "parentId": null,
       "position": {
-        "x": 0.1134,
-        "y": 1.2,
-        "z": 2.9027
+        "x": 0.8319,
+        "y": 0.2437,
+        "z": 2.7748
       },
       "rotation": {
         "x": 0,
@@ -181,23 +1254,103 @@
         "y": 1,
         "z": 1
       },
-      "color": "#78d8ba",
+      "color": "#000000",
       "visible": true,
       "locked": false,
       "runtime": true,
-      "audio": {
-        "mode": "stream",
-        "autoplay": true,
-        "loop": true,
-        "volume": 80,
-        "spatial": false,
-        "distance": 14,
-        "pan": 0,
-        "pitch": 0
+      "persistent": false,
+      "shadow": {
+        "width": 2.5,
+        "height": 2.5,
+        "gridX": 6,
+        "gridZ": 6,
+        "lightDirection": {
+          "x": 0,
+          "y": 1,
+          "z": 1
+        },
+        "bias": -0.02,
+        "lightOffset": 1,
+        "color": "#000000",
+        "opacity": 0.65,
+        "blend": "darken",
+        "followPlayer": true
       }
     },
     {
-      "id": "portal-mrp01rz6-fqmv4l",
+      "id": "light-mrlglr2f-arxmua",
+      "name": "Luz direcional",
+      "source": {
+        "kind": "light",
+        "asset": "",
+        "light": "directional"
+      },
+      "parentId": null,
+      "position": {
+        "x": 2.8372,
+        "y": 8.03,
+        "z": 4.5654
+      },
+      "rotation": {
+        "x": 126.8699,
+        "y": -30.9638,
+        "z": 145.5501
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#ffc15c",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "light": {
+        "type": "directional",
+        "color": "#fff1cf",
+        "intensity": 2,
+        "distance": 12,
+        "castShadow": true,
+        "flicker": false,
+        "flickerAmount": 0.24,
+        "flickerSpeed": 7.5
+      }
+    },
+    {
+      "id": "ruinas-entrada-principal",
+      "name": "Entrada principal",
+      "source": {
+        "kind": "spawn",
+        "asset": ""
+      },
+      "parentId": null,
+      "position": {
+        "x": 0,
+        "y": 0.08,
+        "z": 18
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#ffc15c",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "spawn": {
+        "default": true
+      }
+    },
+    {
+      "id": "portal-mrozd8ea-jo3nzk",
       "name": "Portal de cena",
       "source": {
         "kind": "collider",
@@ -206,9 +1359,9 @@
       },
       "parentId": null,
       "position": {
-        "x": 0.3234,
-        "y": 3.1365,
-        "z": -2.505
+        "x": -0.1359,
+        "y": 1.5,
+        "z": 1.9653
       },
       "rotation": {
         "x": 0,
@@ -216,14 +1369,15 @@
         "z": 0
       },
       "scale": {
-        "x": 6.0758,
-        "y": 2.9238,
+        "x": 8.1462,
+        "y": 1.8753,
         "z": 0.3
       },
       "color": "#ffad66",
       "visible": true,
       "locked": false,
       "runtime": true,
+      "persistent": false,
       "collider": {
         "trigger": true,
         "cameraBlocker": false
@@ -235,62 +1389,81 @@
       },
       "portal": {
         "enabled": true,
-        "targetSceneId": "main",
-        "targetSpawnId": "ruinas-entrada-principal",
+        "targetSceneId": "salao-saida-01",
+        "targetSpawnId": "spawn-mrozcqvq-becjqz",
         "activation": "onEnter",
-        "fadeFrames": 30
-      }
-    },
-    {
-      "id": "collider-mrpdq3qj-3m0k8e",
-      "name": "Portal de cena cópia",
-      "source": {
-        "kind": "collider",
-        "asset": "",
-        "collider": "box"
-      },
-      "parentId": null,
-      "position": {
-        "x": -7.3323,
-        "y": 3.1365,
-        "z": 2.4192
-      },
-      "rotation": {
-        "x": -180,
-        "y": 88.2574,
-        "z": -180
-      },
-      "scale": {
-        "x": 6.0758,
-        "y": 2.9238,
-        "z": 0.3
-      },
-      "color": "#ffad66",
-      "visible": true,
-      "locked": false,
-      "runtime": true,
-      "collider": {
-        "trigger": true,
-        "cameraBlocker": false
-      },
-      "events": {
-        "onEnter": [],
-        "onExit": [],
-        "onInteract": []
-      },
-      "portal": {
-        "enabled": true,
-        "targetSceneId": "nova-cena",
-        "targetSpawnId": "",
-        "activation": "onEnter",
-        "fadeFrames": 30
+        "fadeFrames": 30,
+        "condition": {
+          "enabled": false,
+          "variableId": "",
+          "operator": "eq",
+          "value": false
+        }
       }
     }
   ],
   "ui": [],
   "logic": {
     "version": 1,
-    "variables": [],
-    "graphs": []
+    "variables": [
+      {
+        "id": "jump-count",
+        "name": "Pulos",
+        "type": "number",
+        "initialValue": 0
+      }
+    ],
+    "graphs": [
+      {
+        "id": "global-jump-counter",
+        "name": "Contador global de pulos",
+        "enabled": true,
+        "nodes": [
+          {
+            "id": "jump-event",
+            "type": "eventPlayerJump",
+            "x": 80,
+            "y": 120,
+            "config": {}
+          },
+          {
+            "id": "jump-increment",
+            "type": "actionSetVariable",
+            "x": 340,
+            "y": 120,
+            "config": {
+              "variableId": "jump-count",
+              "operation": "add",
+              "value": 1
+            }
+          },
+          {
+            "id": "jump-display",
+            "type": "actionDisplayVariable",
+            "x": 620,
+            "y": 120,
+            "config": {
+              "variableId": "jump-count",
+              "prefix": "Pulos: ",
+              "duration": 120
+            }
+          }
+        ],
+        "links": [
+          {
+            "id": "jump-to-increment",
+            "from": "jump-event",
+            "fromPort": "next",
+            "to": "jump-increment"
+          },
+          {
+            "id": "increment-to-display",
+            "from": "jump-increment",
+            "fromPort": "next",
+            "to": "jump-display"
+          }
+        ]
+      }
+    ]
   }
 }

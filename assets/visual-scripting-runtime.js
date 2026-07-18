@@ -31,8 +31,12 @@
         const sourceVariables = source.variables || [];
         for (let variableIndex = 0; variableIndex < sourceVariables.length; variableIndex++) {
             const variable = sourceVariables[variableIndex];
-            variables[variable.id] = copyPrimitive(variable.initialValue);
             variableTypes[variable.id] = variable.type || typeof variable.initialValue;
+            const initialValue = copyPrimitive(variable.initialValue);
+            const sharedValue = typeof callbacks.readVariable === "function"
+                ? callbacks.readVariable(variable.id, initialValue, variableTypes[variable.id])
+                : undefined;
+            variables[variable.id] = sharedValue === undefined ? initialValue : copyPrimitive(sharedValue);
         }
 
         const sourceGraphs = source.graphs || [];
@@ -74,23 +78,40 @@
             }
         }
 
+        function currentVariable(id) {
+            if (variables[id] === undefined) return undefined;
+            if (typeof callbacks.readVariable === "function") {
+                const sharedValue = callbacks.readVariable(id, variables[id], variableTypes[id]);
+                if (sharedValue !== undefined) variables[id] = copyPrimitive(sharedValue);
+            }
+            return variables[id];
+        }
+
+        function storeVariable(id, value) {
+            variables[id] = copyPrimitive(value);
+            if (typeof callbacks.writeVariable === "function") {
+                const sharedValue = callbacks.writeVariable(id, variables[id], variableTypes[id]);
+                if (sharedValue !== undefined) variables[id] = copyPrimitive(sharedValue);
+            }
+        }
+
         function setVariable(config) {
             if (!config || variables[config.variableId] === undefined) return;
             const id = config.variableId;
             const operation = config.operation || "set";
             if (operation === "toggle") {
-                variables[id] = !Boolean(variables[id]);
+                storeVariable(id, !Boolean(currentVariable(id)));
                 return;
             }
             if (operation === "add" || operation === "subtract") {
                 const delta = Number(config.value) || 0;
-                const current = Number(variables[id]) || 0;
-                variables[id] = operation === "add" ? current + delta : current - delta;
+                const current = Number(currentVariable(id)) || 0;
+                storeVariable(id, operation === "add" ? current + delta : current - delta);
                 return;
             }
-            if (variableTypes[id] === "number") variables[id] = Number(config.value) || 0;
-            else if (variableTypes[id] === "string") variables[id] = String(config.value === undefined ? "" : config.value);
-            else variables[id] = Boolean(config.value);
+            if (variableTypes[id] === "number") storeVariable(id, Number(config.value) || 0);
+            else if (variableTypes[id] === "string") storeVariable(id, String(config.value === undefined ? "" : config.value));
+            else storeVariable(id, Boolean(config.value));
         }
 
         function executeFrom(graph, sourceNode, port, payload) {
@@ -104,7 +125,7 @@
                 steps++;
                 const config = node.config || {};
                 if (node.type === "conditionVariable") {
-                    const result = compare(variables[config.variableId], config.operator || "eq", config.value);
+                    const result = compare(currentVariable(config.variableId), config.operator || "eq", config.value);
                     enqueueLinked(queue, entry.graph, node.id, result ? "true" : "false", entry.payload);
                     continue;
                 }
@@ -145,6 +166,7 @@
                     const config = node.config || {};
                     let matches = false;
                     if (type === "start") matches = node.type === "eventStart";
+                    else if (type === "playerJump") matches = node.type === "eventPlayerJump";
                     else if (type === "trigger") {
                         matches = node.type === "eventTrigger"
                             && config.triggerId === payload.triggerId
@@ -200,11 +222,16 @@
             emitEvent("trigger", { triggerId: triggerId, phase: phase });
         }
 
-        function getVariable(id) {
-            return variables[id];
+        function playerJump() {
+            if (!started) return;
+            emitEvent("playerJump", {});
         }
 
-        return { start: start, step: step, trigger: trigger, getVariable: getVariable };
+        function getVariable(id) {
+            return currentVariable(id);
+        }
+
+        return { start: start, step: step, trigger: trigger, playerJump: playerJump, getVariable: getVariable };
     }
 
     root.VisualScriptingRuntime = { create: create };

@@ -7,6 +7,7 @@ const sourcePath = path.join(__dirname, "..", "main.js");
 let source = fs.readFileSync(sourcePath, "utf8");
 const editorSource = fs.readFileSync(path.join(__dirname, "..", "editor", "app.js"), "utf8");
 const editorHtml = fs.readFileSync(path.join(__dirname, "..", "editor", "index.html"), "utf8");
+const visualRuntimeSource = fs.readFileSync(path.join(__dirname, "..", "assets", "visual-scripting-runtime.js"), "utf8");
 const particleAssetDir = path.join(__dirname, "..", "assets", "editor_particles");
 for (const preset of ["fire", "smoke", "sparks"]) {
     const objectSource = fs.readFileSync(path.join(particleAssetDir, `${preset}.obj`), "utf8");
@@ -30,8 +31,11 @@ for (const marker of ["MENU_AUDIO_ASSET", "updateMenuAudio", "startRuntimeAutopl
 if (source.includes("Render.SHADE_")) {
     throw new Error("AthenaEnv exposes shade_model as numeric Flat/Gouraud values, not Render.SHADE_* constants");
 }
-for (const marker of ["accurate_clipping", "texture_mapping", "runtimeShadows", "runtimeUiMedia", "controlRuntimeVideo", "EDITOR_LOGIC", "runtimeVisualScripts", "EDITOR_SCENE_PROJECT", "EDITOR_SCENE_META", "EDITOR_SPAWN_POINTS", "EDITOR_PORTALS", "requestSceneTransition", "freeRuntimeSceneResources", "retireRenderObject", "retainBorrowedNativeView", "retiredNativeViews", "releaseRenderData", "reapRetiredActiveSfx", "persistentRuntimeStream", "suspendRuntimeStream", "runAthenaGame", "runtimeNextSceneTransition"]) {
+for (const marker of ["accurate_clipping", "texture_mapping", "runtimeShadows", "runtimeUiMedia", "controlRuntimeVideo", "EDITOR_LOGIC", "runtimeVisualScripts", "actionDisplayVariable", "EDITOR_SCENE_PROJECT", "EDITOR_SCENE_META", "EDITOR_SPAWN_POINTS", "EDITOR_PORTALS", "requestSceneTransition", "freeRuntimeSceneResources", "retireRenderObject", "retainBorrowedNativeView", "retiredNativeViews", "releaseRenderData", "reapRetiredActiveSfx", "persistentRuntimeStream", "persistentState", "portalConditionSatisfied", "suspendRuntimeStream", "runAthenaGame", "runtimeNextSceneTransition"]) {
     if (!source.includes(marker)) throw new Error(`Official Athena runtime integration missing: ${marker}`);
+}
+for (const marker of ["eventPlayerJump", "playerJump: playerJump"]) {
+    if (!visualRuntimeSource.includes(marker)) throw new Error(`Visual scripting runtime event missing: ${marker}`);
 }
 const runtimeLoopStart = source.indexOf("while (runtimeLoopRunning) {");
 const lifecycleLoop = source.lastIndexOf("while (runtimeNextSceneTransition) {");
@@ -47,12 +51,12 @@ if (/globalThis\.ATHENA_BOOT_[A-Z_]+\s*=/.test(source.slice(lifecycleLoop))) {
 if (!source.includes("os.getcwd()") || !source.includes('os.chdir(runtimePreviousDirectory)') || !source.includes('os.chdir("..")')) {
     throw new Error("Every transition must restore the directory above assets, including a checked fallback");
 }
-for (const id of ["snap-mode", "pivot-button", "box-select-button", "selection-marquee", "isolate-selection-button", "material-section", "material-texture-mapping", "material-smooth-shading", "material-accurate-clipping", "animation-section", "animation-clip", "light-section", "light-flicker", "light-campfire-preset", "camera-section", "camera-mode", "camera-preview", "add-spawn-button", "add-portal-button", "spawn-section", "spawn-default", "portal-editor", "portal-enabled", "portal-scene", "portal-spawn", "trigger-events-editor", "event-action-type", "event-scene", "event-spawn", "event-add-button", "event-convert-logic-button", "scene-picker", "scene-manager-button", "scene-manager-dialog", "scene-manager-list", "scene-manager-export-button", "duplicate-scene-button", "scene-background", "runtime-vsync", "runtime-performance", "player-spawn-x", "player-walk-speed", "ui-mode-button", "ui-editor", "ui-canvas", "ui-inspector", "ui-font-asset", "ui-media-section", "ui-media-asset", "logic-mode-button", "logic-editor", "logic-node-palette", "logic-properties", "audio-tools-section", "add-audio-button", "audio-section", "audio-asset", "particle-tools-section", "particle-section", "particle-preset", "particle-color", "add-shadow-button", "shadow-section", "shadow-texture"]) {
+for (const id of ["snap-mode", "pivot-button", "box-select-button", "selection-marquee", "isolate-selection-button", "material-section", "material-texture-mapping", "material-smooth-shading", "material-accurate-clipping", "animation-section", "animation-clip", "light-section", "light-flicker", "light-campfire-preset", "camera-section", "camera-mode", "camera-preview", "add-spawn-button", "add-portal-button", "spawn-section", "spawn-default", "portal-editor", "portal-enabled", "portal-scene", "portal-spawn", "portal-condition-enabled", "portal-condition-variable", "portal-condition-operator", "portal-condition-value", "object-persistent", "trigger-events-editor", "event-action-type", "event-scene", "event-spawn", "event-add-button", "event-convert-logic-button", "scene-picker", "scene-manager-button", "scene-manager-dialog", "scene-manager-list", "scene-manager-export-button", "duplicate-scene-button", "scene-background", "runtime-vsync", "runtime-performance", "player-spawn-x", "player-walk-speed", "ui-mode-button", "ui-editor", "ui-canvas", "ui-inspector", "ui-font-asset", "ui-media-section", "ui-media-asset", "logic-mode-button", "logic-editor", "logic-node-palette", "logic-properties", "audio-tools-section", "add-audio-button", "audio-section", "audio-asset", "particle-tools-section", "particle-section", "particle-preset", "particle-color", "add-shadow-button", "shadow-section", "shadow-texture"]) {
     if (!editorHtml.includes(`id="${id}"`)) throw new Error(`Editor control missing: ${id}`);
 }
 source = source.replace(
     "while (runtimeLoopRunning) {",
-    "globalThis.__levelTest = { baseWalkable, isPlayerValid, applyMovement, colliderHits, updateVerticalMovement, executeAction: executeRuntimeAction, requestSceneTransition, freeResources: freeRuntimeSceneResources, releaseRenderData, getRetiredNativeViewCount: () => runtimeEngineState.retiredNativeViews.length, getSceneTransition: () => runtimeSceneTransition, getRuntimeMessage: () => runtimeMessageText, getVisibility: (id) => runtimeObjectVisibility[id], getColliders: () => collisionShapes, getAudio: (id) => runtimeAudioById(id), getParticleEmitter: (id) => particleEmitterById(id), setPlayer: (state) => { playerX = state.x; playerY = state.y; playerZ = state.z; playerVelocityY = state.velocityY; playerGrounded = state.grounded; }, getPlayer: () => ({ x: playerX, y: playerY, z: playerZ, velocityY: playerVelocityY, grounded: playerGrounded }) }; gameState = GAME_STATE_GAME; for (let __smokeFrame = 0; __smokeFrame < 2; __smokeFrame++) {"
+    "globalThis.__levelTest = { baseWalkable, isPlayerValid, applyMovement, colliderHits, updateVerticalMovement, executeAction: executeRuntimeAction, requestSceneTransition, freeResources: freeRuntimeSceneResources, releaseRenderData, getRetiredNativeViewCount: () => runtimeEngineState.retiredNativeViews.length, getSceneTransition: () => runtimeSceneTransition, getRuntimeMessage: () => runtimeMessageText, getVisibility: (id) => runtimeObjectVisibility[id], getPersistentVariable: (id) => readPersistentVariable(id, undefined, runtimeVariableTypes[id]), setPersistentVariable: (id, value) => writePersistentVariable(id, value, runtimeVariableTypes[id]), triggerJump: () => { runtimeVisualScripts.start(); runtimeVisualScripts.playerJump(); }, portalConditionSatisfied, getColliders: () => collisionShapes, getAudio: (id) => runtimeAudioById(id), getParticleEmitter: (id) => particleEmitterById(id), setPlayer: (state) => { playerX = state.x; playerY = state.y; playerZ = state.z; playerVelocityY = state.velocityY; playerGrounded = state.grounded; }, getPlayer: () => ({ x: playerX, y: playerY, z: playerZ, velocityY: playerVelocityY, grounded: playerGrounded }) }; gameState = GAME_STATE_GAME; for (let __smokeFrame = 0; __smokeFrame < 2; __smokeFrame++) {"
 );
 
 let vertexCount = 0;
@@ -199,7 +203,28 @@ const context = {
         loadScript(filename) {
             const script = fs.readFileSync(path.join(__dirname, "..", "assets", filename), "utf8");
             vm.runInContext(script, sandbox, { filename });
+            if (filename === "scenes/project.generated.js") {
+                sandbox.EDITOR_SCENE_PROJECT.variables.push(
+                    { id: "smoke-global-key", name: "Smoke global key", type: "boolean", initialValue: true },
+                    { id: "smoke-jump-count", name: "Smoke jump count", type: "number", initialValue: 0 }
+                );
+            }
             if (filename === "scene.generated.js" || filename === "scenes/main.generated.js") {
+                if (sandbox.EDITOR_SCENE[0]) sandbox.EDITOR_SCENE[0].persistent = true;
+                sandbox.EDITOR_LOGIC.graphs.push({
+                    id: "smoke-jump-graph",
+                    name: "Smoke jump graph",
+                    enabled: true,
+                    nodes: [
+                        { id: "smoke-jump-event", type: "eventPlayerJump", config: {} },
+                        { id: "smoke-jump-add", type: "actionSetVariable", config: { variableId: "smoke-jump-count", operation: "add", value: 1 } },
+                        { id: "smoke-jump-message", type: "actionDisplayVariable", config: { variableId: "smoke-jump-count", prefix: "Pulos: ", duration: 120 } }
+                    ],
+                    links: [
+                        { id: "smoke-jump-link-1", from: "smoke-jump-event", fromPort: "next", to: "smoke-jump-add" },
+                        { id: "smoke-jump-link-2", from: "smoke-jump-add", fromPort: "next", to: "smoke-jump-message" }
+                    ]
+                });
                 sandbox.EDITOR_COLLIDERS.push({
                     id: "smoke-trigger",
                     name: "Smoke trigger",
@@ -221,7 +246,8 @@ const context = {
                     targetSceneId: "main",
                     targetSpawnId: "",
                     activation: "onEnter",
-                    fadeFrames: 30
+                    fadeFrames: 30,
+                    condition: { enabled: true, variableId: "smoke-global-key", operator: "eq", value: true }
                 });
                 for (let index = 0; index < 4; index++) {
                     sandbox.EDITOR_LIGHTS.push({
@@ -391,6 +417,20 @@ if (context.__levelTest.getRuntimeMessage() !== "Evento executado no runtime") {
 const smokeTransition = context.__levelTest.getSceneTransition();
 if (!smokeTransition || smokeTransition.sceneId !== "main" || smokeTransition.fadeFrames !== 30) {
     throw new Error("Scene portals must request a catalog-backed dynamic transition");
+}
+if (context.__levelTest.getPersistentVariable("smoke-global-key") !== true) {
+    throw new Error("Project variables must be initialized in the persistent runtime store");
+}
+context.__levelTest.setPersistentVariable("smoke-global-key", false);
+if (context.__levelTest.portalConditionSatisfied({ enabled: true, variableId: "smoke-global-key", operator: "eq", value: true })) {
+    throw new Error("A false portal condition must block the transition");
+}
+context.__levelTest.setPersistentVariable("smoke-global-key", true);
+context.__levelTest.triggerJump();
+if (context.__levelTest.getPersistentVariable("smoke-jump-count") !== 1
+    || context.__levelTest.getPersistentVariable("jump-count") !== 1
+    || context.__levelTest.getRuntimeMessage() !== "Pulos: 1") {
+    throw new Error("The player jump event must increment and display its persistent counter");
 }
 if (!soundEvents.some((entry) => entry.type === "stream-play") || !soundEvents.some((entry) => entry.type === "sfx-play")) {
     throw new Error("Autoplay streams and SFX must reach Athena's Sound runtime");
@@ -626,6 +666,15 @@ if (!soundEvents.some((entry) => entry.type === "sfx-free")) {
 if (fontCreations !== 1 || nextLightId !== 4) {
     throw new Error(`Engine-native singletons must survive scene changes (fonts=${fontCreations}, lights=${nextLightId})`);
 }
+if (context.__levelTest.getPersistentVariable("smoke-global-key") !== true) {
+    throw new Error("Global variable values must survive loading a different scene");
+}
+if (context.__levelTest.getPersistentVariable("smoke-jump-count") !== 1) {
+    throw new Error("The jump counter must survive loading a different scene");
+}
+if (context.__levelTest.getPersistentVariable("jump-count") !== 2) {
+    throw new Error("The configured project jump counter must continue incrementing after loading a different scene");
+}
 context.__levelTest.freeResources();
 if (context.__levelTest.getRetiredNativeViewCount() !== renderObjectFrees + 2) {
     throw new Error("Target-scene RenderObject views must also remain protected after cleanup");
@@ -646,6 +695,9 @@ if (returnSceneResult !== null || context.EDITOR_SCENE_META.id !== "main") {
 }
 if (!assetLoads.slice(returnSceneLoadStart).includes("scene_0.obj")) {
     throw new Error("Returning to a scene must recreate its released render assets");
+}
+if (context.__levelTest.getVisibility(visibilityTarget) !== false) {
+    throw new Error("Persistent object visibility must be restored when returning to a scene");
 }
 if (fontCreations !== 1 || nextLightId !== 4) {
     throw new Error(`Engine-native singletons must also survive the return trip (fonts=${fontCreations}, lights=${nextLightId})`);

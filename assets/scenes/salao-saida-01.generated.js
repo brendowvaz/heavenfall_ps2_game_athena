@@ -193,8 +193,66 @@ globalThis.EDITOR_PORTALS = [
 globalThis.EDITOR_EVENTS = [];
 globalThis.EDITOR_LOGIC = {
   "version": 1,
-  "variables": [],
-  "graphs": []
+  "variables": [
+    {
+      "id": "jump-count",
+      "name": "Pulos",
+      "type": "number",
+      "initialValue": 0
+    }
+  ],
+  "graphs": [
+    {
+      "id": "global-jump-counter",
+      "name": "Contador global de pulos",
+      "enabled": true,
+      "nodes": [
+        {
+          "id": "jump-event",
+          "type": "eventPlayerJump",
+          "x": 80,
+          "y": 120,
+          "config": {}
+        },
+        {
+          "id": "jump-increment",
+          "type": "actionSetVariable",
+          "x": 340,
+          "y": 120,
+          "config": {
+            "variableId": "jump-count",
+            "operation": "add",
+            "value": 1
+          }
+        },
+        {
+          "id": "jump-display",
+          "type": "actionDisplayVariable",
+          "x": 620,
+          "y": 120,
+          "config": {
+            "variableId": "jump-count",
+            "prefix": "Pulos: ",
+            "duration": 120
+          }
+        }
+      ],
+      "links": [
+        {
+          "id": "jump-to-increment",
+          "from": "jump-event",
+          "fromPort": "next",
+          "to": "jump-increment"
+        },
+        {
+          "id": "increment-to-display",
+          "from": "jump-increment",
+          "fromPort": "next",
+          "to": "jump-display"
+        }
+      ]
+    }
+  ]
 };
 globalThis.EDITOR_LIGHTS = [];
 globalThis.EDITOR_POINT_LIGHTS = [];

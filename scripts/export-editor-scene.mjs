@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import {
   generateAthenaScene,
   generateSceneProjectManifest,
+  mergeSceneVariables,
   normalizeScene,
   normalizeSceneProject,
   writeJsonAtomic,
@@ -67,8 +68,11 @@ function sceneSummary(scene) {
 await withSceneProjectFileLock(scenesRoot, async () => {
   const discoveredIds = await canonicalSceneIds();
   let project;
+  let catalogHadVariables = false;
   try {
-    project = normalizeSceneProject(JSON.parse(await readFile(sceneProjectFile, "utf8")));
+    const parsed = JSON.parse(await readFile(sceneProjectFile, "utf8"));
+    catalogHadVariables = Array.isArray(parsed.variables);
+    project = normalizeSceneProject(parsed);
   } catch (error) {
     if (error?.code !== "ENOENT") {
       throw new Error(`O catálogo de cenas está inválido e foi preservado: ${error.message}`);
@@ -127,6 +131,10 @@ await withSceneProjectFileLock(scenesRoot, async () => {
     const scene = await readCanonicalScene(entry.id);
     loadedScenes.set(entry.id, scene);
     Object.assign(entry, sceneSummary(scene));
+  }
+  if (!catalogHadVariables) project.variables = mergeSceneVariables(loadedScenes.values());
+  for (const scene of loadedScenes.values()) {
+    scene.logic.variables = project.variables.map((variable) => ({ ...variable }));
   }
 
   // The index is the canonical commit. Generated scripts are deterministic

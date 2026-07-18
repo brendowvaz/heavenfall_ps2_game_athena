@@ -16,7 +16,11 @@ const runtimeEngineState = {
     // never finalizes them between scenes; model/texture wrappers stay free to
     // be collected after their native data is released.
     retiredNativeViews: [],
-    retiredActiveSfx: []
+    retiredActiveSfx: [],
+    persistentState: {
+        variables: {},
+        scenes: {}
+    }
 };
 
 function initializeRuntimeEngine() {
@@ -56,6 +60,48 @@ function persistentRuntimeStream(asset) {
     const stream = Sound.Stream(key);
     runtimeEngineState.audioStreams[key] = stream;
     return stream;
+}
+
+function coercePersistentVariable(value, type, fallback) {
+    if (type === "number") {
+        const number = Number(value);
+        return Number.isFinite(number) ? number : Number(fallback) || 0;
+    }
+    if (type === "string") return String(value === undefined || value === null ? fallback || "" : value);
+    return Boolean(value);
+}
+
+function initializePersistentVariables(definitions) {
+    const values = runtimeEngineState.persistentState.variables;
+    for (let index = 0; index < definitions.length; index++) {
+        const definition = definitions[index];
+        if (!definition || !definition.id) continue;
+        const stored = Object.prototype.hasOwnProperty.call(values, definition.id)
+            ? values[definition.id]
+            : definition.initialValue;
+        values[definition.id] = coercePersistentVariable(stored, definition.type, definition.initialValue);
+    }
+}
+
+function readPersistentVariable(id, fallback, type) {
+    const values = runtimeEngineState.persistentState.variables;
+    if (!Object.prototype.hasOwnProperty.call(values, id)) {
+        values[id] = coercePersistentVariable(fallback, type, fallback);
+    }
+    return values[id];
+}
+
+function writePersistentVariable(id, value, type) {
+    const values = runtimeEngineState.persistentState.variables;
+    values[id] = coercePersistentVariable(value, type, value);
+    return values[id];
+}
+
+function persistentRuntimeScene(sceneId) {
+    const id = sceneId || "legacy";
+    const scenes = runtimeEngineState.persistentState.scenes;
+    if (!scenes[id]) scenes[id] = { objects: {} };
+    return scenes[id];
 }
 
 function drawRuntimeLoading(message) {
@@ -200,7 +246,7 @@ function createRenderData(asset, material) {
 // differences between PCSX2 HostFS and real hardware.
 globalThis.EDITOR_SCENE = [];
 globalThis.EDITOR_SCENE_META = { id: "", name: "" };
-globalThis.EDITOR_SCENE_PROJECT = { version: 1, startupSceneId: "", scenes: [] };
+globalThis.EDITOR_SCENE_PROJECT = { version: 2, startupSceneId: "", variables: [], scenes: [] };
 globalThis.EDITOR_COLLISION_VERSION = 0;
 globalThis.EDITOR_SETTINGS = {};
 globalThis.EDITOR_COLLIDERS = [];
@@ -247,6 +293,21 @@ if (std.exists(runtimeSceneFile)) {
     std.loadScript(runtimeSceneFile);
     console.log("[VeuAzul] Dados da cena inicial prontos: " + (EDITOR_SCENE_META.id || runtimeSceneFile));
 }
+
+const runtimeVariableDefinitions = EDITOR_SCENE_PROJECT.variables && EDITOR_SCENE_PROJECT.variables.length
+    ? EDITOR_SCENE_PROJECT.variables
+    : (EDITOR_LOGIC.variables || []);
+const runtimeVariableTypes = {};
+for (let variableIndex = 0; variableIndex < runtimeVariableDefinitions.length; variableIndex++) {
+    const variable = runtimeVariableDefinitions[variableIndex];
+    runtimeVariableTypes[variable.id] = variable.type || typeof variable.initialValue;
+}
+initializePersistentVariables(runtimeVariableDefinitions);
+const runtimeLogicDefinition = {
+    version: EDITOR_LOGIC.version || 1,
+    variables: runtimeVariableDefinitions,
+    graphs: EDITOR_LOGIC.graphs || []
+};
 
 const runtimeBackground = EDITOR_SETTINGS.background || { r: 7, g: 15, b: 28, a: 128 };
 CLEAR_COLOR = Color.new(runtimeBackground.r, runtimeBackground.g, runtimeBackground.b, runtimeBackground.a);
@@ -295,6 +356,8 @@ if (EDITOR_SCENE.length === 0 && !usingGeneratedScene) {
 const sceneObjects = [];
 const sceneRenderData = [];
 const runtimeObjectVisibility = {};
+const runtimeObjectDefinitions = {};
+const runtimePersistentScene = persistentRuntimeScene(EDITOR_SCENE_META.id || BOOT_SCENE_ID);
 
 function createRenderPair(asset, material) {
     let data = null;
@@ -326,6 +389,7 @@ function createSceneRenderPair(definition) {
 
 for (let i = 0; i < EDITOR_SCENE.length; i++) {
     const definition = EDITOR_SCENE[i];
+    runtimeObjectDefinitions[definition.id] = definition;
     console.log("[VeuAzul] Carregando objeto " + definition.name + " (" + definition.asset + ")");
     const pair = createSceneRenderPair(definition);
     if (pair) {
@@ -335,7 +399,19 @@ for (let i = 0; i < EDITOR_SCENE.length; i++) {
     }
     sceneObjects.push(pair ? pair.object : null);
     sceneRenderData.push(pair ? pair.data : null);
-    runtimeObjectVisibility[definition.id] = true;
+    const storedObject = runtimePersistentScene.objects[definition.id];
+    runtimeObjectVisibility[definition.id] = definition.persistent === true
+        && storedObject && typeof storedObject.visible === "boolean"
+        ? storedObject.visible
+        : true;
+}
+
+function persistRuntimeObjectVisibility(id) {
+    const definition = runtimeObjectDefinitions[id];
+    if (!definition || definition.persistent !== true) return;
+    const storedObject = runtimePersistentScene.objects[id] || {};
+    storedObject.visible = runtimeObjectVisibility[id] !== false;
+    runtimePersistentScene.objects[id] = storedObject;
 }
 
 const runtimeAnimationCollections = [];
@@ -975,10 +1051,30 @@ function requestSceneTransition(sceneId, spawnId, fadeFrames) {
     return true;
 }
 
+function compareRuntimeVariable(left, operator, right) {
+    if (operator === "neq") return left !== right;
+    if (operator === "gt") return Number(left) > Number(right);
+    if (operator === "gte") return Number(left) >= Number(right);
+    if (operator === "lt") return Number(left) < Number(right);
+    if (operator === "lte") return Number(left) <= Number(right);
+    return left === right;
+}
+
+function portalConditionSatisfied(condition) {
+    if (!condition || condition.enabled !== true) return true;
+    const type = runtimeVariableTypes[condition.variableId];
+    if (!type) return false;
+    return compareRuntimeVariable(
+        readPersistentVariable(condition.variableId, undefined, type),
+        condition.operator || "eq",
+        condition.value
+    );
+}
+
 function runPortalPhase(triggerId, phase) {
     for (let i = 0; i < EDITOR_PORTALS.length; i++) {
         const portal = EDITOR_PORTALS[i];
-        if (portal.triggerId !== triggerId || portal.activation !== phase) continue;
+        if (portal.triggerId !== triggerId || portal.activation !== phase || !portalConditionSatisfied(portal.condition)) continue;
         requestSceneTransition(portal.targetSceneId, portal.targetSpawnId, portal.fadeFrames);
         return;
     }
@@ -999,6 +1095,7 @@ function executeRuntimeAction(action) {
             if (action.mode === "show") runtimeObjectVisibility[id] = true;
             else if (action.mode === "hide") runtimeObjectVisibility[id] = false;
             else runtimeObjectVisibility[id] = !runtimeObjectVisibility[id];
+            persistRuntimeObjectVisibility(id);
         }
         return;
     }
@@ -1197,6 +1294,17 @@ pad.update();
 
 function executeVisualScriptAction(type, config) {
     if (type === "actionMessage") executeRuntimeAction({ type: "message", text: config.text, duration: config.duration });
+    else if (type === "actionDisplayVariable") {
+        const variableType = runtimeVariableTypes[config.variableId];
+        const value = variableType
+            ? readPersistentVariable(config.variableId, undefined, variableType)
+            : "?";
+        executeRuntimeAction({
+            type: "message",
+            text: String(config.prefix || "") + String(value),
+            duration: config.duration
+        });
+    }
     else if (type === "actionVisibility") executeRuntimeAction({
         type: "visibility", targetId: config.targetId, targetIds: config.targetIds, mode: config.mode
     });
@@ -1210,8 +1318,14 @@ function executeVisualScriptAction(type, config) {
 }
 
 const runtimeVisualScripts = typeof VisualScriptingRuntime !== "undefined"
-    ? VisualScriptingRuntime.create(EDITOR_LOGIC, {
+    ? VisualScriptingRuntime.create(runtimeLogicDefinition, {
         execute: executeVisualScriptAction,
+        readVariable: function (id, fallback, type) {
+            return readPersistentVariable(id, fallback, type);
+        },
+        writeVariable: function (id, value, type) {
+            return writePersistentVariable(id, value, type);
+        },
         buttonPressed: function (buttonName) {
             const button = Pads[buttonName];
             return button !== undefined && pad.justPressed(button);
@@ -1313,9 +1427,10 @@ function updatePlayerAndCamera() {
     if (pad.justPressed(Pads.START)) showHud = !showHud;
     if (pad.justPressed(Pads.L1)) shoulderSide *= -1.0;
     if (pad.justPressed(Pads.R3)) cameraYaw = playerYaw;
-    if (pad.justPressed(Pads.SQUARE) && playerGrounded) {
+    if (pad.justPressed(Pads.SQUARE) && playerGrounded && JUMP_SPEED > 0.0) {
         playerVelocityY = JUMP_SPEED;
         playerGrounded = false;
+        if (runtimeVisualScripts) runtimeVisualScripts.playerJump();
     }
 
     const lookX = readAxis(pad.rx);

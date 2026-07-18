@@ -12,8 +12,10 @@ export const LOGIC_NODE_DEFINITIONS = Object.freeze({
   eventTrigger: { category: "event", label: "Trigger", inputs: [], outputs: ["next"] },
   eventInput: { category: "event", label: "Botão pressionado", inputs: [], outputs: ["next"] },
   eventTimer: { category: "event", label: "Temporizador", inputs: [], outputs: ["next"] },
+  eventPlayerJump: { category: "event", label: "Jogador pulou", inputs: [], outputs: ["next"] },
   conditionVariable: { category: "condition", label: "Comparar variável", inputs: ["in"], outputs: ["true", "false"] },
   actionMessage: { category: "action", label: "Mostrar mensagem", inputs: ["in"], outputs: ["next"] },
+  actionDisplayVariable: { category: "action", label: "Mostrar variável", inputs: ["in"], outputs: ["next"] },
   actionVisibility: { category: "action", label: "Alterar visibilidade", inputs: ["in"], outputs: ["next"] },
   actionTeleport: { category: "action", label: "Teletransportar", inputs: ["in"], outputs: ["next"] },
   actionAudio: { category: "action", label: "Controlar áudio", inputs: ["in"], outputs: ["next"] },
@@ -79,6 +81,12 @@ function normalizeNodeConfig(type, config = {}) {
     case "actionMessage":
       return {
         text: safeText(config.text, "Uma passagem foi encontrada.", 160),
+        duration: Math.round(Math.max(1, Math.min(3600, finite(config.duration, 180)))),
+      };
+    case "actionDisplayVariable":
+      return {
+        variableId: safeId(config.variableId, ""),
+        prefix: safeText(config.prefix, "Valor: ", 80),
         duration: Math.round(Math.max(1, Math.min(3600, finite(config.duration, 180)))),
       };
     case "actionVisibility":
@@ -262,7 +270,7 @@ export function validateLogic(logic = {}) {
       if (LOGIC_NODE_DEFINITIONS[node.type]?.category === "event" && !outgoing.has(node.id)) {
         issues.push(`${graph.name}: “${LOGIC_NODE_DEFINITIONS[node.type].label}” não está ligado a uma ação.`);
       }
-      if (["conditionVariable", "actionSetVariable"].includes(node.type) && !variables.has(config.variableId)) {
+      if (["conditionVariable", "actionSetVariable", "actionDisplayVariable"].includes(node.type) && !variables.has(config.variableId)) {
         issues.push(`${graph.name}: um nó referencia uma variável inexistente.`);
       }
       if (node.type === "eventTrigger" && !config.triggerId) issues.push(`${graph.name}: um evento de trigger está sem alvo.`);

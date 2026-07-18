@@ -163,6 +163,10 @@ function finite(value, fallback) {
   return Number.isFinite(number) ? number : fallback;
 }
 
+function primitive(value) {
+  return ["string", "number", "boolean"].includes(typeof value) ? value : false;
+}
+
 function vector(value, fallback) {
   return {
     x: finite(value?.x, fallback.x),
@@ -225,6 +229,14 @@ function normalizePortal(portal) {
     targetSpawnId: String(portal?.targetSpawnId || "").replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96),
     activation: ["onEnter", "onInteract"].includes(portal?.activation) ? portal.activation : "onEnter",
     fadeFrames: Math.round(Math.max(1, Math.min(300, finite(portal?.fadeFrames, 30)))),
+    condition: {
+      enabled: portal?.condition?.enabled === true,
+      variableId: String(portal?.condition?.variableId || "").replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96),
+      operator: ["eq", "neq", "gt", "gte", "lt", "lte"].includes(portal?.condition?.operator)
+        ? portal.condition.operator
+        : "eq",
+      value: primitive(portal?.condition?.value),
+    },
   };
 }
 
@@ -339,6 +351,7 @@ function normalizeScene(input) {
         visible: item?.visible !== false,
         locked: item?.locked === true,
         runtime: item?.runtime !== false,
+        persistent: item?.persistent === true,
         material: ["model", "primitive"].includes(kind) ? {
           color: /^#[0-9a-f]{6}$/i.test(item?.material?.color || "") ? item.material.color : (kind === "primitive" ? "#8bd5f7" : "#ffffff"),
           texture: safeAssetPath(item?.material?.texture),
@@ -589,6 +602,7 @@ function generateAthenaScene(scene, metadata = {}) {
           emissive: runtimeMaterialColor(item.material.emissive),
         },
         animation: item.animation,
+        ...(item.persistent === true ? { persistent: true } : {}),
       };
     });
 
@@ -644,6 +658,7 @@ function generateAthenaScene(scene, metadata = {}) {
       targetSpawnId: item.portal.targetSpawnId,
       activation: item.portal.activation,
       fadeFrames: item.portal.fadeFrames,
+      ...(item.portal.condition?.enabled ? { condition: item.portal.condition } : {}),
     }));
 
   const recordById = new Map(scene.objects.map((item) => [item.id, item]));
@@ -956,6 +971,28 @@ function sceneSummary(scene) {
   };
 }
 
+function normalizeProjectVariables(variables) {
+  return normalizeLogic({ version: 1, variables: Array.isArray(variables) ? variables : [], graphs: [] }).variables;
+}
+
+function mergeSceneVariables(scenes) {
+  const merged = [];
+  const ids = new Set();
+  for (const scene of scenes || []) {
+    for (const variable of scene?.logic?.variables || []) {
+      if (!variable?.id || ids.has(variable.id)) continue;
+      ids.add(variable.id);
+      merged.push(variable);
+    }
+  }
+  return normalizeProjectVariables(merged);
+}
+
+function applyProjectVariables(scene, project) {
+  scene.logic.variables = project.variables.map((variable) => ({ ...variable }));
+  return scene;
+}
+
 function normalizeSceneProject(input = {}) {
   const sourceScenes = Array.isArray(input.scenes) ? input.scenes.slice(0, maxProjectScenes) : [];
   const scenes = [];
@@ -988,13 +1025,20 @@ function normalizeSceneProject(input = {}) {
   const startupSceneId = scenes.some((entry) => entry.id === input.startupSceneId)
     ? input.startupSceneId
     : activeSceneId;
-  return { version: 2, activeSceneId, startupSceneId, scenes };
+  return {
+    version: 3,
+    activeSceneId,
+    startupSceneId,
+    variables: normalizeProjectVariables(input.variables),
+    scenes,
+  };
 }
 
 function generateSceneProjectManifest(project) {
   const runtimeProject = {
-    version: 1,
+    version: 2,
     startupSceneId: project.startupSceneId,
+    variables: normalizeProjectVariables(project.variables),
     scenes: project.scenes.map((entry) => ({
       id: entry.id,
       name: entry.name,
@@ -1121,7 +1165,13 @@ async function recoverSceneProject() {
     } catch {
       // Use the recovered active scene when no startup derivative exists.
     }
-    const project = { version: 2, activeSceneId, startupSceneId, scenes };
+    const project = {
+      version: 3,
+      activeSceneId,
+      startupSceneId,
+      variables: mergeSceneVariables(loadedScenes.values()),
+      scenes,
+    };
     await writeSceneProjectFiles(project);
     await writeStartupScene(project);
     return project;
@@ -1136,9 +1186,10 @@ async function recoverSceneProject() {
   }
   const id = "main";
   const project = {
-    version: 2,
+    version: 3,
     activeSceneId: id,
     startupSceneId: id,
+    variables: normalizeProjectVariables(legacy.logic.variables),
     scenes: [{ id, name: legacy.name, updatedAt: new Date().toISOString(), ...sceneSummary(legacy) }],
   };
   await writeJsonAtomic(path.join(scenesRoot, `${id}.json`), legacy);
@@ -1160,12 +1211,21 @@ async function ensureSceneProject() {
     throw error;
   }
   let project;
+  let catalogHadVariables = false;
   try {
-    project = normalizeSceneProject(JSON.parse(source));
+    const parsed = JSON.parse(source);
+    catalogHadVariables = Array.isArray(parsed.variables);
+    project = normalizeSceneProject(parsed);
   } catch (error) {
     throw new Error(`Scene catalog is invalid; all files were preserved: ${error.message}`);
   }
-  const changed = await reconcileSceneProject(project);
+  let changed = await reconcileSceneProject(project);
+  if (!catalogHadVariables) {
+    const scenes = [];
+    for (const entry of project.scenes) scenes.push(await readCanonicalScene(entry.id));
+    project.variables = mergeSceneVariables(scenes);
+    changed = true;
+  }
   if (changed) await writeJsonAtomic(sceneProjectFile, project);
   await writeTextIfChangedAtomic(generatedSceneProjectFile, generateSceneProjectManifest(project));
   await writeStartupScene(project);
@@ -1178,7 +1238,7 @@ async function readProjectScene(sceneId, project = null) {
   if (!currentProject.scenes.some((entry) => entry.id === id)) throw new Error("Cena não encontrada");
   const destination = path.join(scenesRoot, `${id}.json`);
   if (!isInside(scenesRoot, destination)) throw new Error("Identificador de cena inválido");
-  return readCanonicalScene(id);
+  return applyProjectVariables(await readCanonicalScene(id), currentProject);
 }
 
 async function activateProjectScene(sceneId) {
@@ -1206,6 +1266,8 @@ async function writeScene(scene, sceneId) {
   const id = sanitizeSegment(sceneId || project.activeSceneId).replace(/\.[^.]+$/, "").toLowerCase();
   const entry = project.scenes.find((item) => item.id === id);
   if (!entry) throw new Error("Cena não encontrada");
+  project.variables = normalizeProjectVariables(scene.logic.variables);
+  applyProjectVariables(scene, project);
   Object.assign(entry, { name: scene.name, updatedAt: new Date().toISOString(), ...sceneSummary(scene) });
   project.activeSceneId = id;
   await mkdir(assetsRoot, { recursive: true });
@@ -1228,6 +1290,7 @@ async function createProjectScene(payload) {
     objects: [],
     ui: [],
   });
+  applyProjectVariables(source, project);
   source.name = String(payload?.name || (sourceId ? `${source.name} — cópia` : "Nova cena")).trim().slice(0, 120) || "Nova cena";
   const id = sceneIdFromName(source.name, new Set(project.scenes.map((entry) => entry.id)));
   project.scenes.push({ id, name: source.name, updatedAt: new Date().toISOString(), ...sceneSummary(source) });
@@ -1306,10 +1369,11 @@ async function exportSceneProject() {
   for (const entry of project.scenes) scenes.push({ id: entry.id, scene: await readProjectScene(entry.id, project) });
   return {
     format: "athena-visual-editor-project",
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     activeSceneId: project.activeSceneId,
     startupSceneId: project.startupSceneId,
+    variables: project.variables,
     scenes,
   };
 }
@@ -1604,8 +1668,8 @@ function startBuildAndRun() {
 async function handleApi(request, response, url) {
   if (url.pathname === "/api/capabilities" && request.method === "GET") {
     sendJson(response, 200, {
-      editorSchemaVersion: 13,
-      features: ["materials", "material-runtime", "model-animation", "lights", "point-light-runtime", "light-flicker", "shadow-projectors", "cameras", "camera-modes", "camera-preview", "components", "trigger-events", "visual-scripting", "logic-variables", "multiple-scenes", "scene-manager", "startup-scene", "scene-order", "project-export", "dynamic-scene-loading", "scene-portals", "spawn-points", "runtime-settings", "ui-editor", "ui-runtime", "ui-images", "ui-video", "ui-fonts", "audio", "audio-runtime", "particles", "particle-runtime", "particle-color"],
+      editorSchemaVersion: 15,
+      features: ["materials", "material-runtime", "model-animation", "lights", "point-light-runtime", "light-flicker", "shadow-projectors", "cameras", "camera-modes", "camera-preview", "components", "trigger-events", "visual-scripting", "logic-variables", "global-variables", "player-jump-event", "variable-message", "persistent-state", "multiple-scenes", "scene-manager", "startup-scene", "scene-order", "project-export", "dynamic-scene-loading", "scene-portals", "conditional-portals", "spawn-points", "runtime-settings", "ui-editor", "ui-runtime", "ui-images", "ui-video", "ui-fonts", "audio", "audio-runtime", "particles", "particle-runtime", "particle-color"],
     });
     return true;
   }
@@ -1826,6 +1890,7 @@ export {
   worldTransforms,
   generateAthenaScene,
   generateSceneProjectManifest,
+  mergeSceneVariables,
   convertObjToRuntimeObj,
   writeTextAtomic,
   writeTextIfChangedAtomic,

@@ -67,6 +67,7 @@ const state = {
   collapsedPanels: new Set(),
   previewCameraId: null,
   scenes: [],
+  globalVariables: [],
   activeSceneId: null,
   startupSceneId: null,
   sceneProjectBusy: false,
@@ -328,6 +329,7 @@ function normalizeRecord(record = {}) {
     visible: record.visible !== false,
     locked: record.locked === true,
     runtime: record.runtime !== false,
+    persistent: record.persistent === true,
     ...(["model", "primitive"].includes(kind) ? {
       material: {
         color: materialColor,
@@ -363,6 +365,16 @@ function normalizeRecord(record = {}) {
         targetSpawnId: String(record.portal?.targetSpawnId || "").replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96),
         activation: ["onEnter", "onInteract"].includes(record.portal?.activation) ? record.portal.activation : "onEnter",
         fadeFrames: Math.round(THREE.MathUtils.clamp(clampNumber(record.portal?.fadeFrames, 30), 1, 300)),
+        condition: {
+          enabled: record.portal?.condition?.enabled === true,
+          variableId: String(record.portal?.condition?.variableId || "").replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 96),
+          operator: ["eq", "neq", "gt", "gte", "lt", "lte"].includes(record.portal?.condition?.operator)
+            ? record.portal.condition.operator
+            : "eq",
+          value: ["string", "number", "boolean"].includes(typeof record.portal?.condition?.value)
+            ? record.portal.condition.value
+            : false,
+        },
       },
     } : {}),
     ...(kind === "spawn" ? {
@@ -2044,6 +2056,25 @@ function fillProjectSpawnSelect(select, sceneId, value) {
   select.disabled = !sceneId || points.length === 0;
 }
 
+function fillPortalVariableSelect(select, value) {
+  select.replaceChildren(new Option(state.globalVariables.length ? "Selecione uma variável" : "Crie uma variável no modo LOGIC", ""));
+  for (const variable of state.globalVariables) select.append(new Option(variable.name, variable.id));
+  if (value && !state.globalVariables.some((variable) => variable.id === value)) {
+    select.append(new Option(`${value} · ausente`, value));
+  }
+  select.value = value || "";
+  select.disabled = state.globalVariables.length === 0;
+}
+
+function renderPortalConditionValue(condition) {
+  const input = $("portal-condition-value");
+  const variable = state.globalVariables.find((item) => item.id === condition.variableId);
+  input.disabled = !variable;
+  input.type = variable?.type === "boolean" ? "checkbox" : variable?.type === "number" ? "number" : "text";
+  if (variable?.type === "boolean") input.checked = condition.value === true;
+  else input.value = condition.value === undefined || condition.value === null ? "" : String(condition.value);
+}
+
 function renderPortalEditor(record) {
   const container = $("portal-editor");
   container.hidden = record.source.kind !== "collider";
@@ -2054,14 +2085,24 @@ function renderPortalEditor(record) {
   fillProjectSpawnSelect($("portal-spawn"), record.portal.targetSceneId, record.portal.targetSpawnId);
   $("portal-activation").value = record.portal.activation;
   $("portal-fade").value = record.portal.fadeFrames;
+  record.portal.condition ||= { enabled: false, variableId: "", operator: "eq", value: false };
+  $("portal-condition-enabled").checked = record.portal.condition.enabled;
+  fillPortalVariableSelect($("portal-condition-variable"), record.portal.condition.variableId);
+  $("portal-condition-operator").value = record.portal.condition.operator;
+  $("portal-condition-fields").hidden = !record.portal.condition.enabled;
+  renderPortalConditionValue(record.portal.condition);
   const target = state.scenes.find((entry) => entry.id === record.portal.targetSceneId);
-  $("portal-note").textContent = !record.portal.enabled
+  const baseNote = !record.portal.enabled
     ? "Ative o portal para carregar outra cena por este trigger."
     : !target
       ? "Escolha uma cena de destino existente."
       : projectSpawnPoints(target.id).length
         ? "Somente a cena de destino ficará carregada após o fade."
         : "A cena não possui entrada; será usado o spawn configurado no Runtime.";
+  const conditionVariable = state.globalVariables.find((item) => item.id === record.portal.condition.variableId);
+  $("portal-note").textContent = record.portal.condition.enabled
+    ? `${baseNote} ${conditionVariable ? `Condição: ${conditionVariable.name}.` : "Escolha uma variável global para a condição."}`
+    : baseNote;
 }
 
 function eventActionSummary(action) {
@@ -2259,11 +2300,16 @@ function logicNodeSummary(node) {
   if (node.type === "eventTrigger") return `${eventPhaseLabel(config.phase)} · ${logicTargetName(config.triggerId)}`;
   if (node.type === "eventInput") return `Pad.${config.button}`;
   if (node.type === "eventTimer") return `${config.intervalFrames} quadros${config.repeat ? " · repetir" : ""}`;
+  if (node.type === "eventPlayerJump") return "Dispara somente quando um pulo começa";
   if (node.type === "conditionVariable") {
     const variable = state.document.logic.variables.find((item) => item.id === config.variableId);
     return `${variable?.name || "Variável"} ${{ eq: "=", neq: "≠", gt: ">", gte: "≥", lt: "<", lte: "≤" }[config.operator]} ${String(config.value)}`;
   }
   if (node.type === "actionMessage") return config.text;
+  if (node.type === "actionDisplayVariable") {
+    const variable = state.document.logic.variables.find((item) => item.id === config.variableId);
+    return `${config.prefix}${variable?.name || "Variável"}`;
+  }
   if (node.type === "actionVisibility") return `${config.mode} · ${logicTargetName(config.targetId)}`;
   if (node.type === "actionTeleport") return `${config.position.x}, ${config.position.y}, ${config.position.z}`;
   if (["actionAudio", "actionParticle", "actionVideo"].includes(node.type)) return `${config.mode} · ${logicTargetName(config.targetId)}`;
@@ -2285,10 +2331,16 @@ function logicCommit(mutator, message) {
   const before = serializeScene();
   mutator();
   state.document.logic = normalizeLogic(state.document.logic, uid);
+  syncGlobalVariablesFromDocument();
   pushHistorySnapshot(before);
   renderLogicSummary();
   renderLogicEditor();
   if (message) setStatus(message);
+}
+
+function syncGlobalVariablesFromDocument() {
+  if (!state.document) return;
+  state.globalVariables = state.document.logic.variables.map((variable) => ({ ...variable }));
 }
 
 function renderLogicPalette() {
@@ -2484,12 +2536,14 @@ function bindLogicControl(control, apply, message = "Lógica atualizada") {
     control.addEventListener("input", () => {
       before ||= serializeScene();
       apply(control);
+      syncGlobalVariablesFromDocument();
       markDirty();
       renderLogicSummary();
       renderLogicNodes();
     });
     control.addEventListener("change", () => {
       state.document.logic = normalizeLogic(state.document.logic, uid);
+      syncGlobalVariablesFromDocument();
       pushHistorySnapshot(before);
       before = null;
       renderLogicEditor();
@@ -2544,7 +2598,7 @@ function renderLogicVariables(container) {
   const heading = document.createElement("div");
   heading.className = "logic-variable-heading";
   const title = document.createElement("span");
-  title.textContent = "Variáveis da cena";
+  title.textContent = "Variáveis globais do projeto";
   const add = document.createElement("button");
   add.type = "button";
   add.textContent = "+ Adicionar";
@@ -2580,7 +2634,7 @@ function renderLogicVariables(container) {
   if (!state.document.logic.variables.length) {
     const empty = document.createElement("div");
     empty.className = "logic-empty";
-    empty.textContent = "Crie variáveis para guardar chaves, contadores e estados entre eventos.";
+    empty.textContent = "Crie variáveis para guardar chaves, contadores e estados que sobrevivem às trocas de cena.";
     list.append(empty);
   }
   container.append(list);
@@ -2632,6 +2686,14 @@ function renderLogicNodeProperties(container, graph, node) {
     text.maxLength = 160;
     text.value = config.text;
     container.append(logicField("Mensagem", bindLogicControl(text, (control) => { config.text = control.value; })));
+    appendLogicNumber(container, "Duração em quadros", config.duration, (value) => { config.duration = value; }, 1, 3600);
+  } else if (node.type === "actionDisplayVariable") {
+    const variables = [{ label: "Selecione uma variável", value: "" }, ...state.document.logic.variables.map((variable) => ({ label: variable.name, value: variable.id }))];
+    appendLogicSelect(container, "Variável", variables, config.variableId, (value) => { config.variableId = value; });
+    const prefix = document.createElement("input");
+    prefix.maxLength = 80;
+    prefix.value = config.prefix;
+    container.append(logicField("Texto antes do valor", bindLogicControl(prefix, (control) => { config.prefix = control.value; })));
     appendLogicNumber(container, "Duração em quadros", config.duration, (value) => { config.duration = value; }, 1, 3600);
   } else if (node.type === "actionVisibility") {
     appendLogicSelect(container, "Objeto ou grupo", logicObjectOptions((record) => ["model", "primitive", "group"].includes(record.source.kind)), config.targetId, (value) => { config.targetId = value; });
@@ -2867,6 +2929,17 @@ function deleteLogicVariable(variableId) {
 
 function validateVisualScripting() {
   const issues = validateLogic(state.document.logic);
+  for (const record of state.document.objects) {
+    if (record.source.kind !== "collider" || !record.portal?.enabled) continue;
+    const target = state.scenes.find((entry) => entry.id === record.portal.targetSceneId);
+    if (!target) issues.push(`${record.name}: o portal aponta para uma cena inexistente`);
+    else if (record.portal.targetSpawnId && !projectSpawnPoints(target.id).some((point) => point.id === record.portal.targetSpawnId)) {
+      issues.push(`${record.name}: o ponto de entrada ${record.portal.targetSpawnId} não existe em ${target.name}`);
+    }
+    if (record.portal.condition?.enabled && !state.globalVariables.some((variable) => variable.id === record.portal.condition.variableId)) {
+      issues.push(`${record.name}: a condição do portal não possui uma variável global válida`);
+    }
+  }
   for (const graph of state.document.logic.graphs) {
     for (const node of graph.nodes) {
       if (node.type !== "actionScene") continue;
@@ -3008,6 +3081,8 @@ function renderInspector() {
   $("object-visible").checked = record.visible;
   $("object-locked").checked = record.locked;
   $("object-runtime").checked = record.runtime;
+  $("object-persistent").checked = record.persistent;
+  $("object-persistent-row").hidden = !["model", "primitive"].includes(record.source.kind);
   $("source-kind").textContent = record.source.kind === "primitive"
     ? `Primitiva · ${record.source.primitive}`
     : record.source.kind === "collider"
@@ -3389,6 +3464,12 @@ async function loadDocument(documentData, { preserveHistory = false, dirty = fal
   state.objects.clear();
 
   const normalizedObjects = Array.isArray(documentData?.objects) ? documentData.objects.map(normalizeRecord) : [];
+  const documentLogic = normalizeLogic(documentData?.logic, uid);
+  if (preserveHistory) {
+    state.globalVariables = documentLogic.variables.map((variable) => ({ ...variable }));
+  } else {
+    documentLogic.variables = state.globalVariables.map((variable) => ({ ...variable }));
+  }
   state.document = {
     version: 1,
     name: documentData?.name || "Cena Athena",
@@ -3405,7 +3486,7 @@ async function loadDocument(documentData, { preserveHistory = false, dirty = fal
     },
     objects: normalizedObjects,
     ui: (Array.isArray(documentData?.ui) ? documentData.ui : []).map(normalizeUiElement),
-    logic: normalizeLogic(documentData?.logic, uid),
+    logic: documentLogic,
   };
   if (!state.document.logic.graphs.some((graph) => graph.id === state.selectedLogicGraphId)) {
     state.selectedLogicGraphId = state.document.logic.graphs[0]?.id || null;
@@ -3594,6 +3675,7 @@ async function addScenePortal() {
       targetSpawnId: targetSpawn?.id || "",
       activation: "onEnter",
       fadeFrames: 30,
+      condition: { enabled: false, variableId: "", operator: "eq", value: false },
     },
   });
   setStatus(targetScene ? "Portal adicionado · escolha a cena e a entrada no inspector" : "Portal adicionado · crie outra cena para definir o destino");
@@ -4063,7 +4145,7 @@ function rebuildSpawnPointVisual(record) {
   refreshSelectionVisuals();
 }
 
-function updatePortalFromInspector({ resetSpawn = false } = {}) {
+function updatePortalFromInspector({ resetSpawn = false, resetConditionValue = false } = {}) {
   const record = currentRecord();
   if (!record || record.source.kind !== "collider") return;
   stageFieldHistory();
@@ -4078,6 +4160,20 @@ function updatePortalFromInspector({ resetSpawn = false } = {}) {
   }
   record.portal.activation = $("portal-activation").value;
   record.portal.fadeFrames = Math.round(THREE.MathUtils.clamp(clampNumber($("portal-fade").value, 30), 1, 300));
+  record.portal.condition ||= {};
+  record.portal.condition.enabled = $("portal-condition-enabled").checked;
+  record.portal.condition.variableId = $("portal-condition-variable").value;
+  record.portal.condition.operator = $("portal-condition-operator").value;
+  const conditionVariable = state.globalVariables.find((item) => item.id === record.portal.condition.variableId);
+  if (resetConditionValue) {
+    record.portal.condition.value = conditionVariable?.initialValue ?? false;
+  } else if (conditionVariable?.type === "boolean") {
+    record.portal.condition.value = $("portal-condition-value").checked;
+  } else if (conditionVariable?.type === "number") {
+    record.portal.condition.value = clampNumber($("portal-condition-value").value);
+  } else {
+    record.portal.condition.value = $("portal-condition-value").value;
+  }
   if (record.portal.enabled && !record.collider.trigger) {
     record.collider.trigger = true;
     record.color = "#ffad66";
@@ -4520,6 +4616,7 @@ function renderSceneProject(project = null) {
     state.scenes = Array.isArray(project.scenes) ? project.scenes : [];
     state.activeSceneId = project.activeSceneId || state.scenes[0]?.id || null;
     state.startupSceneId = project.startupSceneId || state.activeSceneId;
+    state.globalVariables = normalizeLogic({ variables: project.variables, graphs: [] }, uid).variables;
   }
   const picker = $("scene-picker");
   picker.replaceChildren();
@@ -4846,6 +4943,7 @@ async function performSceneSave({ quiet = false } = {}) {
       syncAllRecords();
       saveCameraToDocument();
       state.document.name = $("scene-name").value.trim() || "Cena Athena";
+      state.document.logic.variables = state.globalVariables.map((variable) => ({ ...variable }));
       const revision = state.documentRevision;
       const loadGeneration = state.loadGeneration;
       const sceneId = state.activeSceneId || "";
@@ -5322,6 +5420,7 @@ function bindInspector() {
 
   for (const [id, property] of [
     ["object-visible", "visible"], ["object-locked", "locked"], ["object-runtime", "runtime"],
+    ["object-persistent", "persistent"],
   ]) {
     $(id).addEventListener("change", (event) => {
       const record = currentRecord();
@@ -5375,6 +5474,18 @@ function bindInspector() {
   $("portal-enabled").addEventListener("change", () => updatePortalFromInspector());
   $("portal-scene").addEventListener("change", () => updatePortalFromInspector({ resetSpawn: true }));
   for (const id of ["portal-spawn", "portal-activation", "portal-fade"]) {
+    $(id).addEventListener("change", () => updatePortalFromInspector());
+  }
+  $("portal-condition-enabled").addEventListener("change", () => {
+    if ($("portal-condition-enabled").checked && !$("portal-condition-variable").value && state.globalVariables.length) {
+      $("portal-condition-variable").value = state.globalVariables[0].id;
+      updatePortalFromInspector({ resetConditionValue: true });
+    } else {
+      updatePortalFromInspector();
+    }
+  });
+  $("portal-condition-variable").addEventListener("change", () => updatePortalFromInspector({ resetConditionValue: true }));
+  for (const id of ["portal-condition-operator", "portal-condition-value"]) {
     $(id).addEventListener("change", () => updatePortalFromInspector());
   }
   $("spawn-default").addEventListener("change", (event) => {
@@ -5841,7 +5952,7 @@ async function boot() {
       const capabilities = await capabilitiesResponse.json();
       state.serverSchemaVersion = Number(capabilities.editorSchemaVersion) || 0;
     }
-    state.serverOutdated = state.serverSchemaVersion < 13;
+    state.serverOutdated = state.serverSchemaVersion < 15;
     const data = await sceneResponse.json();
     if (!sceneResponse.ok) throw new Error(data.error || "Falha ao abrir a cena");
     await loadDocument(data);

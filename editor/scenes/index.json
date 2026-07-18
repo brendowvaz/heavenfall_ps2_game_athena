@@ -1,15 +1,23 @@
 {
-  "version": 2,
-  "activeSceneId": "salao-saida-01",
+  "version": 3,
+  "activeSceneId": "main",
   "startupSceneId": "main",
+  "variables": [
+    {
+      "id": "jump-count",
+      "name": "Pulos",
+      "type": "number",
+      "initialValue": 0
+    }
+  ],
   "scenes": [
     {
       "id": "main",
       "name": "Ruínas do Véu Azul",
-      "updatedAt": "2026-07-17T13:36:20.044Z",
+      "updatedAt": "2026-07-18T00:35:41.383Z",
       "objectCount": 30,
       "uiCount": 0,
-      "graphCount": 0,
+      "graphCount": 1,
       "spawnPoints": [
         {
           "id": "ruinas-entrada-principal",
@@ -21,10 +29,10 @@
     {
       "id": "salao-saida-01",
       "name": "Salão Saída 01",
-      "updatedAt": "2026-07-17T20:17:49.250Z",
+      "updatedAt": "2026-07-18T00:29:04.943Z",
       "objectCount": 6,
       "uiCount": 0,
-      "graphCount": 0,
+      "graphCount": 1,
       "spawnPoints": [
         {
           "id": "spawn-mrozcqvq-becjqz",
@@ -36,10 +44,10 @@
     {
       "id": "nova-cena",
       "name": "Nova cena",
-      "updatedAt": "2026-07-17T20:17:01.898Z",
+      "updatedAt": "2026-07-18T00:29:04.943Z",
       "objectCount": 1,
       "uiCount": 0,
-      "graphCount": 0,
+      "graphCount": 1,
       "spawnPoints": []
     }
   ]

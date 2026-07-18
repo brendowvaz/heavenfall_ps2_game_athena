@@ -564,6 +564,31 @@
               <span><strong>Fade</strong><small>Duração em quadros</small></span>
               <input id="portal-fade" type="number" min="1" max="300" step="1" value="30">
             </label>
+            <label class="property-row switch-property">
+              <span><strong>Usar condição</strong><small>Só atravessar quando a comparação for verdadeira</small></span>
+              <input id="portal-condition-enabled" type="checkbox">
+            </label>
+            <div id="portal-condition-fields" hidden>
+              <label class="property-row select-property">
+                <span><strong>Variável global</strong><small>Estado compartilhado entre as cenas</small></span>
+                <select id="portal-condition-variable"></select>
+              </label>
+              <label class="property-row select-property">
+                <span><strong>Comparação</strong><small>Operador da condição</small></span>
+                <select id="portal-condition-operator">
+                  <option value="eq">Igual</option>
+                  <option value="neq">Diferente</option>
+                  <option value="gt">Maior</option>
+                  <option value="gte">Maior ou igual</option>
+                  <option value="lt">Menor</option>
+                  <option value="lte">Menor ou igual</option>
+                </select>
+              </label>
+              <label class="property-row">
+                <span><strong>Valor</strong><small>Valor necessário para liberar o portal</small></span>
+                <input id="portal-condition-value" type="text">
+              </label>
+            </div>
             <p id="portal-note" class="compatibility-note">A cena de destino é carregada isoladamente após o fade.</p>
           </div>
           <div id="trigger-events-editor" class="trigger-events-editor" hidden>
@@ -861,6 +886,10 @@
           <label class="property-row switch-property">
             <span><strong>Exportar para Athena</strong><small>Incluir no runtime do PS2</small></span>
             <input id="object-runtime" type="checkbox">
+          </label>
+          <label id="object-persistent-row" class="property-row switch-property">
+            <span><strong>Persistir estado</strong><small>Lembrar a visibilidade ao voltar para a cena</small></span>
+            <input id="object-persistent" type="checkbox">
           </label>
         </section>
 
