@@ -19,7 +19,7 @@ for (const preset of ["fire", "smoke", "sparks"]) {
         throw new Error(`Particle ${preset} material library must contain exactly one material; AthenaEnv renders unused material ranges as invalid DMA`);
     }
 }
-for (const marker of ["applyPointerSnap", "togglePivotEditing", "finishBoxSelection", "toggleIsolation", "setupPanelAccordions", "collapsedHierarchy", "applyRecordMaterial", "createLightObject", "applyCampfirePreset", "openCameraPreview", "renderTriggerEvents", "addTriggerAction", "renderUiPreview", "addUiElement", "switchProjectScene", "createProjectScene", "renderSceneManager", "setStartupProjectScene", "moveProjectScene", "exportSceneProjectFile", "withSceneProjectUiLock", "performSceneSave", "documentRevision", "saveQueue", "createAudioObject", "createParticleObject", "createShadowObject", "createSpawnPointObject", "addSpawnPoint", "addScenePortal", "addCheckpoint", "addGameplayTrigger", "renderPortalEditor", "renderCheckpointEditor", "renderGameplayEditor", "updateGameplayFromInspector", "applyShadowTexture", "renderRuntimeSettings", "updateLegacyParticlePreview", "stepLegacyParticlePreview", "OctahedronGeometry", "addAudio", "addParticle", "addShadow", "renderLogicEditor", "convertTriggerActionsToLogic", "validateVisualScripting"]) {
+for (const marker of ["applyPointerSnap", "togglePivotEditing", "finishBoxSelection", "toggleIsolation", "setupPanelAccordions", "collapsedHierarchy", "applyRecordMaterial", "createLightObject", "applyCampfirePreset", "openCameraPreview", "renderTriggerEvents", "addTriggerAction", "renderUiPreview", "addUiElement", "switchProjectScene", "createProjectScene", "renderSceneManager", "setStartupProjectScene", "moveProjectScene", "exportSceneProjectFile", "withSceneProjectUiLock", "performSceneSave", "documentRevision", "saveQueue", "createAudioObject", "createParticleObject", "createShadowObject", "createSpawnPointObject", "addSpawnPoint", "addScenePortal", "addCheckpoint", "addGameplayTrigger", "renderPortalEditor", "renderCheckpointEditor", "renderGameplayEditor", "updateGameplayFromInspector", "applyShadowTexture", "renderRuntimeSettings", "renderPlayerCharacterOptions", "refreshPlayerAnimationClips", "detectCharacterClips", "renderCharacterStateOptions", "instantiatePrefab", "updateLegacyParticlePreview", "stepLegacyParticlePreview", "OctahedronGeometry", "addAudio", "addParticle", "addShadow", "renderLogicEditor", "convertTriggerActionsToLogic", "validateVisualScripting"]) {
     if (!editorSource.includes(marker)) throw new Error(`Editor tool missing: ${marker}`);
 }
 for (const marker of ["Heavenfall", "Iniciar Jogo", "CRÉDITOS", "Brendow Vaz"]) {
@@ -31,7 +31,7 @@ for (const marker of ["MENU_AUDIO_ASSET", "updateMenuAudio", "startRuntimeAutopl
 if (source.includes("Render.SHADE_")) {
     throw new Error("AthenaEnv exposes shade_model as numeric Flat/Gouraud values, not Render.SHADE_* constants");
 }
-for (const marker of ["accurate_clipping", "texture_mapping", "runtimeShadows", "runtimeUiMedia", "controlRuntimeVideo", "EDITOR_LOGIC", "runtimeVisualScripts", "actionDisplayVariable", "actionSaveGame", "actionLoadGame", "actionDamage", "actionHeal", "actionRespawn", "EDITOR_SCENE_PROJECT", "EDITOR_SCENE_META", "EDITOR_SPAWN_POINTS", "EDITOR_PORTALS", "EDITOR_CHECKPOINTS", "EDITOR_GAMEPLAY_COMPONENTS", "runRuntimeGameplayPhase", "applyRuntimeDamage", "applyRuntimeHealing", "respawnRuntimePlayer", "requestSceneTransition", "freeRuntimeSceneResources", "retireRenderObject", "retainBorrowedNativeView", "retiredNativeViews", "releaseRenderData", "reapRetiredActiveSfx", "persistentRuntimeStream", "persistentState", "portalConditionSatisfied", "saveRuntimeGame", "loadRuntimeGame", "writeRuntimeSaveFile", "System.getMCInfo", "System.rename", "System.copyFile", "suspendRuntimeStream", "runAthenaGame", "runtimeNextSceneTransition"]) {
+for (const marker of ["accurate_clipping", "texture_mapping", "runtimeShadows", "runtimeUiMedia", "controlRuntimeVideo", "EDITOR_LOGIC", "runtimeVisualScripts", "actionDisplayVariable", "actionSaveGame", "actionLoadGame", "actionDamage", "actionHeal", "actionRespawn", "actionCharacterState", "EDITOR_SCENE_PROJECT", "EDITOR_SCENE_META", "EDITOR_SPAWN_POINTS", "EDITOR_PORTALS", "EDITOR_CHECKPOINTS", "EDITOR_GAMEPLAY_COMPONENTS", "runRuntimeGameplayPhase", "applyRuntimeDamage", "applyRuntimeHealing", "respawnRuntimePlayer", "createRuntimeCharacterController", "setRuntimeCharacterState", "updateRuntimeCharacterStates", "requestSceneTransition", "freeRuntimeSceneResources", "retireRenderObject", "retainBorrowedNativeView", "retiredNativeViews", "releaseRenderData", "reapRetiredActiveSfx", "persistentRuntimeStream", "persistentState", "portalConditionSatisfied", "saveRuntimeGame", "loadRuntimeGame", "writeRuntimeSaveFile", "System.getMCInfo", "System.rename", "System.copyFile", "suspendRuntimeStream", "runAthenaGame", "runtimeNextSceneTransition"]) {
     if (!source.includes(marker)) throw new Error(`Official Athena runtime integration missing: ${marker}`);
 }
 for (const marker of ["eventPlayerJump", "playerJump: playerJump", "eventGameplay", "gameplay: gameplay"]) {
@@ -51,7 +51,7 @@ if (/globalThis\.ATHENA_BOOT_[A-Z_]+\s*=/.test(source.slice(lifecycleLoop))) {
 if (!source.includes("os.getcwd()") || !source.includes('os.chdir(runtimePreviousDirectory)') || !source.includes('os.chdir("..")')) {
     throw new Error("Every transition must restore the directory above assets, including a checked fallback");
 }
-for (const id of ["snap-mode", "pivot-button", "box-select-button", "selection-marquee", "isolate-selection-button", "material-section", "material-texture-mapping", "material-smooth-shading", "material-accurate-clipping", "animation-section", "animation-clip", "light-section", "light-flicker", "light-campfire-preset", "camera-section", "camera-mode", "camera-preview", "add-spawn-button", "add-portal-button", "add-checkpoint-button", "spawn-section", "spawn-default", "portal-editor", "portal-enabled", "portal-scene", "portal-spawn", "portal-condition-enabled", "portal-condition-variable", "portal-condition-operator", "portal-condition-value", "checkpoint-editor", "checkpoint-enabled", "checkpoint-activation", "checkpoint-autosave", "gameplay-section", "gameplay-health-enabled", "gameplay-damage-enabled", "gameplay-collectible-enabled", "gameplay-interactable-enabled", "gameplay-death-zone-enabled", "player-health-enabled", "player-health-maximum", "object-persistent", "trigger-events-editor", "event-action-type", "event-scene", "event-spawn", "event-add-button", "event-convert-logic-button", "scene-picker", "scene-manager-button", "scene-manager-dialog", "scene-manager-list", "scene-manager-export-button", "duplicate-scene-button", "scene-background", "runtime-vsync", "runtime-performance", "player-spawn-x", "player-walk-speed", "ui-mode-button", "ui-editor", "ui-canvas", "ui-inspector", "ui-font-asset", "ui-media-section", "ui-media-asset", "logic-mode-button", "logic-editor", "logic-node-palette", "logic-properties", "audio-tools-section", "add-audio-button", "audio-section", "audio-asset", "particle-tools-section", "particle-section", "particle-preset", "particle-color", "add-shadow-button", "shadow-section", "shadow-texture"]) {
+for (const id of ["snap-mode", "pivot-button", "box-select-button", "selection-marquee", "isolate-selection-button", "material-section", "material-texture-mapping", "material-smooth-shading", "material-accurate-clipping", "animation-section", "animation-clip", "character-enabled", "character-state-idle", "character-state-death", "character-detect", "player-model-asset", "player-character-enabled", "player-character-idle", "player-character-death", "player-character-detect", "prefab-search", "prefab-category", "light-section", "light-flicker", "light-campfire-preset", "camera-section", "camera-mode", "camera-preview", "add-spawn-button", "add-portal-button", "add-checkpoint-button", "spawn-section", "spawn-default", "portal-editor", "portal-enabled", "portal-scene", "portal-spawn", "portal-condition-enabled", "portal-condition-variable", "portal-condition-operator", "portal-condition-value", "checkpoint-editor", "checkpoint-enabled", "checkpoint-activation", "checkpoint-autosave", "gameplay-section", "gameplay-health-enabled", "gameplay-damage-enabled", "gameplay-collectible-enabled", "gameplay-interactable-enabled", "gameplay-death-zone-enabled", "player-health-enabled", "player-health-maximum", "object-persistent", "trigger-events-editor", "event-action-type", "event-scene", "event-spawn", "event-add-button", "event-convert-logic-button", "scene-picker", "scene-manager-button", "scene-manager-dialog", "scene-manager-list", "scene-manager-export-button", "duplicate-scene-button", "scene-background", "runtime-vsync", "runtime-performance", "player-spawn-x", "player-walk-speed", "ui-mode-button", "ui-editor", "ui-canvas", "ui-inspector", "ui-font-asset", "ui-media-section", "ui-media-asset", "logic-mode-button", "logic-editor", "logic-node-palette", "logic-properties", "audio-tools-section", "add-audio-button", "audio-section", "audio-asset", "particle-tools-section", "particle-section", "particle-preset", "particle-color", "add-shadow-button", "shadow-section", "shadow-texture"]) {
     if (!editorHtml.includes(`id="${id}"`)) throw new Error(`Editor control missing: ${id}`);
 }
 source = source.replace(
@@ -74,6 +74,7 @@ const rectCalls = [];
 const soundEvents = [];
 const videoEvents = [];
 const shadowEvents = [];
+const animationEvents = [];
 const imageDraws = [];
 let nextLightId = 0;
 const lightSetCalls = [];
@@ -158,7 +159,17 @@ class MockRenderObject {
     render() {
         drawCalls++;
     }
+    playAnim(animation, loop) { animationEvents.push({ animation: animation?.name || animation, loop }); }
+    isPlayingAnim() { return false; }
     free() { renderObjectFrees++; }
+}
+
+class MockAnimCollection {
+    constructor(asset) {
+        this.asset = asset;
+        for (const name of ["Idle", "Walk", "Run", "Jump", "Fall", "Attack", "Hurt", "Death"]) this[name] = { name };
+        this[0] = this.Idle;
+    }
 }
 
 const neutralPad = {
@@ -185,6 +196,7 @@ const context = {
     Video: MockVideo,
     RenderData: MockRenderData,
     RenderObject: MockRenderObject,
+    AnimCollection: MockAnimCollection,
     Screen: {
         CT32: 0, Z16S: 1, DEPTH_TEST_ENABLE: 2, DEPTH_TEST_METHOD: 3, DEPTH_GEQUAL: 4,
         getMode: () => ({ width: 640, height: 448 }),
@@ -242,6 +254,11 @@ const context = {
                 sandbox.EDITOR_SETTINGS.player.health = {
                     enabled: true, maximum: 100, initial: 100,
                     invulnerabilityFrames: 0, respawnOnDeath: true, showHud: true
+                };
+                sandbox.EDITOR_SETTINGS.player.modelAsset = "synthetic-player.gltf";
+                sandbox.EDITOR_SETTINGS.player.character = {
+                    enabled: true, initialState: "idle", hurtFrames: 4, attackFrames: 6,
+                    states: { idle: "Idle", walk: "Walk", run: "Run", jump: "Jump", fall: "Fall", attack: "Attack", hurt: "Hurt", death: "Death" }
                 };
                 const gameplayVisualId = sandbox.EDITOR_SCENE[0].id;
                 sandbox.EDITOR_GAMEPLAY_COMPONENTS.push(
@@ -403,6 +420,13 @@ vm.runInContext(source, sandbox, { filename: sourcePath, timeout: 5000 });
 
 if (!Array.isArray(context.EDITOR_LIGHTS) || !Array.isArray(context.EDITOR_POINT_LIGHTS) || !Array.isArray(context.EDITOR_EVENTS) || !Array.isArray(context.EDITOR_SPAWN_POINTS) || !Array.isArray(context.EDITOR_PORTALS) || !Array.isArray(context.EDITOR_CHECKPOINTS) || !Array.isArray(context.EDITOR_UI) || !Array.isArray(context.EDITOR_AUDIO) || !Array.isArray(context.EDITOR_PARTICLES) || !Array.isArray(context.EDITOR_SHADOWS) || !("EDITOR_CAMERA" in context)) {
     throw new Error("Generated scene must expose lights, events, portals, spawn points, interface, audio, particles, shadows and active camera contracts");
+}
+if (!animationEvents.some((entry) => entry.animation === "Idle" && entry.loop === true)) {
+    throw new Error("The animated player component must start its configured idle clip through RenderObject.playAnim");
+}
+context.__levelTest.executeAction({ type: "character", targetId: "__player__", state: "attack", durationFrames: 6 });
+if (!animationEvents.some((entry) => entry.animation === "Attack" && entry.loop === false)) {
+    throw new Error("Gameplay actions must switch a character to a configured non-looping state");
 }
 if (!fontPrints.some((entry) => entry.text === "UI runtime")) throw new Error("Exported UI text must be drawn by Font in the runtime loop");
 if (!rectCalls.some((entry) => entry.x === 12 && entry.y === 24 && entry.width === 180 && entry.height === 40)) {

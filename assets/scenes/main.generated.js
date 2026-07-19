@@ -27,6 +27,23 @@ globalThis.EDITOR_SETTINGS = {
     "runSpeed": 0.19,
     "jumpSpeed": 0.5,
     "gravity": 0.014,
+    "modelAsset": "player.obj",
+    "character": {
+      "enabled": false,
+      "initialState": "idle",
+      "hurtFrames": 24,
+      "attackFrames": 30,
+      "states": {
+        "idle": "",
+        "walk": "",
+        "run": "",
+        "jump": "",
+        "fall": "",
+        "attack": "",
+        "hurt": "",
+        "death": ""
+      }
+    },
     "health": {
       "enabled": true,
       "maximum": 100,

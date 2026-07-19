@@ -13,6 +13,7 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as THREE from "three";
+import { builtinPrefabs } from "./builtin-prefabs.mjs";
 import { withSceneProjectFileLock } from "./scene-project-lock.mjs";
 import { normalizeLogic } from "./visual-scripting.js";
 
@@ -290,6 +291,20 @@ function normalizeGameplay(gameplay, kind) {
   };
 }
 
+const characterAnimationStates = ["idle", "walk", "run", "jump", "fall", "attack", "hurt", "death"];
+
+function normalizeCharacter(character, supported = true) {
+  const states = {};
+  for (const stateName of characterAnimationStates) states[stateName] = String(character?.states?.[stateName] || "").slice(0, 120);
+  return {
+    enabled: supported && character?.enabled === true,
+    initialState: characterAnimationStates.includes(character?.initialState) ? character.initialState : "idle",
+    hurtFrames: Math.round(Math.max(1, Math.min(600, finite(character?.hurtFrames, 24)))),
+    attackFrames: Math.round(Math.max(1, Math.min(600, finite(character?.attackFrames, 30)))),
+    states,
+  };
+}
+
 function normalizeEvents(events) {
   return Object.fromEntries(eventPhases.map((phase) => [
     phase,
@@ -359,6 +374,8 @@ function normalizeScene(input) {
           runSpeed: Math.max(0.01, Math.min(3, finite(input?.settings?.runtime?.player?.runSpeed, 0.19))),
           jumpSpeed: Math.max(0, Math.min(2, finite(input?.settings?.runtime?.player?.jumpSpeed, 0.3))),
           gravity: Math.max(0.0001, Math.min(0.25, finite(input?.settings?.runtime?.player?.gravity, 0.014))),
+          modelAsset: safeAssetPath(input?.settings?.runtime?.player?.modelAsset || "player.obj") || "player.obj",
+          character: normalizeCharacter(input?.settings?.runtime?.player?.character),
           health: {
             enabled: input?.settings?.runtime?.player?.health?.enabled === true,
             maximum: Math.round(Math.max(1, Math.min(999999, finite(input?.settings?.runtime?.player?.health?.maximum, 100)))),
@@ -435,6 +452,7 @@ function normalizeScene(input) {
           autoplay: item?.animation?.autoplay === true,
           loop: item?.animation?.loop !== false,
         } : undefined,
+        character: kind === "model" ? normalizeCharacter(item?.character) : undefined,
         collider: kind === "collider" ? {
           trigger: item?.collider?.trigger === true || item?.portal?.enabled === true || item?.checkpoint?.enabled === true || gameplayTrigger,
           cameraBlocker: item?.portal?.enabled === true || item?.checkpoint?.enabled === true || gameplayTrigger
@@ -670,6 +688,7 @@ function generateAthenaScene(scene, metadata = {}) {
           emissive: runtimeMaterialColor(item.material.emissive),
         },
         animation: item.animation,
+        character: item.character?.enabled ? item.character : undefined,
         ...(item.persistent === true ? { persistent: true } : {}),
       };
     });
@@ -1011,16 +1030,27 @@ async function listPrefabs() {
   await mkdir(prefabsRoot, { recursive: true });
   const files = (await readdir(prefabsRoot, { withFileTypes: true }))
     .filter((entry) => entry.isFile() && entry.name.endsWith(".json"));
-  const prefabs = [];
+  const prefabs = builtinPrefabs.map((source) => ({
+    ...source,
+    objects: normalizeScene({ name: source.name, objects: source.objects }).objects,
+  }));
   for (const file of files) {
     try {
       const prefab = JSON.parse(await readFile(path.join(prefabsRoot, file.name), "utf8"));
-      prefabs.push(prefab);
+      prefabs.push({
+        ...prefab,
+        builtin: false,
+        category: String(prefab.category || "custom").slice(0, 40),
+        description: String(prefab.description || "Prefab criado no projeto.").slice(0, 240),
+        icon: String(prefab.icon || "PF").slice(0, 3),
+      });
     } catch {
       // Ignore malformed prefab files so one bad file cannot hide the library.
     }
   }
-  return prefabs.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  return prefabs.sort((a, b) => Number(b.builtin === true) - Number(a.builtin === true)
+    || String(a.category).localeCompare(String(b.category))
+    || String(a.name).localeCompare(String(b.name)));
 }
 
 async function savePrefab(payload) {
@@ -1028,9 +1058,13 @@ async function savePrefab(payload) {
   const id = sanitizeSegment(payload?.id || `${name}-${Date.now().toString(36)}`).replace(/\.[^.]+$/, "");
   const normalized = normalizeScene({ name, objects: payload?.objects || [] });
   const prefab = {
-    version: 1,
+    version: 2,
     id,
     name,
+    category: "custom",
+    description: String(payload?.description || "Prefab criado no projeto.").slice(0, 240),
+    icon: "PF",
+    builtin: false,
     createdAt: new Date().toISOString(),
     objects: normalized.objects,
   };
@@ -1793,8 +1827,8 @@ function startBuildAndRun() {
 async function handleApi(request, response, url) {
   if (url.pathname === "/api/capabilities" && request.method === "GET") {
     sendJson(response, 200, {
-      editorSchemaVersion: 17,
-      features: ["materials", "material-runtime", "model-animation", "lights", "point-light-runtime", "light-flicker", "shadow-projectors", "cameras", "camera-modes", "camera-preview", "components", "gameplay-components", "health", "damage", "collectibles", "interactables", "death-zones", "trigger-events", "visual-scripting", "gameplay-events", "logic-variables", "global-variables", "player-jump-event", "variable-message", "persistent-state", "save-game", "memory-card-save", "checkpoints", "continue-menu", "multiple-scenes", "scene-manager", "startup-scene", "scene-order", "project-export", "dynamic-scene-loading", "scene-portals", "conditional-portals", "spawn-points", "runtime-settings", "ui-editor", "ui-runtime", "ui-images", "ui-video", "ui-fonts", "audio", "audio-runtime", "particles", "particle-runtime", "particle-color"],
+      editorSchemaVersion: 18,
+      features: ["materials", "material-runtime", "model-animation", "character-state-animation", "player-model", "builtin-prefab-library", "prefab-variables", "lights", "point-light-runtime", "light-flicker", "shadow-projectors", "cameras", "camera-modes", "camera-preview", "components", "gameplay-components", "health", "damage", "collectibles", "interactables", "death-zones", "trigger-events", "visual-scripting", "gameplay-events", "logic-variables", "global-variables", "player-jump-event", "variable-message", "persistent-state", "save-game", "memory-card-save", "checkpoints", "continue-menu", "multiple-scenes", "scene-manager", "startup-scene", "scene-order", "project-export", "dynamic-scene-loading", "scene-portals", "conditional-portals", "spawn-points", "runtime-settings", "ui-editor", "ui-runtime", "ui-images", "ui-video", "ui-fonts", "audio", "audio-runtime", "particles", "particle-runtime", "particle-color"],
     });
     return true;
   }
@@ -1929,6 +1963,7 @@ async function handleApi(request, response, url) {
   if (url.pathname.startsWith("/api/prefabs/") && request.method === "DELETE") {
     try {
       const id = sanitizeSegment(decodeURIComponent(url.pathname.slice("/api/prefabs/".length))).replace(/\.[^.]+$/, "");
+      if (builtinPrefabs.some((prefab) => prefab.id === id)) throw new Error("Os prefabs da biblioteca não podem ser excluídos");
       const destination = path.join(prefabsRoot, `${id}.json`);
       if (!isInside(prefabsRoot, destination)) throw new Error("Invalid prefab id");
       await unlink(destination);

@@ -35,6 +35,8 @@ const state = {
   audioFiles: [],
   videoFiles: [],
   prefabs: [],
+  playerAnimationAsset: "",
+  playerAnimationClips: [],
   selectedIds: new Set(),
   primaryId: null,
   dirty: false,
@@ -294,6 +296,24 @@ function normalizeGameplayComponents(gameplay = {}, kind = "model") {
   };
 }
 
+const characterAnimationStates = ["idle", "walk", "run", "jump", "fall", "attack", "hurt", "death"];
+const characterAnimationLabels = {
+  idle: "Parado", walk: "Andando", run: "Correndo", jump: "Pulando", fall: "Caindo",
+  attack: "Atacando", hurt: "Recebendo dano", death: "Morrendo",
+};
+
+function normalizeCharacterComponent(character = {}, supported = true) {
+  const states = {};
+  for (const stateName of characterAnimationStates) states[stateName] = String(character.states?.[stateName] || "").slice(0, 120);
+  return {
+    enabled: supported && character.enabled === true,
+    initialState: characterAnimationStates.includes(character.initialState) ? character.initialState : "idle",
+    hurtFrames: Math.round(THREE.MathUtils.clamp(clampNumber(character.hurtFrames, 24), 1, 600)),
+    attackFrames: Math.round(THREE.MathUtils.clamp(clampNumber(character.attackFrames, 30), 1, 600)),
+    states,
+  };
+}
+
 function normalizeUiElement(item = {}, index = 0) {
   const type = ["panel", "text", "image", "video"].includes(item.type) ? item.type : "text";
   const media = type === "image" || type === "video";
@@ -399,6 +419,7 @@ function normalizeRecord(record = {}) {
         autoplay: record.animation?.autoplay === true,
         loop: record.animation?.loop !== false,
       },
+      character: normalizeCharacterComponent(record.character),
     } : {}),
     ...(kind === "collider" ? {
       collider: {
@@ -1056,6 +1077,8 @@ function normalizeRuntimeSettings(runtime = {}) {
       runSpeed: THREE.MathUtils.clamp(clampNumber(runtime.player?.runSpeed, 0.19), 0.01, 3),
       jumpSpeed: THREE.MathUtils.clamp(clampNumber(runtime.player?.jumpSpeed, 0.3), 0, 2),
       gravity: THREE.MathUtils.clamp(clampNumber(runtime.player?.gravity, 0.014), 0.0001, 0.25),
+      modelAsset: String(runtime.player?.modelAsset || "player.obj").replace(/\\/g, "/").slice(0, 240),
+      character: normalizeCharacterComponent(runtime.player?.character),
       health: {
         enabled: runtime.player?.health?.enabled === true,
         maximum: playerHealthMaximum,
@@ -1066,6 +1089,90 @@ function normalizeRuntimeSettings(runtime = {}) {
       },
     },
   };
+}
+
+function fillCharacterClipSelect(select, clips, value) {
+  select.replaceChildren(new Option("Sem clip", ""));
+  for (const clip of clips) select.append(new Option(clip, clip));
+  if (value && !clips.includes(value)) select.append(new Option(`${value} · ausente`, value));
+  select.value = value || "";
+}
+
+function renderPlayerModelOptions() {
+  const runtime = state.document?.settings?.runtime;
+  if (!runtime) return;
+  const select = $("player-model-asset");
+  const models = [{ path: "player.obj", name: "player.obj" }, ...state.assets.filter((asset) => asset.path !== "player.obj")];
+  select.replaceChildren();
+  for (const asset of models) select.append(new Option(asset.name || asset.path, asset.path));
+  if (runtime.player.modelAsset && !models.some((asset) => asset.path === runtime.player.modelAsset)) {
+    select.append(new Option(`${runtime.player.modelAsset} · ausente`, runtime.player.modelAsset));
+  }
+  select.value = runtime.player.modelAsset || "player.obj";
+}
+
+function renderPlayerCharacterOptions() {
+  const character = state.document?.settings?.runtime?.player?.character;
+  if (!character) return;
+  $("player-character-enabled").checked = character.enabled;
+  $("player-character-settings").hidden = !character.enabled;
+  for (const stateName of characterAnimationStates) {
+    fillCharacterClipSelect($(`player-character-${stateName}`), state.playerAnimationClips, character.states[stateName]);
+  }
+  $("player-character-hurt-frames").value = character.hurtFrames;
+  $("player-character-attack-frames").value = character.attackFrames;
+  const asset = state.document.settings.runtime.player.modelAsset;
+  $("player-character-note").textContent = !character.enabled
+    ? "Ative para escolher um clip por estado."
+    : !/\.gltf$/i.test(asset)
+      ? "O AthenaEnv documenta AnimCollection para modelos .gltf com skin."
+      : state.playerAnimationClips.length
+        ? `${state.playerAnimationClips.length} clip(s) encontrado(s) no modelo.`
+        : "Nenhum clip encontrado ou o modelo ainda está carregando.";
+}
+
+async function refreshPlayerAnimationClips(asset, force = false) {
+  if (!force && state.playerAnimationAsset === asset) {
+    renderPlayerCharacterOptions();
+    return;
+  }
+  state.playerAnimationAsset = asset;
+  state.playerAnimationClips = [];
+  renderPlayerCharacterOptions();
+  if (!/\.(gltf|glb)$/i.test(asset || "")) return;
+  setLoading(1, "Lendo animações do jogador…");
+  try {
+    const loader = new GLTFLoader();
+    const url = `/assets/${asset.split("/").map(encodeURIComponent).join("/")}`;
+    const result = await loader.loadAsync(url);
+    state.playerAnimationClips = (result.animations || []).map((clip, index) => clip.name || `Animação ${index + 1}`);
+    disposeObject(result.scene);
+  } catch (error) {
+    toast(`Não foi possível ler as animações do jogador: ${error.message}`, "error");
+  } finally {
+    setLoading(-1);
+    renderPlayerCharacterOptions();
+  }
+}
+
+function detectedCharacterState(clips, stateName) {
+  const patterns = {
+    idle: ["idle", "stand", "parado"], walk: ["walk", "andar"], run: ["run", "sprint", "correr"],
+    jump: ["jump", "pulo"], fall: ["fall", "air", "queda"], attack: ["attack", "swing", "punch", "kick", "ataque"],
+    hurt: ["hurt", "damage", "impact", "dano"], death: ["death", "die", "dead", "morte"],
+  };
+  return clips.find((clip) => patterns[stateName].some((pattern) => clip.toLocaleLowerCase("pt-BR").includes(pattern))) || "";
+}
+
+function detectCharacterClips(character, clips) {
+  let detected = 0;
+  for (const stateName of characterAnimationStates) {
+    const clip = detectedCharacterState(clips, stateName);
+    if (!clip) continue;
+    character.states[stateName] = clip;
+    detected++;
+  }
+  return detected;
 }
 
 function renderRuntimeSettings() {
@@ -1085,6 +1192,8 @@ function renderRuntimeSettings() {
   $("player-run-speed").value = runtime.player.runSpeed;
   $("player-jump-speed").value = runtime.player.jumpSpeed;
   $("player-gravity").value = runtime.player.gravity;
+  renderPlayerModelOptions();
+  renderPlayerCharacterOptions();
   $("player-health-enabled").checked = runtime.player.health.enabled;
   $("player-health-maximum").value = runtime.player.health.maximum;
   $("player-health-initial").value = runtime.player.health.initial;
@@ -1113,6 +1222,14 @@ function updateRuntimeSettings() {
       runSpeed: $("player-run-speed").value,
       jumpSpeed: $("player-jump-speed").value,
       gravity: $("player-gravity").value,
+      modelAsset: $("player-model-asset").value,
+      character: {
+        enabled: $("player-character-enabled").checked,
+        initialState: "idle",
+        hurtFrames: $("player-character-hurt-frames").value,
+        attackFrames: $("player-character-attack-frames").value,
+        states: Object.fromEntries(characterAnimationStates.map((stateName) => [stateName, $(`player-character-${stateName}`).value])),
+      },
       health: {
         enabled: $("player-health-enabled").checked,
         maximum: $("player-health-maximum").value,
@@ -1127,6 +1244,7 @@ function updateRuntimeSettings() {
   scene.background = background;
   scene.fog.color.copy(background);
   renderUiPreview();
+  renderPlayerCharacterOptions();
   markDirty();
 }
 
@@ -1230,12 +1348,17 @@ function configureEditorAnimation(record, object, content = object?.children.fin
   object.userData.animationMixer = null;
   const clips = content?.userData.editorAnimations || [];
   object.userData.animationClips = clips;
-  if (!record.animation?.autoplay || clips.length === 0 || !content) return;
-  const clip = clips.find((candidate) => candidate.name === record.animation.clip) || clips[0];
+  const characterClip = record.character?.enabled ? record.character.states?.[record.character.initialState] : "";
+  if ((!record.animation?.autoplay && !characterClip) || clips.length === 0 || !content) return;
+  const clip = clips.find((candidate) => candidate.name === characterClip)
+    || clips.find((candidate) => candidate.name === record.animation.clip) || clips[0];
   const mixer = new THREE.AnimationMixer(content);
   const action = mixer.clipAction(clip);
-  action.setLoop(record.animation.loop ? THREE.LoopRepeat : THREE.LoopOnce, record.animation.loop ? Infinity : 1);
-  action.clampWhenFinished = !record.animation.loop;
+  const loop = record.character?.enabled
+    ? !["attack", "hurt", "death"].includes(record.character.initialState)
+    : record.animation.loop;
+  action.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
+  action.clampWhenFinished = !loop;
   action.play();
   object.userData.animationMixer = mixer;
 }
@@ -2013,26 +2136,40 @@ function renderAssets() {
 function renderPrefabs() {
   const list = $("prefab-list");
   list.replaceChildren();
-  if (!state.prefabs.length) {
+  const query = $("prefab-search").value.trim().toLocaleLowerCase("pt-BR");
+  const category = $("prefab-category").value;
+  const prefabs = state.prefabs.filter((prefab) => (category === "all" || prefab.category === category)
+    && (!query || `${prefab.name} ${prefab.description || ""}`.toLocaleLowerCase("pt-BR").includes(query)));
+  if (!prefabs.length) {
     const empty = document.createElement("div");
     empty.className = "prefab-empty";
-    empty.textContent = "Selecione objetos e use “Da seleção” para criar um prefab.";
+    empty.textContent = state.prefabs.length
+      ? "Nenhum prefab corresponde a este filtro."
+      : "Selecione objetos e use “Da seleção” para criar um prefab.";
     list.append(empty);
     return;
   }
-  for (const prefab of state.prefabs) {
+  for (const prefab of prefabs) {
     const row = document.createElement("div");
-    row.className = "prefab-row";
+    row.className = `prefab-row${prefab.builtin ? " builtin" : ""}`;
+    row.dataset.prefabId = prefab.id;
     row.innerHTML = `
-      <span class="asset-badge">PF</span>
+      <span class="asset-badge"></span>
       <span class="asset-info"><strong></strong><small></small></span>
       <button class="prefab-add" title="Instanciar prefab">＋</button>
       <button class="prefab-delete" title="Excluir prefab">×</button>
     `;
+    row.querySelector(".asset-badge").textContent = prefab.icon || "PF";
     row.querySelector("strong").textContent = prefab.name;
-    row.querySelector("small").textContent = `${prefab.objects?.length || 0} objeto(s)`;
+    const description = row.querySelector("small");
+    description.className = "prefab-description";
+    description.textContent = prefab.description || `${prefab.objects?.length || 0} objeto(s)`;
+    row.title = `${prefab.builtin ? "Biblioteca Athena" : "Meu prefab"} · ${prefab.objects?.length || 0} objeto(s)`;
     row.querySelector(".prefab-add").addEventListener("click", () => instantiatePrefab(prefab));
-    row.querySelector(".prefab-delete").addEventListener("click", () => deletePrefab(prefab));
+    const deleteButton = row.querySelector(".prefab-delete");
+    deleteButton.disabled = prefab.builtin === true;
+    deleteButton.title = prefab.builtin ? "Prefab protegido da biblioteca" : "Excluir prefab";
+    if (!prefab.builtin) deleteButton.addEventListener("click", () => deletePrefab(prefab));
     row.addEventListener("dblclick", () => instantiatePrefab(prefab));
     list.append(row);
   }
@@ -2073,6 +2210,18 @@ function renderAnimationClipOptions(record, object = state.objects.get(record.id
     select.append(new Option(record.animation.clip, record.animation.clip));
   }
   select.value = record.animation?.clip || "";
+}
+
+function renderCharacterStateOptions(record, object = state.objects.get(record.id)) {
+  const clips = (object?.userData.animationClips || []).map((clip, index) => clip.name || `Animação ${index + 1}`);
+  $("character-enabled").checked = record.character.enabled;
+  $("character-settings").hidden = !record.character.enabled;
+  $("character-initial-state").value = record.character.initialState;
+  for (const stateName of characterAnimationStates) {
+    fillCharacterClipSelect($(`character-state-${stateName}`), clips, record.character.states[stateName]);
+  }
+  $("character-hurt-frames").value = record.character.hurtFrames;
+  $("character-attack-frames").value = record.character.attackFrames;
 }
 
 function renderShadowTextureOptions(record) {
@@ -2531,6 +2680,7 @@ function logicNodeSummary(node) {
   if (node.type === "actionDamage") return `${config.amount} de dano · ${logicTargetName(config.targetId)}`;
   if (node.type === "actionHeal") return `${config.amount} de cura · ${logicTargetName(config.targetId)}`;
   if (node.type === "actionRespawn") return `Checkpoint · fade ${config.fadeFrames}`;
+  if (node.type === "actionCharacterState") return `${characterAnimationLabels[config.state] || config.state} · ${logicTargetName(config.targetId)}`;
   if (node.type === "actionScene") {
     const scene = state.scenes.find((entry) => entry.id === config.sceneId);
     const spawn = projectSpawnPoints(config.sceneId).find((entry) => entry.id === config.spawnId);
@@ -2779,6 +2929,15 @@ function logicObjectOptions(predicate, emptyLabel = "Selecione um alvo") {
   return options;
 }
 
+function logicCharacterOptions() {
+  const options = [{ label: "Selecione um personagem", value: "" }];
+  if (state.document.settings.runtime.player.character.enabled) options.push({ label: "Jogador", value: "__player__" });
+  for (const record of state.document.objects) {
+    if (record.source.kind === "model" && record.character?.enabled) options.push({ label: record.name, value: record.id });
+  }
+  return options;
+}
+
 function logicPrimitiveControl(variable, value, apply) {
   if (variable?.type === "boolean") {
     const control = document.createElement("input");
@@ -2942,6 +3101,13 @@ function renderLogicNodeProperties(container, graph, node) {
     appendLogicNumber(container, node.type === "actionDamage" ? "Dano" : "Cura", config.amount, (value) => { config.amount = value; }, 0, 999999);
   } else if (node.type === "actionRespawn") {
     appendLogicNumber(container, "Fade em quadros", config.fadeFrames, (value) => { config.fadeFrames = value; }, 1, 300);
+  } else if (node.type === "actionCharacterState") {
+    appendLogicSelect(container, "Personagem", logicCharacterOptions(), config.targetId, (value) => { config.targetId = value; });
+    appendLogicSelect(container, "Estado", characterAnimationStates.map((stateName) => ({
+      label: characterAnimationLabels[stateName], value: stateName,
+    })), config.state, (value) => { config.state = value; });
+    appendLogicNumber(container, "Duração em quadros (0 = automática)", config.durationFrames,
+      (value) => { config.durationFrames = value; }, 0, 600);
   } else if (node.type === "actionScene") {
     const scenes = [{ label: "Selecione uma cena", value: "" }, ...state.scenes.map((entry) => ({ label: entry.name, value: entry.id }))];
     appendLogicSelect(container, "Cena de destino", scenes, config.sceneId, (value) => {
@@ -3159,6 +3325,14 @@ function deleteLogicVariable(variableId) {
 
 function validateVisualScripting() {
   const issues = validateLogic(state.document.logic);
+  const playerCharacter = state.document.settings.runtime.player.character;
+  if (playerCharacter.enabled) {
+    if (!/\.gltf$/i.test(state.document.settings.runtime.player.modelAsset)) {
+      issues.push("Jogador: Personagem animado requer um modelo .gltf compatível com AnimCollection");
+    } else if (!Object.values(playerCharacter.states).some(Boolean)) {
+      issues.push("Jogador: Personagem animado não possui nenhum estado associado a um clip");
+    }
+  }
   for (const record of state.document.objects) {
     if (record.source.kind !== "collider" || !record.portal?.enabled) continue;
     const target = state.scenes.find((entry) => entry.id === record.portal.targetSceneId);
@@ -3186,6 +3360,10 @@ function validateVisualScripting() {
         issues.push(`${record.name}: o visual do Coletável não existe`);
       }
     }
+    if (record.character?.enabled) {
+      if (!/\.gltf$/i.test(record.source.asset)) issues.push(`${record.name}: Personagem animado requer um modelo .gltf`);
+      else if (!Object.values(record.character.states).some(Boolean)) issues.push(`${record.name}: associe pelo menos um estado a um clip`);
+    }
   }
   const gameplayComponentIds = new Set(gameplayComponentOptions().slice(1).map((option) => option.value));
   for (const graph of state.document.logic.graphs) {
@@ -3200,6 +3378,12 @@ function validateVisualScripting() {
           ? state.document.settings.runtime.player.health.enabled
           : state.document.objects.some((candidate) => candidate.id === node.config.targetId && candidate.gameplay?.health?.enabled);
         if (!validTarget) issues.push(`${graph.name}: ação de Vida aponta para um alvo inválido`);
+      }
+      if (node.type === "actionCharacterState") {
+        const validCharacter = node.config.targetId === "__player__"
+          ? state.document.settings.runtime.player.character.enabled
+          : state.document.objects.some((candidate) => candidate.id === node.config.targetId && candidate.character?.enabled);
+        if (!validCharacter) issues.push(`${graph.name}: ação de animação aponta para um personagem inválido`);
       }
       if (node.type !== "actionScene") continue;
       const scene = state.scenes.find((entry) => entry.id === node.config.sceneId);
@@ -3420,6 +3604,7 @@ function renderInspector() {
   }
   if (animationMode) {
     renderAnimationClipOptions(record, object);
+    renderCharacterStateOptions(record, object);
     $("animation-autoplay").checked = record.animation.autoplay;
     $("animation-loop").checked = record.animation.loop;
     const gltf = /\.gltf$/i.test(record.source.asset);
@@ -3532,6 +3717,8 @@ async function refreshAssetCatalog() {
     state.audioFiles = state.assetFiles.filter((asset) => [".wav", ".ogg", ".adp"].includes(asset.extension));
     state.videoFiles = state.assetFiles.filter((asset) => [".m2v", ".mpg", ".mpeg"].includes(asset.extension));
     renderAssets();
+    renderPlayerModelOptions();
+    refreshPlayerAnimationClips(state.document?.settings?.runtime?.player?.modelAsset || "player.obj");
     if (currentRecord()?.material || currentRecord()?.audio || currentRecord()?.shadow || currentUiElement()) renderInspector();
   } catch (error) {
     toast(error.message, "error");
@@ -3617,12 +3804,30 @@ async function saveSelectionAsPrefab(nameOverride) {
 async function instantiatePrefab(prefab) {
   if (!prefab?.objects?.length) return;
   const before = serializeScene();
+  let enabledPlayerHealth = false;
   const idMap = new Map(prefab.objects.map((record) => [record.id, uid(record.source?.kind || "prefab")]));
+  const variableMap = new Map();
+  for (const sourceVariable of prefab.variables || []) {
+    let variable = state.document.logic.variables.find((candidate) => candidate.type === sourceVariable.type
+      && candidate.name.toLocaleLowerCase("pt-BR") === sourceVariable.name.toLocaleLowerCase("pt-BR"));
+    if (!variable) {
+      variable = createLogicVariable(sourceVariable.name, sourceVariable.type, uid);
+      variable.initialValue = sourceVariable.initialValue;
+      state.document.logic.variables.push(variable);
+    }
+    variableMap.set(sourceVariable.id, variable.id);
+  }
+  const referenceMap = new Map([...idMap, ...variableMap]);
+  const remapReferences = (value) => {
+    if (typeof value === "string") return referenceMap.get(value) || value;
+    if (Array.isArray(value)) return value.map(remapReferences);
+    if (!value || typeof value !== "object") return value;
+    for (const [key, nested] of Object.entries(value)) value[key] = remapReferences(nested);
+    return value;
+  };
   const rootIds = [];
   for (const source of prefab.objects) {
-    const record = deepClone(source);
-    record.id = idMap.get(source.id);
-    record.parentId = source.parentId && idMap.has(source.parentId) ? idMap.get(source.parentId) : null;
+    const record = remapReferences(deepClone(source));
     record.prefabId = prefab.id;
     if (!record.parentId) {
       record.position.x += orbit.target.x;
@@ -3632,13 +3837,22 @@ async function instantiatePrefab(prefab) {
     }
     await addRecord(record, { select: false, checkpoint: false });
   }
+  if (prefab.requirements?.playerHealth && !state.document.settings.runtime.player.health.enabled) {
+    state.document.settings.runtime.player.health.enabled = true;
+    enabledPlayerHealth = true;
+    renderRuntimeSettings();
+  }
+  syncGlobalVariablesFromDocument();
+  renderLogicSummary();
   rebuildHierarchy();
   pushHistorySnapshot(before);
   state.selectedIds = new Set(rootIds);
   state.primaryId = rootIds.at(-1) || null;
   setSelection(state.primaryId, { additive: true });
   focusSelection();
-  toast(`Prefab “${prefab.name}” instanciado.`, "success");
+  const additions = [variableMap.size ? `${variableMap.size} variável(is) preparada(s)` : "", enabledPlayerHealth ? "Vida do jogador ativada" : ""]
+    .filter(Boolean).join(" · ");
+  toast(`Prefab “${prefab.name}” instanciado.${additions ? ` ${additions}.` : ""}`, "success");
 }
 
 async function deletePrefab(prefab) {
@@ -4286,7 +4500,13 @@ function updateAnimationFromInspector() {
   record.animation.clip = $("animation-clip").value;
   record.animation.autoplay = $("animation-autoplay").checked;
   record.animation.loop = $("animation-loop").checked;
+  record.character.enabled = $("character-enabled").checked;
+  record.character.initialState = $("character-initial-state").value;
+  record.character.hurtFrames = Math.round(THREE.MathUtils.clamp(clampNumber($("character-hurt-frames").value, 24), 1, 600));
+  record.character.attackFrames = Math.round(THREE.MathUtils.clamp(clampNumber($("character-attack-frames").value, 30), 1, 600));
+  for (const stateName of characterAnimationStates) record.character.states[stateName] = $(`character-state-${stateName}`).value;
   configureEditorAnimation(record, object);
+  renderCharacterStateOptions(record, object);
   markDirty();
 }
 
@@ -5940,12 +6160,27 @@ function bindInspector() {
     });
   }
 
-  for (const id of ["animation-clip", "animation-autoplay", "animation-loop"]) {
+  for (const id of ["animation-clip", "animation-autoplay", "animation-loop", "character-enabled", "character-initial-state",
+    "character-state-idle", "character-state-walk", "character-state-run", "character-state-jump", "character-state-fall",
+    "character-state-attack", "character-state-hurt", "character-state-death", "character-hurt-frames", "character-attack-frames"]) {
     $(id).addEventListener("change", () => {
       updateAnimationFromInspector();
       finishFieldHistory();
     });
   }
+  $("character-detect").addEventListener("click", () => {
+    const record = currentRecord();
+    const object = currentObject();
+    if (!record?.character || !object) return;
+    const clips = (object.userData.animationClips || []).map((clip, index) => clip.name || `Animação ${index + 1}`);
+    const before = serializeScene();
+    const count = detectCharacterClips(record.character, clips);
+    record.character.enabled = count > 0 || record.character.enabled;
+    configureEditorAnimation(record, object);
+    pushHistorySnapshot(before);
+    renderInspector();
+    toast(count ? `${count} estado(s) associado(s) automaticamente.` : "Nenhum nome de clip reconhecido.", count ? "success" : "info");
+  });
 
   for (const id of ["light-color", "light-intensity", "light-distance", "light-flicker-amount", "light-flicker-speed"]) {
     $(id).addEventListener("beforeinput", stageFieldHistory);
@@ -6057,6 +6292,8 @@ function bindUi() {
   $("add-portal-button").addEventListener("click", addScenePortal);
   $("add-checkpoint-button").addEventListener("click", addCheckpoint);
   document.querySelectorAll("[data-gameplay]").forEach((button) => button.addEventListener("click", () => addGameplayTrigger(button.dataset.gameplay)));
+  $("prefab-search").addEventListener("input", renderPrefabs);
+  $("prefab-category").addEventListener("change", renderPrefabs);
   document.querySelectorAll("[data-ui-type]").forEach((button) => button.addEventListener("click", () => addUiElement(button.dataset.uiType)));
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
   document.querySelectorAll("[data-axis-view]").forEach((button) => button.addEventListener("click", () => setAxisView(button.dataset.axisView)));
@@ -6066,12 +6303,28 @@ function bindUi() {
   $("pivot-button").addEventListener("click", togglePivotEditing);
   $("pivot-reset-button").addEventListener("click", resetPivotToCenter);
   $("isolate-selection-button").addEventListener("click", () => toggleIsolation());
-  for (const id of ["scene-background", "runtime-vsync", "runtime-performance", "runtime-arena-bounds", "player-spawn-x", "player-spawn-y", "player-spawn-z", "player-radius", "player-height", "player-walk-speed", "player-run-speed", "player-jump-speed", "player-gravity", "player-health-enabled", "player-health-maximum", "player-health-initial", "player-health-invulnerability", "player-health-respawn", "player-health-hud"]) {
+  for (const id of ["scene-background", "runtime-vsync", "runtime-performance", "runtime-arena-bounds", "player-spawn-x", "player-spawn-y", "player-spawn-z", "player-radius", "player-height", "player-walk-speed", "player-run-speed", "player-jump-speed", "player-gravity", "player-character-enabled", "player-character-idle", "player-character-walk", "player-character-run", "player-character-jump", "player-character-fall", "player-character-attack", "player-character-hurt", "player-character-death", "player-character-hurt-frames", "player-character-attack-frames", "player-health-enabled", "player-health-maximum", "player-health-initial", "player-health-invulnerability", "player-health-respawn", "player-health-hud"]) {
     $(id).addEventListener("beforeinput", stageFieldHistory);
     $(id).addEventListener("input", updateRuntimeSettings);
     $(id).addEventListener("change", finishFieldHistory);
     $(id).addEventListener("blur", finishFieldHistory);
   }
+  $("player-model-asset").addEventListener("change", async () => {
+    stageFieldHistory();
+    updateRuntimeSettings();
+    finishFieldHistory();
+    await refreshPlayerAnimationClips($("player-model-asset").value, true);
+  });
+  $("player-character-detect").addEventListener("click", () => {
+    const character = state.document?.settings?.runtime?.player?.character;
+    if (!character) return;
+    const before = serializeScene();
+    const count = detectCharacterClips(character, state.playerAnimationClips);
+    character.enabled = count > 0 || character.enabled;
+    pushHistorySnapshot(before);
+    renderRuntimeSettings();
+    toast(count ? `${count} estado(s) do jogador associado(s).` : "Nenhum nome de clip reconhecido.", count ? "success" : "info");
+  });
   for (const id of ["snap-toggle", "snap-mode"]) {
     $(id).addEventListener("change", () => {
       const before = serializeScene();
@@ -6368,7 +6621,7 @@ async function boot() {
       const capabilities = await capabilitiesResponse.json();
       state.serverSchemaVersion = Number(capabilities.editorSchemaVersion) || 0;
     }
-    state.serverOutdated = state.serverSchemaVersion < 17;
+    state.serverOutdated = state.serverSchemaVersion < 18;
     const data = await sceneResponse.json();
     if (!sceneResponse.ok) throw new Error(data.error || "Falha ao abrir a cena");
     await loadDocument(data);

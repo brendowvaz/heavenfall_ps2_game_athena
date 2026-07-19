@@ -8,6 +8,7 @@ import {
   normalizeLogic,
   validateLogic,
 } from "../editor/visual-scripting.js";
+import { builtinPrefabs } from "../editor/builtin-prefabs.mjs";
 import { generateAthenaScene, normalizeScene } from "../editor/server.mjs";
 
 let sequence = 0;
@@ -60,13 +61,16 @@ const damagePlayer = createLogicNode("actionDamage", id, { x: 250, y: 340 });
 damagePlayer.config = { targetId: "__player__", amount: 12 };
 const healPlayer = createLogicNode("actionHeal", id, { x: 490, y: 340 });
 healPlayer.config = { targetId: "__player__", amount: 3 };
-const respawnPlayer = createLogicNode("actionRespawn", id, { x: 730, y: 340 });
+const animatePlayer = createLogicNode("actionCharacterState", id, { x: 730, y: 340 });
+animatePlayer.config = { targetId: "__player__", state: "attack", durationFrames: 30 };
+const respawnPlayer = createLogicNode("actionRespawn", id, { x: 970, y: 340 });
 respawnPlayer.config = { fadeFrames: 18 };
-gameplayGraph.nodes.push(gameplayEvent, damagePlayer, healPlayer, respawnPlayer);
+gameplayGraph.nodes.push(gameplayEvent, damagePlayer, healPlayer, animatePlayer, respawnPlayer);
 gameplayGraph.links.push(
   { id: id("link"), from: gameplayEvent.id, fromPort: "next", to: damagePlayer.id },
   { id: id("link"), from: damagePlayer.id, fromPort: "next", to: healPlayer.id },
-  { id: id("link"), from: healPlayer.id, fromPort: "next", to: respawnPlayer.id },
+  { id: id("link"), from: healPlayer.id, fromPort: "next", to: animatePlayer.id },
+  { id: id("link"), from: animatePlayer.id, fromPort: "next", to: respawnPlayer.id },
 );
 
 const normalized = normalizeLogic({ variables: [variable, jumpVariable], graphs: [graph, jumpGraph, gameplayGraph] }, id);
@@ -112,6 +116,9 @@ assert.deepEqual(actions.find((entry) => entry.type === "actionDisplayVariable")
 runtime.gameplay("trigger-interactable", "interacted", { triggerId: "trigger" });
 assert.deepEqual(actions.find((entry) => entry.type === "actionDamage")?.config, { targetId: "__player__", amount: 12 });
 assert.deepEqual(actions.find((entry) => entry.type === "actionHeal")?.config, { targetId: "__player__", amount: 3 });
+assert.deepEqual(actions.find((entry) => entry.type === "actionCharacterState")?.config, {
+  targetId: "__player__", state: "attack", durationFrames: 30,
+});
 assert.deepEqual(actions.find((entry) => entry.type === "actionRespawn")?.config, { fadeFrames: 18 });
 const nextSceneRuntime = sandbox.VisualScriptingRuntime.create({ variables: normalized.variables, graphs: [] }, {
   readVariable(variableId, initialValue) { return sharedVariables[variableId] ?? initialValue; },
@@ -121,11 +128,16 @@ assert.equal(nextSceneRuntime.getVariable(jumpVariable.id), 1, "the jump counter
 
 const scene = normalizeScene({
   name: "Logic export",
-  settings: { runtime: { legacyArenaBounds: false, player: { health: { enabled: true, maximum: 120, initial: 90 } } } },
+  settings: { runtime: { legacyArenaBounds: false, player: {
+    modelAsset: "imported/hero.gltf",
+    character: { enabled: true, states: { idle: "Idle", walk: "Walk", attack: "Attack" } },
+    health: { enabled: true, maximum: 120, initial: 90 },
+  } } },
   objects: [
     { id: "group", name: "Grupo", source: { kind: "group" } },
     {
-      id: "model", name: "Modelo", parentId: "group", persistent: true, source: { kind: "model", asset: "scene_0.obj" },
+      id: "model", name: "Modelo", parentId: "group", persistent: true, source: { kind: "model", asset: "imported/enemy.gltf" },
+      character: { enabled: true, initialState: "idle", hurtFrames: 18, states: { idle: "Idle", hurt: "Hit", death: "Death" } },
       gameplay: { health: { enabled: true, maximum: 40, initial: 25, persistent: true } },
     },
     {
@@ -165,8 +177,18 @@ assert.deepEqual({ ...generatedSandbox.EDITOR_CHECKPOINTS[0] }, {
   triggerId: "trigger", activation: "onInteract", autosave: true,
 });
 assert.equal(generatedSandbox.EDITOR_SETTINGS.player.health.maximum, 120);
+assert.equal(generatedSandbox.EDITOR_SETTINGS.player.modelAsset, "imported/hero.gltf");
+assert.equal(generatedSandbox.EDITOR_SETTINGS.player.character.states.attack, "Attack");
+assert.equal(generatedSandbox.EDITOR_SCENE[0].character.states.death, "Death");
 assert.equal(generatedSandbox.EDITOR_GAMEPLAY_COMPONENTS.length, 5);
 assert.deepEqual(Array.from(generatedSandbox.EDITOR_GAMEPLAY_COMPONENTS.find((item) => item.type === "collectible").visualTargetIds), ["model"]);
 assert.equal(generatedSandbox.EDITOR_GAMEPLAY_COMPONENTS.find((item) => item.type === "health").persistent, true);
+
+assert(builtinPrefabs.length >= 8, "the editor must ship a useful built-in prefab library");
+const coinPrefab = builtinPrefabs.find((prefab) => prefab.id === "builtin-coin");
+assert.equal(coinPrefab.variables[0].name, "Moedas");
+assert.equal(coinPrefab.objects.find((object) => object.id === "coin-trigger").gameplay.collectible.visualTargetId, "coin-root");
+assert(builtinPrefabs.find((prefab) => prefab.id === "builtin-spikes").requirements.playerHealth,
+  "hazard prefabs must declare their player health requirement");
 
 console.log("Visual scripting test passed.");

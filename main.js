@@ -716,9 +716,66 @@ function persistRuntimeObjectVisibility(id) {
 }
 
 const runtimeAnimationCollections = [];
+const runtimeCharacterControllers = {};
+
+function createRuntimeCharacterController(id, definition, object, asset) {
+    const character = definition && definition.character;
+    if (!character || character.enabled !== true || !/\.gltf$/i.test(asset || "")) return null;
+    if (!object || typeof AnimCollection === "undefined" || typeof object.playAnim !== "function") return null;
+    try {
+        const animations = new AnimCollection(asset);
+        const controller = {
+            id: id,
+            object: object,
+            animations: animations,
+            definition: character,
+            state: "",
+            clip: null,
+            lockFrames: 0
+        };
+        runtimeAnimationCollections.push(animations);
+        runtimeCharacterControllers[id] = controller;
+        setRuntimeCharacterState(id, character.initialState || "idle", 0, true);
+        return controller;
+    } catch (animationError) {
+        console.log("[VeuAzul] Personagem animado nao carregado: " + asset + " - " + animationError);
+        return null;
+    }
+}
+
+function runtimeCharacterLoop(state) {
+    return state !== "attack" && state !== "hurt" && state !== "death";
+}
+
+function setRuntimeCharacterState(targetId, state, durationFrames, force) {
+    const controller = runtimeCharacterControllers[targetId || "__player__"];
+    if (!controller) return false;
+    const stateName = controller.definition.states && controller.definition.states[state]
+        ? state
+        : controller.definition.initialState || "idle";
+    const clipName = controller.definition.states ? controller.definition.states[stateName] : "";
+    if (!clipName) return false;
+    const clip = controller.animations[clipName];
+    if (clip === undefined) return false;
+    const frames = Math.max(0, Math.round(Number(durationFrames) || 0));
+    if (!force && controller.state === stateName && controller.clip === clip) {
+        if (frames > controller.lockFrames) controller.lockFrames = frames;
+        return true;
+    }
+    controller.object.playAnim(clip, runtimeCharacterLoop(stateName));
+    controller.state = stateName;
+    controller.clip = clip;
+    controller.lockFrames = frames;
+    return true;
+}
+
 for (let animationIndex = 0; animationIndex < sceneObjects.length; animationIndex++) {
     const definition = EDITOR_SCENE[animationIndex];
-    if (!definition.animation || !definition.animation.autoplay || !/\.(gltf|glb)$/i.test(definition.asset)) continue;
+    if (definition.character && definition.character.enabled) {
+        createRuntimeCharacterController(definition.id, definition, sceneObjects[animationIndex], definition.asset);
+        continue;
+    }
+    if (!definition.animation || !definition.animation.autoplay || !/\.gltf$/i.test(definition.asset)) continue;
     if (!sceneObjects[animationIndex] || typeof AnimCollection === "undefined" || typeof sceneObjects[animationIndex].playAnim !== "function") continue;
     try {
         const animations = new AnimCollection(definition.asset);
@@ -732,20 +789,32 @@ for (let animationIndex = 0; animationIndex < sceneObjects.length; animationInde
     }
 }
 
+const runtimePlayer = EDITOR_SETTINGS.player || {};
+const configuredPlayerAsset = runtimePlayer.modelAsset || "player.obj";
+let loadedPlayerAsset = configuredPlayerAsset;
 let playerPair = null;
 try {
-    playerPair = createRenderPair("player.obj");
+    playerPair = createRenderPair(configuredPlayerAsset);
 } catch (playerError) {
-    console.log("[VeuAzul] Jogador nao carregado: player.obj - " + playerError);
+    console.log("[VeuAzul] Jogador nao carregado: " + configuredPlayerAsset + " - " + playerError);
     try {
-        playerPair = createRenderPair("editor_primitives/cube.obj");
-        console.log("[VeuAzul] Usando cubo de seguranca para o jogador");
+        playerPair = configuredPlayerAsset === "player.obj" ? null : createRenderPair("player.obj");
+        if (playerPair) {
+            loadedPlayerAsset = "player.obj";
+            console.log("[VeuAzul] Usando player.obj de seguranca para o jogador");
+        }
+        if (!playerPair) {
+            playerPair = createRenderPair("editor_primitives/cube.obj");
+            loadedPlayerAsset = "editor_primitives/cube.obj";
+            console.log("[VeuAzul] Usando cubo de seguranca para o jogador");
+        }
     } catch (playerFallbackError) {
         console.log("[VeuAzul] Jogador de seguranca nao carregado: " + playerFallbackError);
     }
 }
 const playerData = playerPair ? playerPair.data : null;
 const playerObject = playerPair ? playerPair.object : null;
+if (playerObject) createRuntimeCharacterController("__player__", { character: runtimePlayer.character }, playerObject, loadedPlayerAsset);
 console.log("[VeuAzul] " + sceneObjects.length + " objetos, jogador e colisoes prontos");
 
 const reservedPointSlots = Math.min(2, EDITOR_POINT_LIGHTS.length);
@@ -901,7 +970,6 @@ if (!usingEditorColliders) {
 }
 console.log("[VeuAzul] Colisao 3D: " + collisionShapes.length + " colisores, " + cameraBlockers.length + " bloqueadores de camera");
 
-const runtimePlayer = EDITOR_SETTINGS.player || {};
 let activeSpawnPoint = null;
 for (let spawnIndex = 0; spawnIndex < EDITOR_SPAWN_POINTS.length; spawnIndex++) {
     const candidate = EDITOR_SPAWN_POINTS[spawnIndex];
@@ -1613,6 +1681,7 @@ function respawnRuntimePlayer(fadeFrames) {
             ? runtimePlayerGameplay.maximumHealth
             : Math.max(1, Math.min(runtimePlayerGameplay.maximumHealth, checkpoint.player.health));
         runtimePlayerGameplay.invulnerabilityFrames = 0;
+        setRuntimeCharacterState("__player__", "idle", 0, true);
         emitRuntimeGameplayEvent("player-health", "respawn", { health: runtimePlayerGameplay.currentHealth });
         return requestSceneTransition(checkpoint.sceneId, "", fadeFrames || 24, checkpoint.player);
     }
@@ -1621,6 +1690,7 @@ function respawnRuntimePlayer(fadeFrames) {
         runtimePlayerHealthConfig.initial === undefined ? runtimePlayerGameplay.maximumHealth : runtimePlayerHealthConfig.initial
     ));
     runtimePlayerGameplay.invulnerabilityFrames = 0;
+    setRuntimeCharacterState("__player__", "idle", 0, true);
     emitRuntimeGameplayEvent("player-health", "respawn", { health: runtimePlayerGameplay.currentHealth });
     return requestSceneTransition(EDITOR_SCENE_META.id || BOOT_SCENE_ID || EDITOR_SCENE_PROJECT.startupSceneId, "", fadeFrames || 24);
 }
@@ -1632,6 +1702,8 @@ function applyRuntimeDamage(targetId, amount, sourceComponentId) {
         if (!runtimePlayerGameplay.enabled || runtimePlayerGameplay.currentHealth <= 0 || runtimePlayerGameplay.invulnerabilityFrames > 0) return false;
         runtimePlayerGameplay.currentHealth = Math.max(0, runtimePlayerGameplay.currentHealth - damage);
         runtimePlayerGameplay.invulnerabilityFrames = Math.max(0, Math.round(runtimePlayerHealthConfig.invulnerabilityFrames || 0));
+        setRuntimeCharacterState("__player__", runtimePlayerGameplay.currentHealth <= 0 ? "death" : "hurt",
+            runtimePlayerGameplay.currentHealth <= 0 ? 0 : (runtimePlayer.character && runtimePlayer.character.hurtFrames) || 24, true);
         emitRuntimeGameplayEvent("player-health", "damaged", {
             amount: damage,
             health: runtimePlayerGameplay.currentHealth,
@@ -1648,6 +1720,11 @@ function applyRuntimeDamage(targetId, amount, sourceComponentId) {
     const definition = state.definition;
     state.health = Math.max(0, state.health - damage);
     state.invulnerabilityFrames = Math.max(0, Math.round(definition.invulnerabilityFrames || 0));
+    const characterDefinition = runtimeObjectDefinitions[definition.objectId]
+        ? runtimeObjectDefinitions[definition.objectId].character
+        : null;
+    setRuntimeCharacterState(definition.objectId, state.health <= 0 ? "death" : "hurt",
+        state.health <= 0 ? 0 : characterDefinition && characterDefinition.hurtFrames || 24, true);
     persistRuntimeGameplayState(state);
     emitRuntimeGameplayEvent(definition.id, "damaged", { amount: damage, health: state.health, sourceComponentId: sourceComponentId || "" });
     if (state.health <= 0) {
@@ -1665,6 +1742,7 @@ function applyRuntimeHealing(targetId, amount) {
         const previous = runtimePlayerGameplay.currentHealth;
         runtimePlayerGameplay.currentHealth = Math.min(runtimePlayerGameplay.maximumHealth, previous + healing);
         if (runtimePlayerGameplay.currentHealth === previous) return false;
+        if (previous <= 0) setRuntimeCharacterState("__player__", "idle", 0, true);
         emitRuntimeGameplayEvent("player-health", "healed", { amount: runtimePlayerGameplay.currentHealth - previous, health: runtimePlayerGameplay.currentHealth });
         return true;
     }
@@ -1673,6 +1751,10 @@ function applyRuntimeHealing(targetId, amount) {
     const previous = state.health;
     state.health = Math.min(state.maximumHealth, state.health + healing);
     if (state.health === previous) return false;
+    if (previous <= 0) {
+        const healedCharacter = runtimeObjectDefinitions[targetId] && runtimeObjectDefinitions[targetId].character;
+        setRuntimeCharacterState(targetId, healedCharacter ? healedCharacter.initialState || "idle" : "idle", 0, true);
+    }
     if (previous <= 0 && state.definition.hideOnDeath !== false) setRuntimeGameplayVisibility([state.definition.objectId], true);
     persistRuntimeGameplayState(state);
     emitRuntimeGameplayEvent(state.definition.id, "healed", { amount: state.health - previous, health: state.health });
@@ -1745,6 +1827,27 @@ function stepRuntimeGameplay() {
     }
 }
 
+function updateRuntimeCharacterStates(movedThisFrame, runningThisFrame) {
+    for (const targetId in runtimeCharacterControllers) {
+        const controller = runtimeCharacterControllers[targetId];
+        if (controller.lockFrames > 0) controller.lockFrames--;
+        if (targetId === "__player__") continue;
+        const health = runtimeHealthByTarget[targetId];
+        if (health && health.health <= 0) {
+            setRuntimeCharacterState(targetId, "death", 0, false);
+        } else if (controller.lockFrames <= 0) {
+            setRuntimeCharacterState(targetId, controller.definition.initialState || "idle", 0, false);
+        }
+    }
+    const playerController = runtimeCharacterControllers.__player__;
+    if (!playerController || playerController.lockFrames > 0) return;
+    let state = "idle";
+    if (runtimePlayerGameplay.enabled && runtimePlayerGameplay.currentHealth <= 0) state = "death";
+    else if (!playerGrounded) state = playerVelocityY > 0.0 ? "jump" : "fall";
+    else if (movedThisFrame) state = runningThisFrame ? "run" : "walk";
+    setRuntimeCharacterState("__player__", state, 0, false);
+}
+
 function runtimeInteractionPrompt() {
     for (let triggerIndex = 0; triggerIndex < activeTriggerIds.length; triggerIndex++) {
         const components = runtimeGameplayByTrigger[activeTriggerIds[triggerIndex]] || [];
@@ -1763,6 +1866,7 @@ function resetRuntimeGameplayForNewGame() {
         runtimePlayerHealthConfig.initial === undefined ? runtimePlayerGameplay.maximumHealth : runtimePlayerHealthConfig.initial
     ));
     runtimePlayerGameplay.invulnerabilityFrames = 0;
+    setRuntimeCharacterState("__player__", "idle", 0, true);
     for (let index = 0; index < runtimeGameplayComponents.length; index++) {
         const state = runtimeGameplayComponents[index];
         state.consumed = false;
@@ -1771,6 +1875,10 @@ function resetRuntimeGameplayForNewGame() {
         if (state.definition.type === "health") {
             state.health = Math.max(0, Math.min(state.maximumHealth, state.definition.initial));
             if (state.definition.hideOnDeath !== false) setRuntimeGameplayVisibility([state.definition.objectId], state.health > 0);
+            const resetCharacter = runtimeObjectDefinitions[state.definition.objectId]
+                ? runtimeObjectDefinitions[state.definition.objectId].character
+                : null;
+            setRuntimeCharacterState(state.definition.objectId, resetCharacter ? resetCharacter.initialState || "idle" : "idle", 0, true);
         }
     }
 }
@@ -1828,6 +1936,16 @@ function executeRuntimeAction(action) {
     }
     if (action.type === "respawn") {
         respawnRuntimePlayer(action.fadeFrames);
+        return;
+    }
+    if (action.type === "character") {
+        const targetId = action.targetId || "__player__";
+        const controller = runtimeCharacterControllers[targetId];
+        const duration = action.durationFrames === undefined
+            ? action.state === "hurt" ? controller && controller.definition.hurtFrames || 24
+                : action.state === "attack" ? controller && controller.definition.attackFrames || 30 : 0
+            : action.durationFrames;
+        setRuntimeCharacterState(targetId, action.state || "idle", duration, true);
         return;
     }
     if (action.type === "teleport") {
@@ -2039,6 +2157,9 @@ function executeVisualScriptAction(type, config) {
     else if (type === "actionDamage") executeRuntimeAction({ type: "damage", targetId: config.targetId, amount: config.amount });
     else if (type === "actionHeal") executeRuntimeAction({ type: "heal", targetId: config.targetId, amount: config.amount });
     else if (type === "actionRespawn") executeRuntimeAction({ type: "respawn", fadeFrames: config.fadeFrames });
+    else if (type === "actionCharacterState") executeRuntimeAction({
+        type: "character", targetId: config.targetId, state: config.state, durationFrames: config.durationFrames
+    });
 }
 
 const runtimeVisualScripts = typeof VisualScriptingRuntime !== "undefined"
@@ -2208,7 +2329,8 @@ function updatePlayerAndCamera() {
     const forwardZ = -Math.cos(cameraYaw);
     const rightX = Math.cos(cameraYaw);
     const rightZ = Math.sin(cameraYaw);
-    const speed = buttonHeld(Pads.CROSS) ? RUN_SPEED : WALK_SPEED;
+    const runningThisFrame = buttonHeld(Pads.CROSS);
+    const speed = runningThisFrame ? RUN_SPEED : WALK_SPEED;
     // Movement is camera-relative: left stick/D-pad always follows the view.
     const dx = (rightX * strafe + forwardX * forwardInput) * speed;
     const dz = (rightZ * strafe + forwardZ * forwardInput) * speed;
@@ -2225,6 +2347,7 @@ function updatePlayerAndCamera() {
     processRuntimeEvents();
     if (runtimeVisualScripts) runtimeVisualScripts.step();
     updateRuntimeAudio();
+    updateRuntimeCharacterStates(movedThisFrame, runningThisFrame);
 
     if (playerObject) {
         playerObject.position = { x: playerX, y: playerY, z: playerZ };

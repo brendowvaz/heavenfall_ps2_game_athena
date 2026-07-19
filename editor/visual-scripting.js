@@ -27,6 +27,7 @@ export const LOGIC_NODE_DEFINITIONS = Object.freeze({
   actionDamage: { category: "action", label: "Aplicar dano", inputs: ["in"], outputs: ["next"] },
   actionHeal: { category: "action", label: "Restaurar vida", inputs: ["in"], outputs: ["next"] },
   actionRespawn: { category: "action", label: "Renascer", inputs: ["in"], outputs: ["next"] },
+  actionCharacterState: { category: "action", label: "Animar personagem", inputs: ["in"], outputs: ["next"] },
   actionScene: { category: "action", label: "Trocar de cena", inputs: ["in"], outputs: [] },
   actionSetVariable: { category: "variable", label: "Alterar variável", inputs: ["in"], outputs: ["next"] },
   flowDelay: { category: "flow", label: "Esperar", inputs: ["in"], outputs: ["next"] },
@@ -132,6 +133,12 @@ function normalizeNodeConfig(type, config = {}) {
       };
     case "actionRespawn":
       return { fadeFrames: Math.round(Math.max(1, Math.min(300, finite(config.fadeFrames, 24)))) };
+    case "actionCharacterState":
+      return {
+        targetId: safeId(config.targetId, "__player__"),
+        state: ["idle", "walk", "run", "jump", "fall", "attack", "hurt", "death"].includes(config.state) ? config.state : "idle",
+        durationFrames: Math.round(Math.max(0, Math.min(600, finite(config.durationFrames, 0)))),
+      };
     case "actionScene":
       return {
         sceneId: safeId(config.sceneId, ""),

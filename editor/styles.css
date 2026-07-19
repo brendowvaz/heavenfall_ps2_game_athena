@@ -416,6 +416,17 @@ h2, h3, p { margin: 0; }
 .prefab-list { overflow: auto; min-height: 0; }
 .prefab-row { min-height: 34px; grid-template-columns: 24px minmax(0,1fr) 23px 23px; }
 .prefab-empty { color: #4e6878; font-size: 9px; padding: 7px 2px; line-height: 1.4; }
+.prefab-toolbar { display: grid; grid-template-columns: minmax(0,1fr) 88px; gap: 5px; padding: 5px 0; }
+.prefab-toolbar input, .prefab-toolbar select { min-width: 0; height: 25px; font-size: 9px; }
+.prefab-row .prefab-delete[disabled] { opacity: .42; cursor: default; }
+.prefab-row.builtin .asset-badge { color: #ffd166; border-color: rgba(255,209,102,.28); }
+.prefab-row .prefab-description { white-space: normal; line-height: 1.25; max-height: 2.5em; }
+.character-settings { padding: 4px 0 7px; }
+.character-heading { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 5px 0; color: #6e8998; font-size: 9px; }
+.character-heading button { height: 23px; padding: 0 7px; color: var(--cyan); border-color: rgba(87,206,245,.25); background: rgba(87,206,245,.05); font-size: 8px; }
+.character-state-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 5px; }
+.character-state-grid label { min-width: 0; color: #607786; font-size: 8px; }
+.character-state-grid select { width: 100%; min-width: 0; height: 23px; margin-top: 2px; font-size: 8px; }
 
 .viewport {
   position: relative;

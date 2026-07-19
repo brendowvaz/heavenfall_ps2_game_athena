@@ -126,6 +126,27 @@
           <label><span>Pulo</span><input id="player-jump-speed" type="number" min="0" max="2" step="0.01" value="0.3"></label>
           <label><span>Gravidade</span><input id="player-gravity" type="number" min="0.0001" max="0.25" step="0.001" value="0.014"></label>
         </div>
+        <div class="component-heading"><strong>Personagem visual</strong><small>Modelo e estados animados</small></div>
+        <label class="property-row select-property"><span><strong>Modelo</strong><small>OBJ estático ou GLTF animado</small></span><select id="player-model-asset"><option value="player.obj">player.obj</option></select></label>
+        <label class="property-row switch-property"><span><strong>Animado</strong><small>Trocar clips pelo movimento</small></span><input id="player-character-enabled" type="checkbox"></label>
+        <div id="player-character-settings" class="character-settings">
+          <div class="character-heading"><span>Mapa de estados</span><button id="player-character-detect" type="button">Detectar clips</button></div>
+          <div class="character-state-grid">
+            <label>Parado<select id="player-character-idle"><option value="">Sem clip</option></select></label>
+            <label>Andando<select id="player-character-walk"><option value="">Sem clip</option></select></label>
+            <label>Correndo<select id="player-character-run"><option value="">Sem clip</option></select></label>
+            <label>Pulando<select id="player-character-jump"><option value="">Sem clip</option></select></label>
+            <label>Caindo<select id="player-character-fall"><option value="">Sem clip</option></select></label>
+            <label>Atacando<select id="player-character-attack"><option value="">Sem clip</option></select></label>
+            <label>Dano<select id="player-character-hurt"><option value="">Sem clip</option></select></label>
+            <label>Morrendo<select id="player-character-death"><option value="">Sem clip</option></select></label>
+          </div>
+          <div class="runtime-number-grid">
+            <label><span>Dano (quadros)</span><input id="player-character-hurt-frames" type="number" min="1" max="600" step="1" value="24"></label>
+            <label><span>Ataque (quadros)</span><input id="player-character-attack-frames" type="number" min="1" max="600" step="1" value="30"></label>
+          </div>
+          <p id="player-character-note" class="compatibility-note">Selecione um GLTF com skin e animações.</p>
+        </div>
         <div class="component-heading"><strong>Vida do jogador</strong><small>Componente persistente entre cenas</small></div>
         <label class="property-row switch-property"><span><strong>Ativada</strong><small>Permitir dano, cura e morte</small></span><input id="player-health-enabled" type="checkbox"></label>
         <div class="runtime-number-grid">
@@ -252,6 +273,18 @@
             <h2>Prefabs</h2>
           </div>
           <button id="create-prefab-button" class="import-button" disabled>Da seleção</button>
+        </div>
+        <div class="prefab-toolbar">
+          <input id="prefab-search" type="search" aria-label="Buscar na biblioteca" placeholder="Buscar prefab">
+          <select id="prefab-category" aria-label="Categoria da biblioteca">
+            <option value="all">Todas</option>
+            <option value="collectibles">Coletáveis</option>
+            <option value="interaction">Interação</option>
+            <option value="hazards">Perigos</option>
+            <option value="progression">Progressão</option>
+            <option value="combat">Combate</option>
+            <option value="custom">Meus prefabs</option>
+          </select>
         </div>
         <div id="prefab-list" class="prefab-list"></div>
       </section>
@@ -816,6 +849,30 @@
           <label class="property-row select-property"><span><strong>Clip</strong><small>Animação do modelo</small></span><select id="animation-clip"><option value="">Primeira animação</option></select></label>
           <label class="property-row switch-property"><span><strong>Ao iniciar</strong><small>Executar no editor e no PS2</small></span><input id="animation-autoplay" type="checkbox"></label>
           <label class="property-row switch-property"><span><strong>Loop</strong><small>Repetir continuamente</small></span><input id="animation-loop" type="checkbox" checked></label>
+          <div class="component-heading"><strong>Personagem animado</strong><small>Componente por estados</small></div>
+          <label class="property-row switch-property"><span><strong>Ativado</strong><small>Controlar clips por gameplay</small></span><input id="character-enabled" type="checkbox"></label>
+          <div id="character-settings" class="character-settings">
+            <label class="property-row select-property"><span><strong>Preview</strong><small>Estado mostrado no editor</small></span><select id="character-initial-state">
+              <option value="idle">Parado</option><option value="walk">Andando</option><option value="run">Correndo</option>
+              <option value="jump">Pulando</option><option value="fall">Caindo</option><option value="attack">Atacando</option>
+              <option value="hurt">Recebendo dano</option><option value="death">Morrendo</option>
+            </select></label>
+            <div class="character-heading"><span>Mapa de estados</span><button id="character-detect" type="button">Detectar clips</button></div>
+            <div class="character-state-grid">
+              <label>Parado<select id="character-state-idle"><option value="">Sem clip</option></select></label>
+              <label>Andando<select id="character-state-walk"><option value="">Sem clip</option></select></label>
+              <label>Correndo<select id="character-state-run"><option value="">Sem clip</option></select></label>
+              <label>Pulando<select id="character-state-jump"><option value="">Sem clip</option></select></label>
+              <label>Caindo<select id="character-state-fall"><option value="">Sem clip</option></select></label>
+              <label>Atacando<select id="character-state-attack"><option value="">Sem clip</option></select></label>
+              <label>Dano<select id="character-state-hurt"><option value="">Sem clip</option></select></label>
+              <label>Morrendo<select id="character-state-death"><option value="">Sem clip</option></select></label>
+            </div>
+            <div class="runtime-number-grid">
+              <label><span>Dano (quadros)</span><input id="character-hurt-frames" type="number" min="1" max="600" step="1" value="24"></label>
+              <label><span>Ataque (quadros)</span><input id="character-attack-frames" type="number" min="1" max="600" step="1" value="30"></label>
+            </div>
+          </div>
           <p id="animation-runtime-note" class="compatibility-note"></p>
         </section>
 
