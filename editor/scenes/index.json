@@ -1,11 +1,23 @@
 {
   "version": 3,
-  "activeSceneId": "main",
-  "startupSceneId": "main",
+  "activeSceneId": "fortaleza-das-correntes",
+  "startupSceneId": "fortaleza-das-correntes",
   "variables": [
     {
       "id": "jump-count",
       "name": "Pulos",
+      "type": "number",
+      "initialValue": 0
+    },
+    {
+      "id": "variable-mrr467gm-aj7v04",
+      "name": "Moedas",
+      "type": "number",
+      "initialValue": 0
+    },
+    {
+      "id": "titan-shards",
+      "name": "Fragmentos do Tita",
       "type": "number",
       "initialValue": 0
     }
@@ -14,8 +26,8 @@
     {
       "id": "main",
       "name": "Ruínas do Véu Azul",
-      "updatedAt": "2026-07-18T17:50:31.945Z",
-      "objectCount": 31,
+      "updatedAt": "2026-07-20T17:37:10.827Z",
+      "objectCount": 39,
       "uiCount": 0,
       "graphCount": 1,
       "spawnPoints": [
@@ -49,6 +61,21 @@
       "uiCount": 0,
       "graphCount": 1,
       "spawnPoints": []
+    },
+    {
+      "id": "fortaleza-das-correntes",
+      "name": "Fortaleza das Correntes Congeladas",
+      "updatedAt": "2026-07-20T21:31:13.177Z",
+      "objectCount": 58,
+      "uiCount": 0,
+      "graphCount": 0,
+      "spawnPoints": [
+        {
+          "id": "citadel-spawn",
+          "name": "Entrada da ponte",
+          "default": true
+        }
+      ]
     }
   ]
 }

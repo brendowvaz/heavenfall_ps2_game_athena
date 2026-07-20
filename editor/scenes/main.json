@@ -9,14 +9,14 @@
     "snapMode": "grid",
     "camera": {
       "position": {
-        "x": -8.5282,
-        "y": 2.4798,
-        "z": 3.6752
+        "x": 2.3968,
+        "y": 14.1293,
+        "z": 24.7709
       },
       "target": {
-        "x": -7.2814,
-        "y": 1,
-        "z": -1.7025
+        "x": -3.1383,
+        "y": 5.1299,
+        "z": -1.7801
       }
     },
     "runtime": {
@@ -35,6 +35,23 @@
         "runSpeed": 0.19,
         "jumpSpeed": 0.5,
         "gravity": 0.014,
+        "modelAsset": "player.obj",
+        "character": {
+          "enabled": false,
+          "initialState": "idle",
+          "hurtFrames": 24,
+          "attackFrames": 30,
+          "states": {
+            "idle": "",
+            "walk": "",
+            "run": "",
+            "jump": "",
+            "fall": "",
+            "attack": "",
+            "hurt": "",
+            "death": ""
+          }
+        },
         "health": {
           "enabled": true,
           "maximum": 100,
@@ -215,6 +232,22 @@
         "autoplay": false,
         "loop": true
       },
+      "character": {
+        "enabled": false,
+        "initialState": "idle",
+        "hurtFrames": 24,
+        "attackFrames": 30,
+        "states": {
+          "idle": "",
+          "walk": "",
+          "run": "",
+          "jump": "",
+          "fall": "",
+          "attack": "",
+          "hurt": "",
+          "death": ""
+        }
+      },
       "gameplay": {
         "health": {
           "enabled": false,
@@ -297,6 +330,22 @@
         "clip": "",
         "autoplay": false,
         "loop": true
+      },
+      "character": {
+        "enabled": false,
+        "initialState": "idle",
+        "hurtFrames": 24,
+        "attackFrames": 30,
+        "states": {
+          "idle": "",
+          "walk": "",
+          "run": "",
+          "jump": "",
+          "fall": "",
+          "attack": "",
+          "hurt": "",
+          "death": ""
+        }
       },
       "gameplay": {
         "health": {
@@ -381,6 +430,22 @@
         "autoplay": false,
         "loop": true
       },
+      "character": {
+        "enabled": false,
+        "initialState": "idle",
+        "hurtFrames": 24,
+        "attackFrames": 30,
+        "states": {
+          "idle": "",
+          "walk": "",
+          "run": "",
+          "jump": "",
+          "fall": "",
+          "attack": "",
+          "hurt": "",
+          "death": ""
+        }
+      },
       "gameplay": {
         "health": {
           "enabled": false,
@@ -463,6 +528,22 @@
         "clip": "",
         "autoplay": false,
         "loop": true
+      },
+      "character": {
+        "enabled": false,
+        "initialState": "idle",
+        "hurtFrames": 24,
+        "attackFrames": 30,
+        "states": {
+          "idle": "",
+          "walk": "",
+          "run": "",
+          "jump": "",
+          "fall": "",
+          "attack": "",
+          "hurt": "",
+          "death": ""
+        }
       },
       "gameplay": {
         "health": {
@@ -547,6 +628,22 @@
         "autoplay": false,
         "loop": true
       },
+      "character": {
+        "enabled": false,
+        "initialState": "idle",
+        "hurtFrames": 24,
+        "attackFrames": 30,
+        "states": {
+          "idle": "",
+          "walk": "",
+          "run": "",
+          "jump": "",
+          "fall": "",
+          "attack": "",
+          "hurt": "",
+          "death": ""
+        }
+      },
       "gameplay": {
         "health": {
           "enabled": false,
@@ -629,6 +726,22 @@
         "clip": "",
         "autoplay": false,
         "loop": true
+      },
+      "character": {
+        "enabled": false,
+        "initialState": "idle",
+        "hurtFrames": 24,
+        "attackFrames": 30,
+        "states": {
+          "idle": "",
+          "walk": "",
+          "run": "",
+          "jump": "",
+          "fall": "",
+          "attack": "",
+          "hurt": "",
+          "death": ""
+        }
       },
       "gameplay": {
         "health": {
@@ -713,6 +826,22 @@
         "autoplay": false,
         "loop": true
       },
+      "character": {
+        "enabled": false,
+        "initialState": "idle",
+        "hurtFrames": 24,
+        "attackFrames": 30,
+        "states": {
+          "idle": "",
+          "walk": "",
+          "run": "",
+          "jump": "",
+          "fall": "",
+          "attack": "",
+          "hurt": "",
+          "death": ""
+        }
+      },
       "gameplay": {
         "health": {
           "enabled": false,
@@ -795,6 +924,22 @@
         "clip": "",
         "autoplay": false,
         "loop": true
+      },
+      "character": {
+        "enabled": false,
+        "initialState": "idle",
+        "hurtFrames": 24,
+        "attackFrames": 30,
+        "states": {
+          "idle": "",
+          "walk": "",
+          "run": "",
+          "jump": "",
+          "fall": "",
+          "attack": "",
+          "hurt": "",
+          "death": ""
+        }
       },
       "gameplay": {
         "health": {
@@ -2148,15 +2293,15 @@
       },
       "portal": {
         "enabled": true,
-        "targetSceneId": "salao-saida-01",
-        "targetSpawnId": "spawn-mrozcqvq-becjqz",
+        "targetSceneId": "fortaleza-das-correntes",
+        "targetSpawnId": "citadel-spawn",
         "activation": "onEnter",
         "fadeFrames": 30,
         "condition": {
           "enabled": false,
           "variableId": "",
           "operator": "eq",
-          "value": false
+          "value": "false"
         }
       },
       "checkpoint": {
@@ -2291,6 +2436,572 @@
           "fadeFrames": 24
         }
       }
+    },
+    {
+      "id": "group-mrr44uln-xmdp6d",
+      "name": "Espinhos",
+      "source": {
+        "kind": "group",
+        "asset": ""
+      },
+      "parentId": null,
+      "position": {
+        "x": -5.0153,
+        "y": 1,
+        "z": -3.8795
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "prefabId": "builtin-spikes"
+    },
+    {
+      "id": "primitive-mrr44uln-31gomo",
+      "name": "Espinho esquerdo",
+      "source": {
+        "kind": "primitive",
+        "asset": "editor_primitives/cone.obj",
+        "primitive": "cone"
+      },
+      "parentId": "group-mrr44uln-xmdp6d",
+      "position": {
+        "x": -0.65,
+        "y": 0.55,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 0.45,
+        "y": 0.7,
+        "z": 0.45
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "material": {
+        "color": "#8c939b",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0.45,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
+      },
+      "prefabId": "builtin-spikes"
+    },
+    {
+      "id": "primitive-mrr44uln-sqy82m",
+      "name": "Espinho central",
+      "source": {
+        "kind": "primitive",
+        "asset": "editor_primitives/cone.obj",
+        "primitive": "cone"
+      },
+      "parentId": "group-mrr44uln-xmdp6d",
+      "position": {
+        "x": 0,
+        "y": 0.72,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 0.52,
+        "y": 0.9,
+        "z": 0.52
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "material": {
+        "color": "#a8afb6",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0.45,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
+      },
+      "prefabId": "builtin-spikes"
+    },
+    {
+      "id": "primitive-mrr44uln-cbrqof",
+      "name": "Espinho direito",
+      "source": {
+        "kind": "primitive",
+        "asset": "editor_primitives/cone.obj",
+        "primitive": "cone"
+      },
+      "parentId": "group-mrr44uln-xmdp6d",
+      "position": {
+        "x": 0.65,
+        "y": 0.55,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 0.45,
+        "y": 0.7,
+        "z": 0.45
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "material": {
+        "color": "#8c939b",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.72,
+        "metalness": 0.45,
+        "emissive": "#000000",
+        "emissiveIntensity": 0,
+        "unlit": false,
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
+      },
+      "prefabId": "builtin-spikes"
+    },
+    {
+      "id": "collider-mrr44uln-bt9ztj",
+      "name": "Dano dos espinhos",
+      "source": {
+        "kind": "collider",
+        "asset": "",
+        "collider": "box"
+      },
+      "parentId": "group-mrr44uln-xmdp6d",
+      "position": {
+        "x": 0,
+        "y": 0.55,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1.25,
+        "y": 0.7,
+        "z": 0.75
+      },
+      "color": "#ff647c",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "collider": {
+        "trigger": true,
+        "cameraBlocker": false
+      },
+      "events": {
+        "onEnter": [],
+        "onExit": [],
+        "onInteract": []
+      },
+      "portal": {
+        "enabled": false,
+        "targetSceneId": "",
+        "targetSpawnId": "",
+        "activation": "onEnter",
+        "fadeFrames": 30,
+        "condition": {
+          "enabled": false,
+          "variableId": "",
+          "operator": "eq",
+          "value": false
+        }
+      },
+      "checkpoint": {
+        "enabled": false,
+        "activation": "onEnter",
+        "autosave": true
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": true,
+          "amount": 20,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 45
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
+      },
+      "prefabId": "builtin-spikes"
+    },
+    {
+      "id": "group-mrr467gm-5l6p6f",
+      "name": "Moeda",
+      "source": {
+        "kind": "group",
+        "asset": ""
+      },
+      "parentId": null,
+      "position": {
+        "x": -1.448,
+        "y": 4.1068,
+        "z": -6.7499
+      },
+      "rotation": {
+        "x": 83.7488,
+        "y": -42.2381,
+        "z": -4.2113
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "prefabId": "builtin-coin"
+    },
+    {
+      "id": "primitive-mrr467gm-0bqecj",
+      "name": "Visual da moeda",
+      "source": {
+        "kind": "primitive",
+        "asset": "editor_primitives/cylinder.obj",
+        "primitive": "cylinder"
+      },
+      "parentId": "group-mrr467gm-5l6p6f",
+      "position": {
+        "x": 0,
+        "y": 0.78,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 0.42,
+        "y": 0.08,
+        "z": 0.42
+      },
+      "color": "#8bd5f7",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "material": {
+        "color": "#ffd166",
+        "texture": "",
+        "opacity": 1,
+        "roughness": 0.28,
+        "metalness": 0.65,
+        "emissive": "#7a4b00",
+        "emissiveIntensity": 0.45,
+        "unlit": false,
+        "doubleSided": true,
+        "textureMapping": true,
+        "smoothShading": true,
+        "accurateClipping": false
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": false,
+          "variableId": "",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "",
+          "message": "Item coletado.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
+      },
+      "prefabId": "builtin-coin"
+    },
+    {
+      "id": "collider-mrr467gm-ccx2jo",
+      "name": "Coletar moeda",
+      "source": {
+        "kind": "collider",
+        "asset": "",
+        "collider": "sphere"
+      },
+      "parentId": "group-mrr467gm-5l6p6f",
+      "position": {
+        "x": 0,
+        "y": 0.78,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 0.68,
+        "y": 0.68,
+        "z": 0.68
+      },
+      "color": "#ffd166",
+      "visible": true,
+      "locked": false,
+      "runtime": true,
+      "persistent": false,
+      "collider": {
+        "trigger": true,
+        "cameraBlocker": false
+      },
+      "events": {
+        "onEnter": [],
+        "onExit": [],
+        "onInteract": []
+      },
+      "portal": {
+        "enabled": false,
+        "targetSceneId": "",
+        "targetSpawnId": "",
+        "activation": "onEnter",
+        "fadeFrames": 30,
+        "condition": {
+          "enabled": false,
+          "variableId": "",
+          "operator": "eq",
+          "value": false
+        }
+      },
+      "checkpoint": {
+        "enabled": false,
+        "activation": "onEnter",
+        "autosave": true
+      },
+      "gameplay": {
+        "health": {
+          "enabled": false,
+          "maximum": 100,
+          "initial": 100,
+          "invulnerabilityFrames": 15,
+          "hideOnDeath": true,
+          "persistent": false
+        },
+        "damage": {
+          "enabled": false,
+          "amount": 10,
+          "targetId": "__player__",
+          "activation": "onEnter",
+          "cooldownFrames": 30
+        },
+        "collectible": {
+          "enabled": true,
+          "variableId": "variable-mrr467gm-aj7v04",
+          "amount": 1,
+          "activation": "onEnter",
+          "visualTargetId": "group-mrr467gm-5l6p6f",
+          "message": "Moeda coletada.",
+          "autosave": false
+        },
+        "interactable": {
+          "enabled": false,
+          "prompt": "Pressione Triangulo para interagir",
+          "once": false
+        },
+        "deathZone": {
+          "enabled": false,
+          "fadeFrames": 24
+        }
+      },
+      "prefabId": "builtin-coin"
     }
   ],
   "ui": [],
@@ -2300,6 +3011,18 @@
       {
         "id": "jump-count",
         "name": "Pulos",
+        "type": "number",
+        "initialValue": 0
+      },
+      {
+        "id": "variable-mrr467gm-aj7v04",
+        "name": "Moedas",
+        "type": "number",
+        "initialValue": 0
+      },
+      {
+        "id": "titan-shards",
+        "name": "Fragmentos do Tita",
         "type": "number",
         "initialValue": 0
       }

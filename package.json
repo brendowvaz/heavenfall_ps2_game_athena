@@ -6,7 +6,7 @@
   "scripts": {
     "editor": "node editor/server.mjs",
     "editor:check": "node --check editor/server.mjs && node --check editor/app.js",
-    "test": "node tests/smoke.cjs && node tests/editor-collision.mjs && node tests/visual-scripting.mjs && node tests/scene-management.mjs"
+    "test": "node tests/smoke.cjs && node tests/editor-collision.mjs && node tests/visual-scripting.mjs && node tests/scene-management.mjs && node tests/frozen-citadel.mjs"
   },
   "dependencies": {
     "three": "^0.177.0"

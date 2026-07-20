@@ -118,6 +118,18 @@ globalThis.EDITOR_LOGIC = {
       "name": "Pulos",
       "type": "number",
       "initialValue": 0
+    },
+    {
+      "id": "variable-mrr467gm-aj7v04",
+      "name": "Moedas",
+      "type": "number",
+      "initialValue": 0
+    },
+    {
+      "id": "titan-shards",
+      "name": "Fragmentos do Tita",
+      "type": "number",
+      "initialValue": 0
     }
   ],
   "graphs": [

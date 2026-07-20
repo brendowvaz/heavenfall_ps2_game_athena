@@ -569,6 +569,198 @@ globalThis.EDITOR_SCENE = [
       "smoothShading": true,
       "accurateClipping": false
     }
+  },
+  {
+    "id": "primitive-mrr44uln-31gomo",
+    "name": "Espinho esquerdo",
+    "asset": "editor_primitives/cone.obj",
+    "position": {
+      "x": -5.6653,
+      "y": 1.55,
+      "z": -3.8795
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": {
+      "x": 0.45,
+      "y": 0.7,
+      "z": 0.45
+    },
+    "boundsCenter": {
+      "x": -5.6653,
+      "y": 1.55,
+      "z": -3.8795
+    },
+    "boundsRadius": 1.212435565298214,
+    "material": {
+      "color": {
+        "r": 0.5490196078431373,
+        "g": 0.5764705882352941,
+        "b": 0.6078431372549019
+      },
+      "texture": "",
+      "opacity": 1,
+      "roughness": 0.72,
+      "metalness": 0.45,
+      "emissive": {
+        "r": 0,
+        "g": 0,
+        "b": 0
+      },
+      "emissiveIntensity": 0,
+      "unlit": false,
+      "doubleSided": true,
+      "textureMapping": true,
+      "smoothShading": true,
+      "accurateClipping": false
+    }
+  },
+  {
+    "id": "primitive-mrr44uln-sqy82m",
+    "name": "Espinho central",
+    "asset": "editor_primitives/cone.obj",
+    "position": {
+      "x": -5.0153,
+      "y": 1.72,
+      "z": -3.8795
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": {
+      "x": 0.52,
+      "y": 0.9,
+      "z": 0.52
+    },
+    "boundsCenter": {
+      "x": -5.0153,
+      "y": 1.72,
+      "z": -3.8795
+    },
+    "boundsRadius": 1.5588457268119895,
+    "material": {
+      "color": {
+        "r": 0.6588235294117647,
+        "g": 0.6862745098039216,
+        "b": 0.7137254901960784
+      },
+      "texture": "",
+      "opacity": 1,
+      "roughness": 0.72,
+      "metalness": 0.45,
+      "emissive": {
+        "r": 0,
+        "g": 0,
+        "b": 0
+      },
+      "emissiveIntensity": 0,
+      "unlit": false,
+      "doubleSided": true,
+      "textureMapping": true,
+      "smoothShading": true,
+      "accurateClipping": false
+    }
+  },
+  {
+    "id": "primitive-mrr44uln-cbrqof",
+    "name": "Espinho direito",
+    "asset": "editor_primitives/cone.obj",
+    "position": {
+      "x": -4.3652999999999995,
+      "y": 1.55,
+      "z": -3.8795
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": {
+      "x": 0.45,
+      "y": 0.7,
+      "z": 0.45
+    },
+    "boundsCenter": {
+      "x": -4.3652999999999995,
+      "y": 1.55,
+      "z": -3.8795
+    },
+    "boundsRadius": 1.212435565298214,
+    "material": {
+      "color": {
+        "r": 0.5490196078431373,
+        "g": 0.5764705882352941,
+        "b": 0.6078431372549019
+      },
+      "texture": "",
+      "opacity": 1,
+      "roughness": 0.72,
+      "metalness": 0.45,
+      "emissive": {
+        "r": 0,
+        "g": 0,
+        "b": 0
+      },
+      "emissiveIntensity": 0,
+      "unlit": false,
+      "doubleSided": true,
+      "textureMapping": true,
+      "smoothShading": true,
+      "accurateClipping": false
+    }
+  },
+  {
+    "id": "primitive-mrr467gm-0bqecj",
+    "name": "Visual da moeda",
+    "asset": "editor_primitives/cylinder.obj",
+    "position": {
+      "x": -1.4055928903870074,
+      "y": 4.153228192201285,
+      "z": -5.972438708344144
+    },
+    "rotation": {
+      "x": 1.4616923045942267,
+      "y": -0.7371939147866167,
+      "z": -0.07350105078923698
+    },
+    "scale": {
+      "x": 0.42,
+      "y": 0.08,
+      "z": 0.42
+    },
+    "boundsCenter": {
+      "x": -1.4055928903870074,
+      "y": 4.153228192201285,
+      "z": -5.972438708344144
+    },
+    "boundsRadius": 0.7274613391789284,
+    "material": {
+      "color": {
+        "r": 1,
+        "g": 0.8196078431372549,
+        "b": 0.4
+      },
+      "texture": "",
+      "opacity": 1,
+      "roughness": 0.28,
+      "metalness": 0.65,
+      "emissive": {
+        "r": 0.47843137254901963,
+        "g": 0.29411764705882354,
+        "b": 0
+      },
+      "emissiveIntensity": 0.45,
+      "unlit": false,
+      "doubleSided": true,
+      "textureMapping": true,
+      "smoothShading": true,
+      "accurateClipping": false
+    }
   }
 ];
 globalThis.EDITOR_COLLIDERS = [
@@ -846,6 +1038,56 @@ globalThis.EDITOR_COLLIDERS = [
     },
     "trigger": true,
     "cameraBlocker": false
+  },
+  {
+    "id": "collider-mrr44uln-bt9ztj",
+    "name": "Dano dos espinhos",
+    "shape": "box",
+    "contractVersion": 2,
+    "rotationOrder": "XYZ",
+    "scaleMeaning": "halfExtents",
+    "position": {
+      "x": -5.0153,
+      "y": 1.55,
+      "z": -3.8795
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": {
+      "x": 1.25,
+      "y": 0.7,
+      "z": 0.75
+    },
+    "trigger": true,
+    "cameraBlocker": false
+  },
+  {
+    "id": "collider-mrr467gm-ccx2jo",
+    "name": "Coletar moeda",
+    "shape": "sphere",
+    "contractVersion": 2,
+    "rotationOrder": "XYZ",
+    "scaleMeaning": "localRadii",
+    "position": {
+      "x": -1.4055928903870074,
+      "y": 4.153228192201285,
+      "z": -5.972438708344144
+    },
+    "rotation": {
+      "x": 1.4616923045942267,
+      "y": -0.7371939147866167,
+      "z": -0.07350105078923705
+    },
+    "scale": {
+      "x": 0.68,
+      "y": 0.6800000000000002,
+      "z": 0.6800000000000002
+    },
+    "trigger": true,
+    "cameraBlocker": false
   }
 ];
 globalThis.EDITOR_SPAWN_POINTS = [
@@ -869,8 +1111,8 @@ globalThis.EDITOR_SPAWN_POINTS = [
 globalThis.EDITOR_PORTALS = [
   {
     "triggerId": "portal-mrozd8ea-jo3nzk",
-    "targetSceneId": "salao-saida-01",
-    "targetSpawnId": "spawn-mrozcqvq-becjqz",
+    "targetSceneId": "fortaleza-das-correntes",
+    "targetSpawnId": "citadel-spawn",
     "activation": "onEnter",
     "fadeFrames": 30
   }
@@ -892,6 +1134,31 @@ globalThis.EDITOR_GAMEPLAY_COMPONENTS = [
     "targetId": "__player__",
     "activation": "onEnter",
     "cooldownFrames": 30
+  },
+  {
+    "id": "collider-mrr44uln-bt9ztj-damage",
+    "type": "damage",
+    "triggerId": "collider-mrr44uln-bt9ztj",
+    "enabled": true,
+    "amount": 20,
+    "targetId": "__player__",
+    "activation": "onEnter",
+    "cooldownFrames": 45
+  },
+  {
+    "id": "collider-mrr467gm-ccx2jo-collectible",
+    "type": "collectible",
+    "triggerId": "collider-mrr467gm-ccx2jo",
+    "enabled": true,
+    "variableId": "variable-mrr467gm-aj7v04",
+    "amount": 1,
+    "activation": "onEnter",
+    "visualTargetId": "group-mrr467gm-5l6p6f",
+    "message": "Moeda coletada.",
+    "autosave": false,
+    "visualTargetIds": [
+      "primitive-mrr467gm-0bqecj"
+    ]
   }
 ];
 globalThis.EDITOR_EVENTS = [];
@@ -901,6 +1168,18 @@ globalThis.EDITOR_LOGIC = {
     {
       "id": "jump-count",
       "name": "Pulos",
+      "type": "number",
+      "initialValue": 0
+    },
+    {
+      "id": "variable-mrr467gm-aj7v04",
+      "name": "Moedas",
+      "type": "number",
+      "initialValue": 0
+    },
+    {
+      "id": "titan-shards",
+      "name": "Fragmentos do Tita",
       "type": "number",
       "initialValue": 0
     }
